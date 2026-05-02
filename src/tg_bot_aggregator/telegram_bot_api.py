@@ -71,6 +71,35 @@ class TelegramBotApiClient:
     async def get_me(self, token: str) -> dict[str, Any]:
         return await self._post(token, "getMe", {})
 
+    async def delete_webhook(
+        self,
+        token: str,
+        drop_pending_updates: bool = True,
+    ) -> dict[str, Any]:
+        return await self._post(
+            token,
+            "deleteWebhook",
+            {"drop_pending_updates": drop_pending_updates},
+        )
+
+    async def get_updates(
+        self,
+        token: str,
+        offset: int | None = None,
+        timeout: int = 30,
+        allowed_updates: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        payload: dict[str, Any] = {"timeout": timeout}
+        if offset is not None:
+            payload["offset"] = offset
+        if allowed_updates is not None:
+            payload["allowed_updates"] = allowed_updates
+        response = await self._post(token, "getUpdates", payload)
+        result = response.get("result", [])
+        if not isinstance(result, list):
+            return []
+        return result
+
     async def send_message(
         self,
         token: str,
@@ -79,6 +108,7 @@ class TelegramBotApiClient:
         parse_mode: str | None = None,
         disable_web_page_preview: bool | None = None,
         message_thread_id: int | None = None,
+        reply_markup: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
         if parse_mode:
@@ -87,6 +117,8 @@ class TelegramBotApiClient:
             payload["disable_web_page_preview"] = disable_web_page_preview
         if message_thread_id is not None:
             payload["message_thread_id"] = message_thread_id
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
         return await self._post(token, "sendMessage", payload)
 
     async def send_document(
