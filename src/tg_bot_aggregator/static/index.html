@@ -124,10 +124,8 @@
       }
       .settings-grid {
         grid-template-columns:
-          minmax(270px, 0.85fr)
-          minmax(520px, 1.25fr)
-          minmax(300px, 0.9fr)
-          minmax(300px, 0.9fr);
+          minmax(300px, 0.85fr)
+          minmax(520px, 1.15fr);
       }
       .panel {
         background: var(--panel);
@@ -261,16 +259,19 @@
       .tools-table th:nth-child(1),
       .tools-table td:nth-child(1) {
         width: 45%;
+        overflow-wrap: anywhere;
       }
       .tools-table th:nth-child(2),
       .tools-table td:nth-child(2),
       .tools-table th:nth-child(3),
       .tools-table td:nth-child(3) {
         width: 18%;
+        white-space: nowrap;
       }
       .tools-table th:nth-child(4),
       .tools-table td:nth-child(4) {
         width: 19%;
+        white-space: nowrap;
       }
       .token-table {
         min-width: 360px;
@@ -289,7 +290,7 @@
         text-align: left;
         font-size: 13px;
         vertical-align: top;
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
       }
       th {
         color: var(--muted);
@@ -375,11 +376,6 @@
         *::after {
           animation-duration: 1ms !important;
           transition-duration: 1ms !important;
-        }
-      }
-      @media (max-width: 1700px) {
-        .settings-grid {
-          grid-template-columns: repeat(2, minmax(min(360px, 100%), 1fr));
         }
       }
       @media (max-width: 960px) {
