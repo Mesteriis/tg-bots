@@ -10,6 +10,7 @@ from tg_bot_aggregator.api import (
     analytics,
     bots,
     destinations,
+    diagnostics,
     events,
     health,
     mtproto,
@@ -75,6 +76,7 @@ def create_app(
     app.include_router(health.router, prefix=prefix)
     app.include_router(bots.router, prefix=prefix)
     app.include_router(destinations.router, prefix=prefix)
+    app.include_router(diagnostics.router, prefix=prefix)
     app.include_router(templates.router, prefix=prefix)
     app.include_router(send.router, prefix=prefix)
     app.include_router(mtproto.router, prefix=prefix)

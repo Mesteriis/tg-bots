@@ -32,6 +32,25 @@ class Bot(Base):
     destinations: Mapped[list["Destination"]] = relationship(
         back_populates="bot", cascade="all, delete-orphan"
     )
+    diagnostic_settings: Mapped["DiagnosticBotSettings | None"] = relationship(
+        back_populates="bot",
+    )
+
+
+class DiagnosticBotSettings(Base):
+    __tablename__ = "diagnostic_bot_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    bot_id: Mapped[int | None] = mapped_column(ForeignKey("bots.id", ondelete="SET NULL"))
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    last_update_id: Mapped[int | None] = mapped_column(Integer)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    bot: Mapped[Bot | None] = relationship(back_populates="diagnostic_settings")
 
 
 class Destination(Base):

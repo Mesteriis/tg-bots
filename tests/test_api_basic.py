@@ -112,6 +112,27 @@ async def test_create_bot_returns_gateway_error_when_bot_api_unreachable() -> No
     }
 
 
+async def test_dashboard_can_manage_diagnostic_bot_settings() -> None:
+    client, _ = await _client()
+    async with client:
+        bot = (await client.post("/api/v1/bots", json={"token": "123:token"})).json()
+        missing = (await client.get("/api/v1/diagnostics/bot")).json()
+        updated_response = await client.patch(
+            "/api/v1/diagnostics/bot",
+            json={"bot_id": bot["id"], "is_enabled": True},
+        )
+        updated = updated_response.json()
+
+    assert missing["bot_id"] is None
+    assert missing["is_enabled"] is False
+    assert updated_response.status_code == 200
+    assert updated["bot_id"] == bot["id"]
+    assert updated["bot_name"] == "@ops_bot"
+    assert updated["bot_username"] == "ops_bot"
+    assert updated["is_enabled"] is True
+    assert updated["last_update_id"] is None
+
+
 async def test_events_once_returns_sse_frame() -> None:
     client, event_bus = await _client()
     await event_bus.publish("send.created", {"send_history_id": 1})

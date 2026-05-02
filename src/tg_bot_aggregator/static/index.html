@@ -398,6 +398,31 @@
             </div>
           </div>
 
+          <div v-if="activeTab === 'diagnostics'" class="grid">
+            <form class="panel" @submit.prevent="saveDiagnosticSettings">
+              <label>Diagnostic bot
+                <select v-model.number="diagnosticSettings.bot_id">
+                  <option :value="null">Not selected</option>
+                  <option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option>
+                </select>
+              </label>
+              <label><input v-model="diagnosticSettings.is_enabled" type="checkbox" /> Enabled</label>
+              <button class="btn primary"><i data-lucide="save"></i>Save diagnostics</button>
+              <div class="hint">This bot runs polling only for this product and replies with message IDs.</div>
+            </form>
+            <div class="panel">
+              <table>
+                <tbody>
+                  <tr><th>Bot</th><td>{{ diagnosticSettings.bot_name || '-' }}</td></tr>
+                  <tr><th>Username</th><td>{{ diagnosticSettings.bot_username || '-' }}</td></tr>
+                  <tr><th>Enabled</th><td>{{ diagnosticSettings.is_enabled ? 'yes' : 'no' }}</td></tr>
+                  <tr><th>Last update</th><td>{{ diagnosticSettings.last_update_id || '-' }}</td></tr>
+                  <tr><th>Last error</th><td>{{ diagnosticSettings.last_error || '-' }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div v-if="activeTab === 'health'" class="panel">
             <pre>{{ JSON.stringify(health, null, 2) }}</pre>
           </div>
@@ -422,9 +447,11 @@
               { id: "history", label: "History", icon: "history" },
               { id: "mtproto", label: "MTProto", icon: "smartphone" },
               { id: "analytics", label: "Analytics", icon: "chart-no-axes-combined" },
+              { id: "diagnostics", label: "Diagnostics", icon: "scan-search" },
               { id: "health", label: "Health", icon: "activity" },
             ],
             bots: [], destinations: [], templates: [], history: [], analyticsTargets: [], health: {},
+            diagnosticSettings: { bot_id: null, bot_name: null, bot_username: null, is_enabled: false, last_update_id: null, last_error: null },
             forms: {
               bot: { name: "", token: "", description: "" },
               destination: { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, title: "" },
@@ -467,15 +494,16 @@
             return response.json();
           },
           async refreshAll() {
-            const [health, bots, destinations, templates, history, analyticsTargets] = await Promise.all([
+            const [health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings] = await Promise.all([
               this.api("/health"),
               this.api("/bots"),
               this.api("/destinations"),
               this.api("/templates"),
               this.api("/send-history"),
               this.api("/analytics/targets"),
+              this.api("/diagnostics/bot"),
             ]);
-            Object.assign(this, { health, bots, destinations, templates, history, analyticsTargets });
+            Object.assign(this, { health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings });
           },
           connectEvents() {
             const source = new EventSource("/api/v1/events");
@@ -508,6 +536,7 @@
           async confirmPassword() { await this.api("/mtproto/login/confirm-password", { method: "POST", body: JSON.stringify({ password: this.forms.mtproto.password }) }); },
           async createAnalyticsTarget() { await this.api("/analytics/targets", { method: "POST", body: JSON.stringify(this.forms.analytics) }); this.forms.analytics = { peer_ref: "", title: "" }; await this.refreshAll(); },
           async refreshAnalytics(target_id) { await this.api("/analytics/refresh", { method: "POST", body: JSON.stringify({ target_id }) }); await this.refreshAll(); },
+          async saveDiagnosticSettings() { await this.api("/diagnostics/bot", { method: "PATCH", body: JSON.stringify({ bot_id: this.diagnosticSettings.bot_id, is_enabled: this.diagnosticSettings.is_enabled }) }); await this.refreshAll(); },
         },
       }).mount("#app");
     </script>

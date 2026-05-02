@@ -32,6 +32,21 @@ class BotRead(BaseModel):
     last_checked_at: datetime | None
 
 
+class DiagnosticBotSettingsUpdate(BaseModel):
+    bot_id: int | None = None
+    is_enabled: bool | None = None
+
+
+class DiagnosticBotSettingsRead(BaseModel):
+    bot_id: int | None
+    bot_name: str | None
+    bot_username: str | None
+    is_enabled: bool
+    last_update_id: int | None
+    last_error: str | None
+    updated_at: datetime | None
+
+
 class DestinationCreate(BaseModel):
     bot_id: int
     kind: Literal["private", "group", "supergroup", "channel", "forum_topic"]

@@ -4,6 +4,7 @@ from tg_bot_aggregator.repositories import (
     AnalyticsRepository,
     BotRepository,
     DestinationRepository,
+    DiagnosticSettingsRepository,
     SendHistoryRepository,
     TemplateRepository,
 )
@@ -60,3 +61,25 @@ async def test_analytics_repository_creates_runs_and_snapshots(db_session: Async
     assert (await analytics.list_targets())[0].peer_ref == "@channel"
     assert (await analytics.list_runs())[0].id == run.id
     assert (await analytics.list_snapshots(target_id=target.id))[0].id == snapshot.id
+
+
+async def test_diagnostic_settings_repository_upserts_singleton(
+    db_session: AsyncSession,
+) -> None:
+    bots = BotRepository(db_session)
+    diagnostics = DiagnosticSettingsRepository(db_session)
+    bot = await bots.create(name="diag", token="123:token")
+
+    created = await diagnostics.upsert(bot_id=bot.id, is_enabled=True, last_update_id=10)
+    updated = await diagnostics.upsert(is_enabled=False, last_error="disabled")
+    await db_session.commit()
+
+    loaded = await diagnostics.get()
+
+    assert created.id == 1
+    assert updated.id == 1
+    assert loaded is not None
+    assert loaded.bot_id == bot.id
+    assert loaded.is_enabled is False
+    assert loaded.last_update_id == 10
+    assert loaded.last_error == "disabled"

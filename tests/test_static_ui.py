@@ -30,3 +30,14 @@ def test_static_ui_shows_api_errors_for_bot_create() -> None:
     assert "error-banner" in html
     assert "this.lastError = detail" in html
     assert "catch (error)" in html
+
+
+def test_static_ui_exposes_diagnostic_bot_management() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert '{ id: "diagnostics", label: "Diagnostics", icon: "scan-search" }' in html
+    assert "activeTab === 'diagnostics'" in html
+    assert 'v-model.number="diagnosticSettings.bot_id"' in html
+    assert 'v-model="diagnosticSettings.is_enabled"' in html
+    assert 'saveDiagnosticSettings' in html
+    assert 'this.api("/diagnostics/bot"' in html

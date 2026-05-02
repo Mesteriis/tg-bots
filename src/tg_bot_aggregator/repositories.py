@@ -9,6 +9,7 @@ from tg_bot_aggregator.models import (
     AnalyticsTarget,
     Bot,
     Destination,
+    DiagnosticBotSettings,
     MessageTemplate,
     MtprotoSession,
     SendHistory,
@@ -61,6 +62,26 @@ class BotRepository:
         await self.session.delete(bot)
         await self.session.flush()
         return True
+
+
+class DiagnosticSettingsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self) -> DiagnosticBotSettings | None:
+        return await _get_or_none(self.session, DiagnosticBotSettings, 1)
+
+    async def upsert(self, **values: Any) -> DiagnosticBotSettings:
+        row = await self.get()
+        if row is None:
+            row = DiagnosticBotSettings(id=1, **values)
+            self.session.add(row)
+        else:
+            for key, value in values.items():
+                setattr(row, key, value)
+            row.updated_at = utc_now()
+        await self.session.flush()
+        return row
 
 
 class DestinationRepository:
