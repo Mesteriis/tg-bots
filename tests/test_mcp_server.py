@@ -1,6 +1,5 @@
 import inspect
 
-import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tg_bot_aggregator.config import Settings

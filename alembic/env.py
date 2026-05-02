@@ -1,8 +1,8 @@
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from alembic import context
 from tg_bot_aggregator.config import get_settings
 from tg_bot_aggregator.models import Base
 

@@ -8,6 +8,7 @@ Create Date: 2026-05-02
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0001_initial"
@@ -69,7 +70,12 @@ def upgrade() -> None:
     op.create_table(
         "destinations",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("bot_id", sa.Integer(), sa.ForeignKey("bots.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "bot_id",
+            sa.Integer(),
+            sa.ForeignKey("bots.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("kind", sa.String(length=40), nullable=False),
         sa.Column("chat_id", sa.String(length=200), nullable=False),
         sa.Column("message_thread_id", sa.Integer()),
@@ -96,7 +102,10 @@ def upgrade() -> None:
         "analytics_snapshots",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column(
-            "target_id", sa.Integer(), sa.ForeignKey("analytics_targets.id", ondelete="CASCADE"), nullable=False
+            "target_id",
+            sa.Integer(),
+            sa.ForeignKey("analytics_targets.id", ondelete="CASCADE"),
+            nullable=False,
         ),
         sa.Column("captured_at", sa.DateTime(timezone=True)),
         sa.Column("participants_count", sa.Integer()),
@@ -141,4 +150,3 @@ def downgrade() -> None:
     op.drop_table("mtproto_sessions")
     op.drop_table("message_templates")
     op.drop_table("bots")
-

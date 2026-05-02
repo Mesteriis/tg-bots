@@ -74,7 +74,9 @@ class SendHistory(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id", ondelete="SET NULL"), nullable=True)
-    destination_id: Mapped[int | None] = mapped_column(ForeignKey("destinations.id", ondelete="SET NULL"))
+    destination_id: Mapped[int | None] = mapped_column(
+        ForeignKey("destinations.id", ondelete="SET NULL")
+    )
     chat_id: Mapped[str] = mapped_column(String(200), nullable=False)
     message_thread_id: Mapped[int | None] = mapped_column(Integer)
     tag: Mapped[str | None] = mapped_column(String(100))
@@ -154,4 +156,3 @@ class AnalyticsRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str | None] = mapped_column(Text)
     snapshots_created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-

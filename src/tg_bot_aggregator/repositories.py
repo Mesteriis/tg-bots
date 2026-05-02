@@ -277,7 +277,9 @@ class AnalyticsRepository:
         statement = select(AnalyticsRun).order_by(AnalyticsRun.id.desc()).limit(limit)
         return await _list(self.session, statement)
 
-    async def list_snapshots(self, target_id: int | None = None, limit: int = 100) -> list[AnalyticsSnapshot]:
+    async def list_snapshots(
+        self, target_id: int | None = None, limit: int = 100
+    ) -> list[AnalyticsSnapshot]:
         statement = select(AnalyticsSnapshot).order_by(AnalyticsSnapshot.id.desc()).limit(limit)
         if target_id is not None:
             statement = statement.where(AnalyticsSnapshot.target_id == target_id)

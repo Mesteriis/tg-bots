@@ -53,10 +53,10 @@ class Settings(BaseSettings):
 
     @property
     def is_local_bot_api(self) -> bool:
-        return self.telegram_bot_api_base_url.startswith(("http://telegram-bot-api", "http://localhost", "http://127.0.0.1"))
+        local_prefixes = ("http://telegram-bot-api", "http://localhost", "http://127.0.0.1")
+        return self.telegram_bot_api_base_url.startswith(local_prefixes)
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

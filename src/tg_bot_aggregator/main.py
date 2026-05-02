@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,9 +6,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from typing import Awaitable, Callable
-
-from tg_bot_aggregator.api import analytics, bots, destinations, events, health, mtproto, send, templates
+from tg_bot_aggregator.api import (
+    analytics,
+    bots,
+    destinations,
+    events,
+    health,
+    mtproto,
+    send,
+    templates,
+)
 from tg_bot_aggregator.config import Settings, get_settings
 from tg_bot_aggregator.db import create_engine, create_session_factory
 from tg_bot_aggregator.events import MemoryEventBus

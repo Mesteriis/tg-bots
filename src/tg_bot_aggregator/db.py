@@ -1,6 +1,11 @@
 from collections.abc import AsyncIterator
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from tg_bot_aggregator.config import Settings, get_settings
 
@@ -20,4 +25,3 @@ async def get_session() -> AsyncIterator[AsyncSession]:
     async with session_factory() as session:
         yield session
     await engine.dispose()
-

@@ -30,7 +30,9 @@ class AnalyticsService:
 
         await self.analytics.mark_run_started(run)
         await self.session.commit()
-        await self.events.publish("analytics.run.started", {"run_id": run.id, "target_id": target_id})
+        await self.events.publish(
+            "analytics.run.started", {"run_id": run.id, "target_id": target_id}
+        )
 
         try:
             metrics = await self.mtproto.collect_metrics(target.peer_ref)
@@ -77,4 +79,3 @@ class StaticMtprotoMetrics:
 
     async def collect_metrics(self, peer_ref: str) -> Any:
         return self.metrics
-

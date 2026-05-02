@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     from tg_bot_aggregator.models import Base

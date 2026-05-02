@@ -19,7 +19,9 @@ def _service(request: Request, session: AsyncSession) -> MtprotoService:
 
 
 @router.get("/status", response_model=MtprotoStatusRead)
-async def status(request: Request, session: AsyncSession = Depends(get_session)) -> dict[str, str | None]:
+async def status(
+    request: Request, session: AsyncSession = Depends(get_session)
+) -> dict[str, str | None]:
     return await _service(request, session).status()
 
 
@@ -57,4 +59,3 @@ async def confirm_password(
     await session.commit()
     await request.app.state.event_bus.publish("mtproto.login.status_changed", result)
     return result
-

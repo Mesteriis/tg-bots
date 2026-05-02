@@ -1,5 +1,3 @@
-from typing import Any
-
 import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -19,7 +17,9 @@ async def _client() -> tuple[httpx.AsyncClient, MemoryEventBus]:
 
     async def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url).endswith("/getMe"):
-            return httpx.Response(200, json={"ok": True, "result": {"id": 123, "username": "ops_bot"}})
+            return httpx.Response(
+                200, json={"ok": True, "result": {"id": 123, "username": "ops_bot"}}
+            )
         return httpx.Response(200, json={"ok": True, "result": {"message_id": 88}})
 
     bot_api = TelegramBotApiClient(

@@ -6,7 +6,13 @@ from tg_bot_aggregator.security import redact_secrets
 
 
 class TelegramBotApiError(RuntimeError):
-    def __init__(self, method: str, error_code: int | None, description: str, payload: dict[str, Any]):
+    def __init__(
+        self,
+        method: str,
+        error_code: int | None,
+        description: str,
+        payload: dict[str, Any],
+    ) -> None:
         super().__init__(description)
         self.method = method
         self.error_code = error_code
@@ -106,4 +112,3 @@ class TelegramBotApiClient:
         if message_thread_id is not None:
             payload["message_thread_id"] = message_thread_id
         return await self._post(token, "sendVideo", payload)
-
