@@ -35,7 +35,7 @@ def test_static_ui_shows_api_errors_for_bot_create() -> None:
 def test_static_ui_exposes_diagnostic_bot_management() -> None:
     html = Path("src/tg_bot_aggregator/static/index.html").read_text()
 
-    assert '{ id: "diagnostics", label: "Диагностика", icon: "scan-search" }' in html
+    assert '{ id: "diagnostics", label: "Диагностика", icon: "scan-search"' in html
     assert "activeTab === 'diagnostics'" in html
     assert 'v-model.number="diagnosticSettings.bot_id"' in html
     assert 'v-model="diagnosticSettings.is_enabled"' in html
@@ -46,7 +46,7 @@ def test_static_ui_exposes_diagnostic_bot_management() -> None:
 def test_static_ui_exposes_mcp_and_api_token_management() -> None:
     html = Path("src/tg_bot_aggregator/static/index.html").read_text()
 
-    assert '{ id: "mcp", label: "MCP", icon: "plug-zap" }' in html
+    assert '{ id: "mcp", label: "MCP", icon: "plug-zap"' in html
     assert "activeTab === 'mcp'" in html
     assert 'activeTab === \'mcp\'" class="grid settings-grid"' in html
     assert "mcpSettings" in html
@@ -84,8 +84,44 @@ def test_static_ui_is_russian_first_and_explains_mtproto() -> None:
 
     assert '<html lang="ru">' in html
     assert "Агрегатор Telegram-ботов" in html
-    assert '{ id: "bots", label: "Боты", icon: "bot" }' in html
-    assert '{ id: "send", label: "Отправка", icon: "send" }' in html
+    assert '{ id: "bots", label: "Боты", icon: "bot"' in html
+    assert '{ id: "send", label: "Отправка", icon: "send"' in html
     assert "Зачем нужен MTProto" in html
     assert "Запросить код" in html
     assert "любой клиент с доступом к ней сможет пользоваться сохраненной MTProto-сессией" in html
+
+
+def test_static_ui_describes_tabs_and_cards() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert 'class="section-description"' in html
+    assert "currentTab.description" in html
+    assert 'class="panel-title"' in html
+    assert 'class="panel-description"' in html
+    assert "Новый бот" in html
+    assert "Список адресатов" in html
+    assert "Журнал отправок" in html
+    assert "Runtime health" in html
+
+
+def test_static_ui_uses_dropdowns_for_fixed_choices() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert "parseModeOptions" in html
+    assert 'v-model="forms.template.parse_mode"' in html
+    assert 'v-model="forms.send.parse_mode"' in html
+    assert 'v-model="forms.file.parse_mode"' in html
+    assert 'v-model="forms.templateSend.tag"' in html
+    assert 'v-for="item in templates"' in html
+    assert 'value: "MarkdownV2"' in html
+
+
+def test_static_ui_exposes_template_send_flow() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert "Отправка по шаблону" in html
+    assert "forms.templateSend" in html
+    assert "sendTemplate" in html
+    assert 'this.api("/send/template"' in html
+    assert 'this.api("/send/template/dry-run"' in html
+    assert 'template: "/api/v1/send/template"' in html

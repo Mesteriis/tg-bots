@@ -116,6 +116,13 @@
         margin: 0;
         font-size: 17px;
       }
+      .section-description {
+        max-width: 900px;
+        margin: -4px 0 14px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
       .grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
@@ -138,6 +145,23 @@
       }
       .panel.compact {
         padding: 12px;
+      }
+      .panel-head {
+        display: grid;
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+      .panel-title {
+        margin: 0;
+        color: var(--text-strong);
+        font-size: 14px;
+        font-weight: 650;
+      }
+      .panel-description {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
       }
       label {
         display: grid;
@@ -434,8 +458,13 @@
             <h2>{{ currentTab.label }}</h2>
             <button class="btn" @click="refreshAll"><i data-lucide="refresh-cw"></i>Обновить</button>
           </div>
+          <p class="section-description">{{ currentTab.description }}</p>
           <div v-if="lastError" class="error-banner" role="alert">{{ lastError }}</div>
           <div v-if="isProtectedHost" class="panel" style="margin-bottom: 14px;">
+            <div class="panel-head">
+              <p class="panel-title">Доступ к защищенному домену</p>
+              <p class="panel-description">Для запросов через tg.sh-inc.ru и tg.sh-inc.dev нужен постоянный API-токен.</p>
+            </div>
             <label>API-токен для tg.sh-inc.ru / tg.sh-inc.dev
               <input v-model="apiToken" type="password" placeholder="tga_..." />
             </label>
@@ -448,6 +477,10 @@
 
           <div v-if="activeTab === 'bots'" class="grid">
             <form class="panel" @submit.prevent="createBot">
+              <div class="panel-head">
+                <p class="panel-title">Новый бот</p>
+                <p class="panel-description">Вставь Bot API token. Сервис сразу выполнит getMe и подтянет username, ID и базовые данные.</p>
+              </div>
               <label>Имя<input v-model="forms.bot.name" placeholder="@username после проверки" /></label>
               <label>Токен<input v-model="forms.bot.token" required /></label>
               <label>Описание<textarea v-model="forms.bot.description"></textarea></label>
@@ -457,6 +490,10 @@
               <div class="hint">После добавления сразу выполняется getMe: username и ID подтянутся автоматически, имя можно отредактировать.</div>
             </form>
             <div class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Сохраненные боты</p>
+                <p class="panel-description">Список токенов, через которые доступна отправка и автоматическое обнаружение чатов.</p>
+              </div>
               <div class="table-wrap">
                 <table>
                   <thead><tr><th>Имя</th><th>Username</th><th></th></tr></thead>
@@ -474,7 +511,11 @@
 
           <div v-if="activeTab === 'destinations'" class="grid">
             <form class="panel" @submit.prevent="createDestination">
-              <label>Бот<select v-model.number="forms.destination.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <div class="panel-head">
+                <p class="panel-title">Новый адресат</p>
+                <p class="panel-description">Сохрани chat ID, алиас и thread ID форума, чтобы не вводить их вручную при отправке.</p>
+              </div>
+              <label>Бот<select v-model.number="forms.destination.bot_id"><option :value="null">выбери бота</option><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
               <label>Тип<select v-model="forms.destination.kind"><option value="private">личный чат</option><option value="group">группа</option><option value="supergroup">супергруппа</option><option value="channel">канал</option><option value="forum_topic">тема форума</option></select></label>
               <label>Chat ID<input v-model="forms.destination.chat_id" required /></label>
               <label>Thread ID<input v-model.number="forms.destination.message_thread_id" type="number" /></label>
@@ -483,6 +524,10 @@
               <button class="btn primary"><i data-lucide="plus"></i>Добавить адресата</button>
             </form>
             <div class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Список адресатов</p>
+                <p class="panel-description">Проверь доступ бота к группе, каналу или теме форума перед регулярной отправкой.</p>
+              </div>
               <div class="table-wrap">
                 <table>
                   <thead><tr><th>Название</th><th>Алиас</th><th>Тип</th><th>Chat</th><th>Thread</th><th></th></tr></thead>
@@ -503,13 +548,26 @@
 
           <div v-if="activeTab === 'templates'" class="grid">
             <form class="panel" @submit.prevent="createTemplate">
+              <div class="panel-head">
+                <p class="panel-title">Новый шаблон</p>
+                <p class="panel-description">Шаблон отправляется по tag и может использовать parse mode Telegram для форматирования текста.</p>
+              </div>
               <label>Tag<input v-model="forms.template.tag" required /></label>
               <label>Название<input v-model="forms.template.title" required /></label>
               <label>Текст<textarea v-model="forms.template.text" required></textarea></label>
-              <label>Parse mode<input v-model="forms.template.parse_mode" /></label>
+              <label>Parse mode
+                <select v-model="forms.template.parse_mode">
+                  <option v-for="mode in parseModeOptions" :key="mode.key" :value="mode.value">{{ mode.label }}</option>
+                </select>
+              </label>
+              <label class="checkbox-label"><input v-model="forms.template.disable_web_page_preview" type="checkbox" /> Отключить предпросмотр ссылок</label>
               <button class="btn primary"><i data-lucide="plus"></i>Добавить шаблон</button>
             </form>
             <div class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Сохраненные шаблоны</p>
+                <p class="panel-description">Используются в REST, MCP и отдельной отправке по шаблону.</p>
+              </div>
               <div class="table-wrap">
                 <table><thead><tr><th>Tag</th><th>Название</th><th>Текст</th></tr></thead><tbody><tr v-for="item in templates" :key="item.id"><td>{{ item.tag }}</td><td>{{ item.title }}</td><td>{{ item.text }}</td></tr></tbody></table>
               </div>
@@ -518,13 +576,23 @@
 
           <div v-if="activeTab === 'send'" class="grid">
             <form class="panel" @submit.prevent="sendText">
-              <label>Бот<select v-model.number="forms.send.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <div class="panel-head">
+                <p class="panel-title">Ручной текст</p>
+                <p class="panel-description">Для одноразового сообщения или проверки адресата. Tag здесь остается произвольной меткой истории.</p>
+              </div>
+              <label>Бот<select v-model.number="forms.send.bot_id"><option :value="null">выбери бота</option><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
               <label>Адресат<select v-model.number="forms.send.destination_id"><option :value="null">ручной chat ID</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
               <label>Алиас адресата<input v-model="forms.send.destination_alias" placeholder="ops_channel" /></label>
               <label>Chat ID<input v-model="forms.send.chat_id" /></label>
               <label>Режим отправки<select v-model="forms.send.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
+              <label>Parse mode
+                <select v-model="forms.send.parse_mode">
+                  <option v-for="mode in parseModeOptions" :key="mode.key" :value="mode.value">{{ mode.label }}</option>
+                </select>
+              </label>
               <label>Tag<input v-model="forms.send.tag" /></label>
               <label>Текст<textarea v-model="forms.send.text"></textarea></label>
+              <label class="checkbox-label"><input v-model="forms.send.disable_web_page_preview" type="checkbox" /> Отключить предпросмотр ссылок</label>
               <div class="actions">
                 <button class="btn primary"><i data-lucide="send"></i>Отправить текст</button>
                 <button class="btn" type="button" @click="dryRunText"><i data-lucide="scan-line"></i>Проверить</button>
@@ -532,13 +600,44 @@
               </div>
               <pre v-if="sendDryRun">{{ JSON.stringify(sendDryRun, null, 2) }}</pre>
             </form>
+            <form class="panel" @submit.prevent="sendTemplate">
+              <div class="panel-head">
+                <p class="panel-title">Отправка по шаблону</p>
+                <p class="panel-description">Выбери сохраненный tag из списка. Текст, parse mode и предпросмотр ссылок берутся из шаблона.</p>
+              </div>
+              <label>Бот<select v-model.number="forms.templateSend.bot_id"><option :value="null">выбери бота</option><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Адресат<select v-model.number="forms.templateSend.destination_id"><option :value="null">ручной chat ID</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
+              <label>Алиас адресата<input v-model="forms.templateSend.destination_alias" placeholder="ops_channel" /></label>
+              <label>Chat ID<input v-model="forms.templateSend.chat_id" /></label>
+              <label>Режим отправки<select v-model="forms.templateSend.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
+              <label>Шаблон
+                <select v-model="forms.templateSend.tag" required>
+                  <option value="">выбери шаблон</option>
+                  <option v-for="item in templates" :key="item.id" :value="item.tag">{{ item.tag }} · {{ item.title }}</option>
+                </select>
+              </label>
+              <div class="actions">
+                <button class="btn primary"><i data-lucide="send"></i>Отправить шаблон</button>
+                <button class="btn" type="button" @click="dryRunTemplate"><i data-lucide="scan-line"></i>Проверить</button>
+                <button class="btn" type="button" @click="copyCurl('template')"><i data-lucide="copy"></i>cURL</button>
+              </div>
+            </form>
             <form class="panel" @submit.prevent="sendFile">
+              <div class="panel-head">
+                <p class="panel-title">Файл с общей шары</p>
+                <p class="panel-description">Передается относительный путь к уже загруженному файлу. FastAPI файл не копирует и не проксирует.</p>
+              </div>
               <label>Тип файла<select v-model="forms.file.media_type"><option value="video">видео</option><option value="document">документ</option></select></label>
-              <label>Бот<select v-model.number="forms.file.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Бот<select v-model.number="forms.file.bot_id"><option :value="null">выбери бота</option><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
               <label>Адресат<select v-model.number="forms.file.destination_id"><option :value="null">ручной chat ID</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
               <label>Алиас адресата<input v-model="forms.file.destination_alias" placeholder="ops_channel" /></label>
               <label>Chat ID<input v-model="forms.file.chat_id" /></label>
               <label>Режим отправки<select v-model="forms.file.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
+              <label>Parse mode подписи
+                <select v-model="forms.file.parse_mode">
+                  <option v-for="mode in parseModeOptions" :key="mode.key" :value="mode.value">{{ mode.label }}</option>
+                </select>
+              </label>
               <label>Путь на шаре<input v-model="forms.file.file_relative_path" placeholder="telegram-outbox/video.mp4" /></label>
               <label>Подпись<textarea v-model="forms.file.caption"></textarea></label>
               <div class="actions">
@@ -550,6 +649,10 @@
           </div>
 
           <div v-if="activeTab === 'history'" class="panel">
+            <div class="panel-head">
+              <p class="panel-title">Журнал отправок</p>
+              <p class="panel-description">Последние попытки отправки с Telegram message ID, статусом и ошибками для диагностики.</p>
+            </div>
             <div class="table-wrap">
               <table><thead><tr><th>ID</th><th>Статус</th><th>Chat</th><th>Tag</th><th>Ошибка</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td>{{ item.id }}</td><td>{{ statusLabel(item.status) }}</td><td>{{ item.chat_id }}</td><td>{{ item.tag || '-' }}</td><td>{{ item.error_message || '-' }}</td></tr></tbody></table>
             </div>
@@ -567,6 +670,10 @@
               <p class="guide-text">Важно: в локальной сети админка без авторизации, поэтому любой клиент с доступом к ней сможет пользоваться сохраненной MTProto-сессией через функции приложения.</p>
             </div>
             <form class="panel" @submit.prevent="startLogin">
+              <div class="panel-head">
+                <p class="panel-title">Шаг 1: запрос кода</p>
+                <p class="panel-description">Номер используется только для старта Telethon-сессии и запроса кода у Telegram.</p>
+              </div>
               <label>Телефон
                 <input v-model="forms.mtproto.phone" placeholder="+79990000000" />
                 <span class="field-hint">Номер аккаунта, которым будем читать аналитику.</span>
@@ -574,6 +681,10 @@
               <button class="btn primary"><i data-lucide="smartphone"></i>Запросить код</button>
             </form>
             <form class="panel" @submit.prevent="confirmCode">
+              <div class="panel-head">
+                <p class="panel-title">Шаг 2: подтверждение кода</p>
+                <p class="panel-description">Код приходит в Telegram-приложение аккаунта, который указан на первом шаге.</p>
+              </div>
               <label>Код
                 <input v-model="forms.mtproto.code" inputmode="numeric" />
                 <span class="field-hint">Код из Telegram после запроса на предыдущем шаге.</span>
@@ -581,6 +692,10 @@
               <button class="btn"><i data-lucide="key-round"></i>Подтвердить код</button>
             </form>
             <form class="panel" @submit.prevent="confirmPassword">
+              <div class="panel-head">
+                <p class="panel-title">Шаг 3: пароль 2FA</p>
+                <p class="panel-description">Заполняется только если Telegram требует облачный пароль для завершения входа.</p>
+              </div>
               <label>Пароль 2FA
                 <input v-model="forms.mtproto.password" type="password" />
                 <span class="field-hint">Нужен только если Telegram запросит облачный пароль.</span>
@@ -591,11 +706,19 @@
 
           <div v-if="activeTab === 'analytics'" class="grid">
             <form class="panel" @submit.prevent="createAnalyticsTarget">
+              <div class="panel-head">
+                <p class="panel-title">Новая цель аналитики</p>
+                <p class="panel-description">Peer ref может быть username, numeric ID или другой Telethon-resolvable идентификатор.</p>
+              </div>
               <label>Peer ref<input v-model="forms.analytics.peer_ref" required /></label>
               <label>Название<input v-model="forms.analytics.title" /></label>
               <button class="btn primary"><i data-lucide="plus"></i>Добавить цель</button>
             </form>
             <div class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Цели и ручное обновление</p>
+                <p class="panel-description">Запускает Taskiq refresh для выбранного канала или чата через сохраненную MTProto-сессию.</p>
+              </div>
               <div class="table-wrap">
                 <table><thead><tr><th>Peer</th><th>Название</th><th></th></tr></thead><tbody><tr v-for="target in analyticsTargets" :key="target.id"><td>{{ target.peer_ref }}</td><td>{{ target.title || '-' }}</td><td><button class="btn icon-only" title="Обновить аналитику" @click="refreshAnalytics(target.id)"><i data-lucide="refresh-cw"></i></button></td></tr></tbody></table>
               </div>
@@ -604,6 +727,10 @@
 
           <div v-if="activeTab === 'diagnostics'" class="grid">
             <form class="panel" @submit.prevent="saveDiagnosticSettings">
+              <div class="panel-head">
+                <p class="panel-title">Настройка диагностического бота</p>
+                <p class="panel-description">Выбери отдельного бота, который будет polling-режимом отвечать на пересланные сообщения и показывать ID.</p>
+              </div>
               <label>Диагностический бот
                 <select v-model.number="diagnosticSettings.bot_id">
                   <option :value="null">не выбран</option>
@@ -615,6 +742,10 @@
               <div class="hint">Этот бот работает polling-режимом только для продукта и отвечает красивой карточкой с ID сообщения, chat ID и thread ID.</div>
             </form>
             <div class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Текущее состояние</p>
+                <p class="panel-description">Показывает выбранного бота, polling-флаг и последнюю ошибку диагностического процесса.</p>
+              </div>
               <div class="table-wrap">
                 <table class="meta-table">
                   <tbody>
@@ -631,6 +762,10 @@
 
           <div v-if="activeTab === 'discovery'" class="grid">
             <div class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Автоматическое добавление чатов</p>
+                <p class="panel-description">Включи discovery для ботов, которых добавляют администраторами в группы, каналы и форумные темы.</p>
+              </div>
               <div class="table-wrap">
                 <table>
                   <thead><tr><th>Бот</th><th>Включен</th><th>Последний update</th><th>Ошибка</th></tr></thead>
@@ -650,6 +785,10 @@
 
           <div v-if="activeTab === 'mcp'" class="grid settings-grid">
             <div class="panel compact">
+              <div class="panel-head">
+                <p class="panel-title">Профиль MCP</p>
+                <p class="panel-description">Управляет доступностью MCP transport и быстрыми наборами инструментов для AI-клиентов.</p>
+              </div>
               <label class="checkbox-label"><input v-model="mcpSettings.is_enabled" type="checkbox" /> MCP включен</label>
               <label class="checkbox-label"><input v-model="mcpSettings.allow_legacy_sse" type="checkbox" /> Старый SSE-транспорт</label>
               <div class="actions">
@@ -661,6 +800,10 @@
               <div class="hint">Отключенные инструменты отклоняются при вызове. После изменения переподключи MCP-клиент, чтобы он обновил discovery.</div>
             </div>
             <div class="panel compact">
+              <div class="panel-head">
+                <p class="panel-title">Инструменты MCP</p>
+                <p class="panel-description">Отключенный инструмент остается видимым в настройке, но будет отклонен при вызове.</p>
+              </div>
               <div class="table-wrap">
                 <table class="tools-table">
                   <thead><tr><th>Инструмент</th><th>Категория</th><th>Риск</th><th>Включен</th></tr></thead>
@@ -676,6 +819,10 @@
               </div>
             </div>
             <form class="panel compact" @submit.prevent="createApiToken">
+              <div class="panel-head">
+                <p class="panel-title">Новый постоянный токен</p>
+                <p class="panel-description">Используется для защищенных доменов tg.* и внешнего tg-like API.</p>
+              </div>
               <label>Имя нового постоянного токена<input v-model="forms.apiToken.name" required /></label>
               <div class="token-scope-grid">
                 <label class="checkbox-label" v-for="scope in tokenScopes" :key="scope"><input v-model="forms.apiToken.scopes" type="checkbox" :value="scope" /> {{ scopeLabel(scope) }}</label>
@@ -684,6 +831,10 @@
               <div v-if="createdApiToken" class="hint">Создан токен: <code>{{ createdApiToken }}</code></div>
             </form>
             <div class="panel compact">
+              <div class="panel-head">
+                <p class="panel-title">Созданные токены</p>
+                <p class="panel-description">Токен показывается полностью только в момент создания; дальше доступен только префикс и отзыв.</p>
+              </div>
               <div class="table-wrap">
                 <table class="token-table">
                   <thead><tr><th>Имя</th><th>Префикс</th><th>Статус</th><th></th></tr></thead>
@@ -699,6 +850,10 @@
               </div>
             </div>
             <div class="panel compact">
+              <div class="panel-head">
+                <p class="panel-title">Transport endpoints</p>
+                <p class="panel-description">Пути MCP и список хостов, где обязательна проверка постоянного API-токена.</p>
+              </div>
               <div class="table-wrap">
                 <table class="meta-table">
                   <tbody>
@@ -711,6 +866,10 @@
           </div>
 
           <div v-if="activeTab === 'audit'" class="panel">
+            <div class="panel-head">
+              <p class="panel-title">События безопасности и операций</p>
+              <p class="panel-description">Здесь видны действия по токенам, MCP, discovery и другим административным операциям.</p>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>ID</th><th>Действие</th><th>Статус</th><th>Путь</th><th>Сообщение</th></tr></thead>
@@ -728,6 +887,10 @@
           </div>
 
           <div v-if="activeTab === 'health'" class="panel">
+            <div class="panel-head">
+              <p class="panel-title">Runtime health</p>
+              <p class="panel-description">Снимок текущей конфигурации API, shared media root и режима Telegram Bot API.</p>
+            </div>
             <pre>{{ JSON.stringify(health, null, 2) }}</pre>
           </div>
         </section>
@@ -744,18 +907,18 @@
             botSaving: false,
             lastError: "",
             tabs: [
-              { id: "bots", label: "Боты", icon: "bot" },
-              { id: "destinations", label: "Адресаты", icon: "send-to-back" },
-              { id: "templates", label: "Шаблоны", icon: "file-text" },
-              { id: "send", label: "Отправка", icon: "send" },
-              { id: "history", label: "История", icon: "history" },
-              { id: "mtproto", label: "MTProto", icon: "smartphone" },
-              { id: "analytics", label: "Аналитика", icon: "chart-no-axes-combined" },
-              { id: "diagnostics", label: "Диагностика", icon: "scan-search" },
-              { id: "discovery", label: "Автопоиск", icon: "radar" },
-              { id: "mcp", label: "MCP", icon: "plug-zap" },
-              { id: "audit", label: "Аудит", icon: "list-checks" },
-              { id: "health", label: "Состояние", icon: "activity" },
+              { id: "bots", label: "Боты", icon: "bot", description: "Управление Bot API токенами, проверка getMe и базовые сведения о каждом боте." },
+              { id: "destinations", label: "Адресаты", icon: "send-to-back", description: "Сохраненные группы, каналы, личные чаты и forum topic thread ID для повторной отправки." },
+              { id: "templates", label: "Шаблоны", icon: "file-text", description: "Переиспользуемые tagged-сообщения с настройками форматирования Telegram." },
+              { id: "send", label: "Отправка", icon: "send", description: "Единый рабочий экран для ручного текста, отправки по шаблону и файлов из shared media." },
+              { id: "history", label: "История", icon: "history", description: "Журнал попыток отправки, статусы, Telegram response и диагностические ошибки." },
+              { id: "mtproto", label: "MTProto", icon: "smartphone", description: "Вход пользовательской Telegram-сессией для аналитики каналов и чатов через Telethon." },
+              { id: "analytics", label: "Аналитика", icon: "chart-no-axes-combined", description: "Цели аналитики и ручной запуск refresh задач через Taskiq и Redis." },
+              { id: "diagnostics", label: "Диагностика", icon: "scan-search", description: "Отдельный polling-бот, который отвечает красивой карточкой с ID входящего или пересланного сообщения." },
+              { id: "discovery", label: "Автопоиск", icon: "radar", description: "Автоматическое создание адресатов, когда управляемого бота добавляют в чат администратором." },
+              { id: "mcp", label: "MCP", icon: "plug-zap", description: "Настройка MCP transport, tool discovery и постоянных API-токенов для защищенных tg.* доменов." },
+              { id: "audit", label: "Аудит", icon: "list-checks", description: "Операционный журнал административных действий и изменений доступа." },
+              { id: "health", label: "Состояние", icon: "activity", description: "Быстрая проверка runtime-конфигурации, Bot API endpoint и shared media root." },
             ],
             apiToken: localStorage.getItem("tgApiToken") || "",
             createdApiToken: "",
@@ -764,6 +927,12 @@
             auditEvents: [],
             discoverySettings: [],
             sendDryRun: null,
+            parseModeOptions: [
+              { key: "none", value: null, label: "без форматирования" },
+              { key: "html", value: "HTML", label: "HTML" },
+              { key: "markdown_v2", value: "MarkdownV2", label: "MarkdownV2" },
+              { key: "markdown", value: "Markdown", label: "Markdown legacy" },
+            ],
             tokenScopes: ["read", "send", "mcp_admin", "tg_compat"],
             mcpSettings: { is_enabled: true, allow_legacy_sse: true, protected_hosts: ["tg.sh-inc.ru", "tg.sh-inc.dev"], transports: [], tools: [] },
             diagnosticSettings: { bot_id: null, bot_name: null, bot_username: null, is_enabled: false, last_update_id: null, last_error: null },
@@ -771,9 +940,10 @@
               apiToken: { name: "dashboard", scopes: ["read", "send", "mcp_admin", "tg_compat"] },
               bot: { name: "", token: "", description: "" },
               destination: { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, alias: "", title: "" },
-              template: { tag: "", title: "", text: "", parse_mode: "" },
-              send: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", tag: "", text: "", send_mode: "sync" },
-              file: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", media_type: "video", file_relative_path: "", caption: "", send_mode: "sync" },
+              template: { tag: "", title: "", text: "", parse_mode: null, disable_web_page_preview: false },
+              send: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", tag: "", text: "", parse_mode: null, disable_web_page_preview: false, send_mode: "sync" },
+              templateSend: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", tag: "", send_mode: "sync" },
+              file: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", media_type: "video", file_relative_path: "", caption: "", parse_mode: null, send_mode: "sync" },
               mtproto: { phone: "", code: "", password: "" },
               analytics: { peer_ref: "", title: "" },
             },
@@ -921,14 +1091,24 @@
           async checkBot(id) { await this.api(`/bots/${id}/check`, { method: "POST" }); await this.refreshAll(); },
           async createDestination() { await this.api("/destinations", { method: "POST", body: JSON.stringify(this.forms.destination) }); await this.refreshAll(); },
           async checkDestination(id) { await this.api(`/destinations/${id}/check`, { method: "POST" }); await this.refreshAll(); },
-          async createTemplate() { await this.api("/templates", { method: "POST", body: JSON.stringify(this.forms.template) }); this.forms.template = { tag: "", title: "", text: "", parse_mode: "" }; await this.refreshAll(); },
+          async createTemplate() { await this.api("/templates", { method: "POST", body: JSON.stringify(this.forms.template) }); this.forms.template = { tag: "", title: "", text: "", parse_mode: null, disable_web_page_preview: false }; await this.refreshAll(); },
           async sendText() { await this.api("/send/text", { method: "POST", body: JSON.stringify(this.forms.send) }); await this.refreshAll(); },
+          async sendTemplate() { await this.api("/send/template", { method: "POST", body: JSON.stringify(this.forms.templateSend) }); await this.refreshAll(); },
           async sendFile() { await this.api("/send/file", { method: "POST", body: JSON.stringify(this.forms.file) }); await this.refreshAll(); },
           async dryRunText() { this.sendDryRun = await this.api("/send/text/dry-run", { method: "POST", body: JSON.stringify(this.forms.send) }); },
+          async dryRunTemplate() { this.sendDryRun = await this.api("/send/template/dry-run", { method: "POST", body: JSON.stringify(this.forms.templateSend) }); },
           async dryRunFile() { this.sendDryRun = await this.api("/send/file/dry-run", { method: "POST", body: JSON.stringify(this.forms.file) }); },
           copyCurl(kind) {
-            const path = kind === "file" ? "/api/v1/send/file" : "/api/v1/send/text";
-            const payload = kind === "file" ? this.forms.file : this.forms.send;
+            const path = {
+              file: "/api/v1/send/file",
+              template: "/api/v1/send/template",
+              text: "/api/v1/send/text",
+            }[kind];
+            const payload = {
+              file: this.forms.file,
+              template: this.forms.templateSend,
+              text: this.forms.send,
+            }[kind];
             const token = this.apiToken ? ` -H "X-API-Token: ${this.apiToken}"` : "";
             const command = `curl -X POST ${location.origin}${path} -H "Content-Type: application/json"${token} -d '${JSON.stringify(payload)}'`;
             navigator.clipboard?.writeText(command);
