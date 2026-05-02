@@ -62,6 +62,11 @@ class ApiToken(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     token_prefix: Mapped[str] = mapped_column(String(32), nullable=False)
+    scopes_json: Mapped[list[str]] = mapped_column(
+        JSON,
+        default=lambda: ["read", "send", "mcp_admin", "tg_compat"],
+        nullable=False,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
@@ -88,12 +93,14 @@ class McpSettings(Base):
 
 class Destination(Base):
     __tablename__ = "destinations"
+    __table_args__ = (UniqueConstraint("bot_id", "alias", name="uq_destinations_bot_alias"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), nullable=False)
     chat_id: Mapped[str] = mapped_column(String(200), nullable=False)
     message_thread_id: Mapped[int | None] = mapped_column(Integer)
+    alias: Mapped[str | None] = mapped_column(String(100))
     title: Mapped[str | None] = mapped_column(String(300))
     username: Mapped[str | None] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -123,6 +130,7 @@ class MessageTemplate(Base):
 
 class SendHistory(Base):
     __tablename__ = "send_history"
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_send_history_idempotency_key"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id", ondelete="SET NULL"), nullable=True)
@@ -138,6 +146,12 @@ class SendHistory(Base):
     file_size_bytes: Mapped[int | None] = mapped_column(Integer)
     telegram_message_id: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(40), default="created", nullable=False)
+    send_mode: Mapped[str] = mapped_column(String(40), default="sync", nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(200))
+    idempotency_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    queued_task_id: Mapped[str | None] = mapped_column(String(200))
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_code: Mapped[str | None] = mapped_column(String(100))
     error_message: Mapped[str | None] = mapped_column(Text)
     request_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
@@ -145,6 +159,59 @@ class SendHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    source: Mapped[str] = mapped_column(String(40), nullable=False)
+    action: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    api_token_id: Mapped[int | None] = mapped_column(
+        ForeignKey("api_tokens.id", ondelete="SET NULL")
+    )
+    host: Mapped[str | None] = mapped_column(String(300))
+    path: Mapped[str | None] = mapped_column(String(500))
+    method: Mapped[str | None] = mapped_column(String(20))
+    entity_type: Mapped[str | None] = mapped_column(String(80))
+    entity_id: Mapped[str | None] = mapped_column(String(120))
+    request_id: Mapped[str | None] = mapped_column(String(120))
+    message: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class BotDiscoverySettings(Base):
+    __tablename__ = "bot_discovery_settings"
+    __table_args__ = (UniqueConstraint("bot_id", name="uq_bot_discovery_settings_bot_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    last_update_id: Mapped[int | None] = mapped_column(Integer)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class BotDiscoveryEvent(Base):
+    __tablename__ = "bot_discovery_events"
+    __table_args__ = (
+        UniqueConstraint("bot_id", "update_id", name="uq_bot_discovery_event_update"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), nullable=False)
+    update_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    chat_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    old_status: Mapped[str | None] = mapped_column(String(40))
+    new_status: Mapped[str | None] = mapped_column(String(40))
+    raw_update_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class MtprotoSession(Base):

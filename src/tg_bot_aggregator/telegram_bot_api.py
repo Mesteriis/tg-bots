@@ -71,6 +71,14 @@ class TelegramBotApiClient:
     async def get_me(self, token: str) -> dict[str, Any]:
         return await self._post(token, "getMe", {})
 
+    async def get_chat(self, token: str, chat_id: str) -> dict[str, Any]:
+        return await self._post(token, "getChat", {"chat_id": chat_id})
+
+    async def get_chat_member_count(self, token: str, chat_id: str) -> int | None:
+        response = await self._post(token, "getChatMemberCount", {"chat_id": chat_id})
+        result = response.get("result")
+        return result if isinstance(result, int) else None
+
     async def delete_webhook(
         self,
         token: str,

@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
 from tg_bot_aggregator.api_tokens import API_TOKEN_COOKIE, API_TOKEN_HEADER, hash_api_token
+from tg_bot_aggregator.audit import record_audit_event
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.repositories import ApiTokenRepository
 from tg_bot_aggregator.security import is_protected_host_request
@@ -20,43 +21,78 @@ class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        if not self._requires_api_token(request):
+        required_scope = self._required_scope(request)
+        if required_scope is None:
             return await call_next(request)
 
         token = self._extract_token(request)
         if token is None:
+            await self._record_rejected(request, None, "missing", "api token required")
             return self._unauthorized()
 
         session_factory = request.app.state.session_factory
         async with session_factory() as session:
             row = await ApiTokenRepository(session).get_by_hash(hash_api_token(token))
             if row is None or not row.is_active:
+                await self._record_rejected(request, None, "invalid", "invalid api token")
                 return self._unauthorized()
+            scopes = set(row.scopes_json or ["read", "send", "mcp_admin", "tg_compat"])
+            if required_scope not in scopes:
+                await record_audit_event(
+                    session,
+                    source="auth",
+                    action="protected_host.scope",
+                    status="denied",
+                    request=request,
+                    api_token_id=row.id,
+                    message=f"api token scope '{required_scope}' required",
+                    metadata={"required_scope": required_scope, "scopes": sorted(scopes)},
+                )
+                await session.commit()
+                return self._forbidden(required_scope)
             await ApiTokenRepository(session).mark_used(row)
             await session.commit()
             request.state.api_token_id = row.id
+            request.state.api_token_scopes = sorted(scopes)
 
         return await call_next(request)
 
-    def _requires_api_token(self, request: Request) -> bool:
+    def _required_scope(self, request: Request) -> str | None:
         if request.method == "OPTIONS":
-            return False
+            return None
         path = request.url.path
         if path == "/" or path == f"{self.settings.api_v1_prefix}/auth/session":
-            return False
+            return None
         if not (
             path.startswith(self.settings.api_v1_prefix)
             or path.startswith(self.settings.mcp_v1_prefix)
             or path.startswith("/bot")
         ):
-            return False
+            return None
         host = request.headers.get("x-forwarded-host") or request.headers.get("host")
         origin = request.headers.get("origin")
-        return is_protected_host_request(
+        if not is_protected_host_request(
             host=host,
             origin=origin,
             protected_hosts=self.settings.protected_api_hosts,
-        )
+        ):
+            return None
+        return self._scope_for_path(path, request.method)
+
+    def _scope_for_path(self, path: str, method: str) -> str:
+        if path.startswith("/bot"):
+            return "tg_compat"
+        if path.startswith(self.settings.mcp_v1_prefix):
+            return "mcp_admin"
+        if path.startswith(f"{self.settings.api_v1_prefix}/send"):
+            return "send"
+        if path.startswith(f"{self.settings.api_v1_prefix}/auth/tokens"):
+            return "mcp_admin"
+        if path.startswith(f"{self.settings.api_v1_prefix}/mcp"):
+            return "mcp_admin"
+        if method in {"GET", "HEAD"}:
+            return "read"
+        return "mcp_admin"
 
     def _extract_token(self, request: Request) -> str | None:
         header_token = request.headers.get(API_TOKEN_HEADER)
@@ -74,3 +110,30 @@ class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):
             status_code=401,
             media_type="application/json",
         )
+
+    def _forbidden(self, required_scope: str) -> Response:
+        return Response(
+            f'{{"detail":"api token scope \'{required_scope}\' required"}}',
+            status_code=403,
+            media_type="application/json",
+        )
+
+    async def _record_rejected(
+        self,
+        request: Request,
+        api_token_id: int | None,
+        status: str,
+        message: str,
+    ) -> None:
+        session_factory = request.app.state.session_factory
+        async with session_factory() as session:
+            await record_audit_event(
+                session,
+                source="auth",
+                action="protected_host.token",
+                status=status,
+                request=request,
+                api_token_id=api_token_id,
+                message=message,
+            )
+            await session.commit()

@@ -6,6 +6,8 @@ from tg_bot_aggregator.db import create_engine, create_session_factory
 from tg_bot_aggregator.events import RedisEventBus
 from tg_bot_aggregator.mtproto_service import MtprotoService
 from tg_bot_aggregator.repositories import MtprotoSessionRepository
+from tg_bot_aggregator.send_service import SendService
+from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 
 def create_broker(settings: Settings | None = None) -> RedisStreamBroker:
@@ -50,3 +52,26 @@ async def refresh_all_analytics_targets() -> list[int]:
     finally:
         await engine.dispose()
 
+
+async def run_send_history(send_history_id: int) -> int:
+    settings = get_settings()
+    engine = create_engine(settings)
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as session:
+            events = RedisEventBus(settings.redis_url)
+            service = SendService(
+                session,
+                TelegramBotApiClient(settings.telegram_bot_api_base_url),
+                settings,
+                events,
+            )
+            row = await service.process_queued_send(send_history_id)
+            return row.id
+    finally:
+        await engine.dispose()
+
+
+@broker.task
+async def send_history(send_history_id: int) -> int:
+    return await run_send_history(send_history_id)

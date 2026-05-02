@@ -337,11 +337,12 @@
               <label>Kind<select v-model="forms.destination.kind"><option>private</option><option>group</option><option>supergroup</option><option>channel</option><option>forum_topic</option></select></label>
               <label>Chat ID<input v-model="forms.destination.chat_id" required /></label>
               <label>Thread ID<input v-model.number="forms.destination.message_thread_id" type="number" /></label>
+              <label>Alias<input v-model="forms.destination.alias" placeholder="ops_channel" /></label>
               <label>Title<input v-model="forms.destination.title" /></label>
               <button class="btn primary"><i data-lucide="plus"></i>Add destination</button>
             </form>
             <div class="panel">
-              <table><thead><tr><th>Title</th><th>Kind</th><th>Chat</th><th>Thread</th></tr></thead><tbody><tr v-for="item in destinations" :key="item.id"><td>{{ item.title || '-' }}</td><td>{{ item.kind }}</td><td>{{ item.chat_id }}</td><td>{{ item.message_thread_id || '-' }}</td></tr></tbody></table>
+              <table><thead><tr><th>Title</th><th>Alias</th><th>Kind</th><th>Chat</th><th>Thread</th><th></th></tr></thead><tbody><tr v-for="item in destinations" :key="item.id"><td>{{ item.title || '-' }}</td><td>{{ item.alias || '-' }}</td><td>{{ item.kind }}</td><td>{{ item.chat_id }}</td><td>{{ item.message_thread_id || '-' }}</td><td><button class="btn" @click="checkDestination(item.id)"><i data-lucide="radar"></i></button></td></tr></tbody></table>
             </div>
           </div>
 
@@ -362,19 +363,32 @@
             <form class="panel" @submit.prevent="sendText">
               <label>Bot<select v-model.number="forms.send.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
               <label>Destination<select v-model.number="forms.send.destination_id"><option :value="null">Manual chat</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
+              <label>Destination alias<input v-model="forms.send.destination_alias" placeholder="ops_channel" /></label>
               <label>Chat ID<input v-model="forms.send.chat_id" /></label>
+              <label>Send mode<select v-model="forms.send.send_mode"><option>sync</option><option>queued</option></select></label>
               <label>Tag<input v-model="forms.send.tag" /></label>
               <label>Text<textarea v-model="forms.send.text"></textarea></label>
-              <button class="btn primary"><i data-lucide="send"></i>Send text</button>
+              <div class="actions">
+                <button class="btn primary"><i data-lucide="send"></i>Send text</button>
+                <button class="btn" type="button" @click="dryRunText"><i data-lucide="scan-line"></i>Dry run</button>
+                <button class="btn" type="button" @click="copyCurl('text')"><i data-lucide="copy"></i>cURL</button>
+              </div>
+              <pre v-if="sendDryRun">{{ JSON.stringify(sendDryRun, null, 2) }}</pre>
             </form>
             <form class="panel" @submit.prevent="sendFile">
               <label>Media type<select v-model="forms.file.media_type"><option>video</option><option>document</option></select></label>
               <label>Bot<select v-model.number="forms.file.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
               <label>Destination<select v-model.number="forms.file.destination_id"><option :value="null">Manual chat</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
+              <label>Destination alias<input v-model="forms.file.destination_alias" placeholder="ops_channel" /></label>
               <label>Chat ID<input v-model="forms.file.chat_id" /></label>
+              <label>Send mode<select v-model="forms.file.send_mode"><option>sync</option><option>queued</option></select></label>
               <label>Shared path<input v-model="forms.file.file_relative_path" placeholder="telegram-outbox/video.mp4" /></label>
               <label>Caption<textarea v-model="forms.file.caption"></textarea></label>
-              <button class="btn primary"><i data-lucide="file-video"></i>Send file</button>
+              <div class="actions">
+                <button class="btn primary"><i data-lucide="file-video"></i>Send file</button>
+                <button class="btn" type="button" @click="dryRunFile"><i data-lucide="scan-line"></i>Dry run</button>
+                <button class="btn" type="button" @click="copyCurl('file')"><i data-lucide="copy"></i>cURL</button>
+              </div>
             </form>
           </div>
 
@@ -433,6 +447,23 @@
             </div>
           </div>
 
+          <div v-if="activeTab === 'discovery'" class="grid">
+            <div class="panel">
+              <table>
+                <thead><tr><th>Bot</th><th>Enabled</th><th>Last update</th><th>Error</th></tr></thead>
+                <tbody>
+                  <tr v-for="bot in bots" :key="bot.id">
+                    <td>{{ bot.name }}</td>
+                    <td><input :checked="discoveryEnabled(bot.id)" type="checkbox" @change="saveDiscoverySettings(bot.id, $event.target.checked)" /></td>
+                    <td>{{ discoveryFor(bot.id)?.last_update_id || '-' }}</td>
+                    <td>{{ discoveryFor(bot.id)?.last_error || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="hint">Discovery polls only my_chat_member updates to register chats where a managed bot is added.</div>
+            </div>
+          </div>
+
           <div v-if="activeTab === 'mcp'" class="grid">
             <div class="panel">
               <label><input v-model="mcpSettings.is_enabled" type="checkbox" /> MCP enabled</label>
@@ -460,6 +491,9 @@
             </div>
             <form class="panel" @submit.prevent="createApiToken">
               <label>New permanent token name<input v-model="forms.apiToken.name" required /></label>
+              <div class="actions">
+                <label v-for="scope in tokenScopes" :key="scope"><input v-model="forms.apiToken.scopes" type="checkbox" :value="scope" /> {{ scope }}</label>
+              </div>
               <button class="btn primary"><i data-lucide="key-round"></i>Create token</button>
               <div v-if="createdApiToken" class="hint">Created token: <code>{{ createdApiToken }}</code></div>
             </form>
@@ -484,6 +518,21 @@
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <div v-if="activeTab === 'audit'" class="panel">
+            <table>
+              <thead><tr><th>ID</th><th>Action</th><th>Status</th><th>Path</th><th>Message</th></tr></thead>
+              <tbody>
+                <tr v-for="event in auditEvents" :key="event.id">
+                  <td>{{ event.id }}</td>
+                  <td>{{ event.action }}</td>
+                  <td>{{ event.status }}</td>
+                  <td>{{ event.path || '-' }}</td>
+                  <td>{{ event.message || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div v-if="activeTab === 'health'" class="panel">
@@ -511,22 +560,28 @@
               { id: "mtproto", label: "MTProto", icon: "smartphone" },
               { id: "analytics", label: "Analytics", icon: "chart-no-axes-combined" },
               { id: "diagnostics", label: "Diagnostics", icon: "scan-search" },
+              { id: "discovery", label: "Discovery", icon: "radar" },
               { id: "mcp", label: "MCP", icon: "plug-zap" },
+              { id: "audit", label: "Audit", icon: "list-checks" },
               { id: "health", label: "Health", icon: "activity" },
             ],
             apiToken: localStorage.getItem("tgApiToken") || "",
             createdApiToken: "",
             bots: [], destinations: [], templates: [], history: [], analyticsTargets: [], health: {},
             apiTokens: [],
+            auditEvents: [],
+            discoverySettings: [],
+            sendDryRun: null,
+            tokenScopes: ["read", "send", "mcp_admin", "tg_compat"],
             mcpSettings: { is_enabled: true, allow_legacy_sse: true, protected_hosts: ["tg.sh-inc.ru", "tg.sh-inc.dev"], transports: [], tools: [] },
             diagnosticSettings: { bot_id: null, bot_name: null, bot_username: null, is_enabled: false, last_update_id: null, last_error: null },
             forms: {
-              apiToken: { name: "dashboard" },
+              apiToken: { name: "dashboard", scopes: ["read", "send", "mcp_admin", "tg_compat"] },
               bot: { name: "", token: "", description: "" },
-              destination: { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, title: "" },
+              destination: { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, alias: "", title: "" },
               template: { tag: "", title: "", text: "", parse_mode: "" },
-              send: { bot_id: null, destination_id: null, chat_id: "", tag: "", text: "" },
-              file: { bot_id: null, destination_id: null, chat_id: "", media_type: "video", file_relative_path: "", caption: "" },
+              send: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", tag: "", text: "", send_mode: "sync" },
+              file: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", media_type: "video", file_relative_path: "", caption: "", send_mode: "sync" },
               mtproto: { phone: "", code: "", password: "" },
               analytics: { peer_ref: "", title: "" },
             },
@@ -586,7 +641,7 @@
             localStorage.removeItem("tgApiToken");
           },
           async refreshAll() {
-            const [health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings, mcpSettings, apiTokens] = await Promise.all([
+            const [health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings, mcpSettings, apiTokens, discoverySettings, auditEvents] = await Promise.all([
               this.api("/health"),
               this.api("/bots"),
               this.api("/destinations"),
@@ -596,8 +651,10 @@
               this.api("/diagnostics/bot"),
               this.api("/mcp/settings"),
               this.api("/auth/tokens"),
+              this.api("/discovery/bots"),
+              this.api("/audit"),
             ]);
-            Object.assign(this, { health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings, mcpSettings, apiTokens });
+            Object.assign(this, { health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings, mcpSettings, apiTokens, discoverySettings, auditEvents });
           },
           connectEvents() {
             const source = new EventSource("/api/v1/events");
@@ -622,15 +679,28 @@
           },
           async checkBot(id) { await this.api(`/bots/${id}/check`, { method: "POST" }); await this.refreshAll(); },
           async createDestination() { await this.api("/destinations", { method: "POST", body: JSON.stringify(this.forms.destination) }); await this.refreshAll(); },
+          async checkDestination(id) { await this.api(`/destinations/${id}/check`, { method: "POST" }); await this.refreshAll(); },
           async createTemplate() { await this.api("/templates", { method: "POST", body: JSON.stringify(this.forms.template) }); this.forms.template = { tag: "", title: "", text: "", parse_mode: "" }; await this.refreshAll(); },
           async sendText() { await this.api("/send/text", { method: "POST", body: JSON.stringify(this.forms.send) }); await this.refreshAll(); },
           async sendFile() { await this.api("/send/file", { method: "POST", body: JSON.stringify(this.forms.file) }); await this.refreshAll(); },
+          async dryRunText() { this.sendDryRun = await this.api("/send/text/dry-run", { method: "POST", body: JSON.stringify(this.forms.send) }); },
+          async dryRunFile() { this.sendDryRun = await this.api("/send/file/dry-run", { method: "POST", body: JSON.stringify(this.forms.file) }); },
+          copyCurl(kind) {
+            const path = kind === "file" ? "/api/v1/send/file" : "/api/v1/send/text";
+            const payload = kind === "file" ? this.forms.file : this.forms.send;
+            const token = this.apiToken ? ` -H "X-API-Token: ${this.apiToken}"` : "";
+            const command = `curl -X POST ${location.origin}${path} -H "Content-Type: application/json"${token} -d '${JSON.stringify(payload)}'`;
+            navigator.clipboard?.writeText(command);
+          },
           async startLogin() { await this.api("/mtproto/login/start", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone }) }); },
           async confirmCode() { await this.api("/mtproto/login/confirm-code", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone, code: this.forms.mtproto.code }) }); },
           async confirmPassword() { await this.api("/mtproto/login/confirm-password", { method: "POST", body: JSON.stringify({ password: this.forms.mtproto.password }) }); },
           async createAnalyticsTarget() { await this.api("/analytics/targets", { method: "POST", body: JSON.stringify(this.forms.analytics) }); this.forms.analytics = { peer_ref: "", title: "" }; await this.refreshAll(); },
           async refreshAnalytics(target_id) { await this.api("/analytics/refresh", { method: "POST", body: JSON.stringify({ target_id }) }); await this.refreshAll(); },
           async saveDiagnosticSettings() { await this.api("/diagnostics/bot", { method: "PATCH", body: JSON.stringify({ bot_id: this.diagnosticSettings.bot_id, is_enabled: this.diagnosticSettings.is_enabled }) }); await this.refreshAll(); },
+          async saveDiscoverySettings(bot_id, is_enabled) { await this.api(`/discovery/bots/${bot_id}`, { method: "PATCH", body: JSON.stringify({ is_enabled }) }); await this.refreshAll(); },
+          discoveryFor(bot_id) { return this.discoverySettings.find((item) => item.bot_id === bot_id); },
+          discoveryEnabled(bot_id) { return Boolean(this.discoveryFor(bot_id)?.is_enabled); },
           setMcpPreset(preset) {
             const allowed = {
               read: ["list_bots", "list_destinations", "list_message_templates", "get_analytics_summary", "get_send_history"],

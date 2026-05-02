@@ -6,8 +6,17 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.repositories import BotRepository, DestinationRepository, TemplateRepository
-from tg_bot_aggregator.send_service import SendService, SendServiceError
+from tg_bot_aggregator.repositories import (
+    BotRepository,
+    DestinationRepository,
+    SendHistoryRepository,
+    TemplateRepository,
+)
+from tg_bot_aggregator.send_service import (
+    IdempotencyConflictError,
+    SendService,
+    SendServiceError,
+)
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 
@@ -112,3 +121,134 @@ async def test_failed_telegram_response_is_persisted(db_session: AsyncSession) -
     assert row.status == "failed"
     assert row.error_code == "400"
     assert row.error_message == "bad"
+
+
+async def test_send_template_renders_variables(db_session: AsyncSession) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await TemplateRepository(db_session).create(
+        tag="deploy",
+        title="Deploy",
+        text="Deploy {{service}}",
+    )
+    await db_session.commit()
+    service = SendService(db_session, _bot_api_client({}), Settings())
+
+    row = await service.send_template(
+        bot.id,
+        "deploy",
+        chat_id="@ops",
+        variables={"service": "api"},
+    )
+
+    assert row.text == "Deploy api"
+    assert row.status == "succeeded"
+
+
+async def test_send_text_idempotency_key_prevents_duplicate_telegram_calls(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    seen: dict[str, Any] = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["count"] += 1
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": seen["count"]}})
+
+    client = TelegramBotApiClient(
+        "http://telegram-bot-api:8081", httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    service = SendService(db_session, client, Settings())
+
+    first = await service.send_text(bot.id, "hello", chat_id="@ops", idempotency_key="idem-1")
+    second = await service.send_text(bot.id, "hello", chat_id="@ops", idempotency_key="idem-1")
+
+    assert first.id == second.id
+    assert second.telegram_message_id == 1
+    assert seen["count"] == 1
+
+
+async def test_send_text_rejects_conflicting_idempotency_key(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    service = SendService(db_session, _bot_api_client({}), Settings())
+
+    await service.send_text(bot.id, "hello", chat_id="@ops", idempotency_key="idem-1")
+
+    with pytest.raises(IdempotencyConflictError):
+        await service.send_text(bot.id, "changed", chat_id="@ops", idempotency_key="idem-1")
+
+
+async def test_dry_run_text_validates_without_history_or_telegram_call(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    destination = await DestinationRepository(db_session).create(
+        bot_id=bot.id,
+        kind="channel",
+        chat_id="@ops",
+        alias="ops_channel",
+    )
+    await db_session.commit()
+    seen: dict[str, Any] = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["count"] += 1
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 1}})
+
+    service = SendService(
+        db_session,
+        TelegramBotApiClient(
+            "http://telegram-bot-api:8081",
+            httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        ),
+        Settings(),
+    )
+
+    result = await service.dry_run_text(
+        bot.id,
+        "hello",
+        destination_alias="ops_channel",
+    )
+
+    assert result["method"] == "sendMessage"
+    assert result["destination_id"] == destination.id
+    assert result["payload"]["chat_id"] == "@ops"
+    assert seen["count"] == 0
+    assert await SendHistoryRepository(db_session).list() == []
+
+
+async def test_queued_send_is_processed_with_transient_retry(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    seen: dict[str, Any] = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["count"] += 1
+        if seen["count"] == 1:
+            return httpx.Response(
+                500,
+                json={"ok": False, "error_code": 500, "description": "temporary"},
+            )
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 77}})
+
+    client = TelegramBotApiClient(
+        "http://telegram-bot-api:8081", httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    service = SendService(
+        db_session,
+        client,
+        Settings(SEND_RETRY_MAX_ATTEMPTS=2, SEND_RETRY_DELAY_SECONDS=0),
+    )
+
+    queued = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+    assert queued.status == "queued"
+    processed = await service.process_queued_send(queued.id)
+
+    assert processed.status == "succeeded"
+    assert processed.telegram_message_id == 77
+    assert processed.attempt_count == 2

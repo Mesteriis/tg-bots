@@ -8,10 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tg_bot_aggregator.api import (
     analytics,
+    audit,
     auth,
     bots,
     destinations,
     diagnostics,
+    discovery,
     events,
     health,
     mcp_settings,
@@ -36,6 +38,7 @@ def create_app(
     event_bus: MemoryEventBus | None = None,
     bot_api_client: TelegramBotApiClient | None = None,
     enqueue_analytics_refresh: Callable[[int, int], Awaitable[str | None]] | None = None,
+    enqueue_send_history: Callable[[int], Awaitable[str | None]] | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     install_secret_log_filters()
@@ -70,6 +73,14 @@ def create_app(
         enqueue_analytics_refresh or default_enqueue_analytics_refresh
     )
 
+    async def default_enqueue_send_history(send_history_id: int) -> str | None:
+        from tg_bot_aggregator.tasks import send_history
+
+        task = await send_history.kiq(send_history_id)
+        return task.task_id
+
+    app.state.enqueue_send_history = enqueue_send_history or default_enqueue_send_history
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_allowed_origins,
@@ -81,10 +92,12 @@ def create_app(
 
     prefix = resolved_settings.api_v1_prefix
     app.include_router(health.router, prefix=prefix)
+    app.include_router(audit.router, prefix=prefix)
     app.include_router(auth.router, prefix=prefix)
     app.include_router(bots.router, prefix=prefix)
     app.include_router(destinations.router, prefix=prefix)
     app.include_router(diagnostics.router, prefix=prefix)
+    app.include_router(discovery.router, prefix=prefix)
     app.include_router(templates.router, prefix=prefix)
     app.include_router(send.router, prefix=prefix)
     app.include_router(mtproto.router, prefix=prefix)

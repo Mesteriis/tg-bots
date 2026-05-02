@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     diagnostic_retry_delay_seconds: float = Field(
         default=5.0, validation_alias="DIAGNOSTIC_RETRY_DELAY_SECONDS"
     )
+    discovery_poll_timeout_seconds: int = Field(
+        default=30, validation_alias="DISCOVERY_POLL_TIMEOUT_SECONDS"
+    )
+    discovery_retry_delay_seconds: float = Field(
+        default=5.0, validation_alias="DISCOVERY_RETRY_DELAY_SECONDS"
+    )
+    send_retry_max_attempts: int = Field(default=3, validation_alias="SEND_RETRY_MAX_ATTEMPTS")
+    send_retry_delay_seconds: float = Field(
+        default=1.0,
+        validation_alias="SEND_RETRY_DELAY_SECONDS",
+    )
 
     @field_validator(
         "cors_allowed_origins",

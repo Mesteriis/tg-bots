@@ -133,6 +133,23 @@ async def test_dashboard_can_manage_diagnostic_bot_settings() -> None:
     assert updated["last_update_id"] is None
 
 
+async def test_dashboard_can_manage_discovery_settings() -> None:
+    client, _ = await _client()
+    async with client:
+        bot = (await client.post("/api/v1/bots", json={"token": "123:token"})).json()
+        listed = (await client.get("/api/v1/discovery/bots")).json()
+        updated = (
+            await client.patch(
+                f"/api/v1/discovery/bots/{bot['id']}",
+                json={"is_enabled": True},
+            )
+        ).json()
+
+    assert listed == []
+    assert updated["bot_id"] == bot["id"]
+    assert updated["is_enabled"] is True
+
+
 async def test_dashboard_can_manage_mcp_settings() -> None:
     client, _ = await _client()
     async with client:
@@ -160,3 +177,129 @@ async def test_events_once_returns_sse_frame() -> None:
 
     assert response.headers["content-type"].startswith("text/event-stream")
     assert "event: send.created" in response.text
+
+
+async def test_send_dry_run_does_not_create_history() -> None:
+    client, _ = await _client()
+    async with client:
+        bot = (await client.post("/api/v1/bots", json={"token": "123:token"})).json()
+        destination = (
+            await client.post(
+                "/api/v1/destinations",
+                json={
+                    "bot_id": bot["id"],
+                    "kind": "channel",
+                    "chat_id": "@ops",
+                    "alias": "ops_channel",
+                },
+            )
+        ).json()
+        dry_run = (
+            await client.post(
+                "/api/v1/send/text/dry-run",
+                json={
+                    "bot_id": bot["id"],
+                    "destination_alias": "ops_channel",
+                    "text": "hello",
+                },
+            )
+        ).json()
+        history = (await client.get("/api/v1/send-history")).json()
+
+    assert destination["alias"] == "ops_channel"
+    assert dry_run["method"] == "sendMessage"
+    assert dry_run["payload"]["chat_id"] == "@ops"
+    assert history == []
+
+
+async def test_send_text_honors_idempotency_key() -> None:
+    seen = {"send_count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith("/getMe"):
+            return httpx.Response(
+                200,
+                json={"ok": True, "result": {"id": 123, "username": "ops_bot"}},
+            )
+        seen["send_count"] += 1
+        return httpx.Response(
+            200,
+            json={"ok": True, "result": {"message_id": seen["send_count"]}},
+        )
+
+    client, _ = await _client(handler=httpx.MockTransport(handler))
+    async with client:
+        bot = (await client.post("/api/v1/bots", json={"token": "123:token"})).json()
+        first = (
+            await client.post(
+                "/api/v1/send/text",
+                json={"bot_id": bot["id"], "chat_id": "@ops", "text": "hello"},
+                headers={"Idempotency-Key": "idem-rest-1"},
+            )
+        ).json()
+        second = (
+            await client.post(
+                "/api/v1/send/text",
+                json={"bot_id": bot["id"], "chat_id": "@ops", "text": "hello"},
+                headers={"Idempotency-Key": "idem-rest-1"},
+            )
+        ).json()
+        conflict = await client.post(
+            "/api/v1/send/text",
+            json={"bot_id": bot["id"], "chat_id": "@ops", "text": "changed"},
+            headers={"Idempotency-Key": "idem-rest-1"},
+        )
+
+    assert first["id"] == second["id"]
+    assert seen["send_count"] == 1
+    assert conflict.status_code == 409
+
+
+async def test_destination_check_updates_metadata_and_reports_partial_warnings() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith("/getMe"):
+            return httpx.Response(
+                200,
+                json={"ok": True, "result": {"id": 123, "username": "ops_bot"}},
+            )
+        if str(request.url).endswith("/getChat"):
+            return httpx.Response(
+                200,
+                json={
+                    "ok": True,
+                    "result": {
+                        "id": -100,
+                        "type": "supergroup",
+                        "title": "Updated Ops",
+                        "username": "ops_chat",
+                    },
+                },
+            )
+        if str(request.url).endswith("/getChatMemberCount"):
+            return httpx.Response(
+                400,
+                json={"ok": False, "error_code": 400, "description": "not enough rights"},
+            )
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 1}})
+
+    client, _ = await _client(handler=httpx.MockTransport(handler))
+    async with client:
+        bot = (await client.post("/api/v1/bots", json={"token": "123:token"})).json()
+        destination = (
+            await client.post(
+                "/api/v1/destinations",
+                json={"bot_id": bot["id"], "kind": "channel", "chat_id": "-100"},
+            )
+        ).json()
+        checked = (
+            await client.post(f"/api/v1/destinations/{destination['id']}/check")
+        ).json()
+        loaded = (await client.get(f"/api/v1/destinations/{destination['id']}")).json()
+
+    assert checked["ok"] is True
+    assert checked["chat"]["title"] == "Updated Ops"
+    assert checked["member_count"] is None
+    assert checked["warnings"] == ["not enough rights"]
+    assert loaded["title"] == "Updated Ops"
+    assert loaded["username"] == "ops_chat"
+    assert loaded["kind"] == "supergroup"

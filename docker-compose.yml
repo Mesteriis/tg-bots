@@ -65,6 +65,22 @@ services:
     depends_on:
       - telegram-bot-api
 
+  discovery-bot:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    command: ["python", "-m", "tg_bot_aggregator.discovery.bot"]
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/app.db
+      TELEGRAM_BOT_API_BASE_URL: http://telegram-bot-api:8081
+      DISCOVERY_POLL_TIMEOUT_SECONDS: "${DISCOVERY_POLL_TIMEOUT_SECONDS:-30}"
+      DISCOVERY_RETRY_DELAY_SECONDS: "${DISCOVERY_RETRY_DELAY_SECONDS:-5}"
+    volumes:
+      - app-data:/data
+    depends_on:
+      - telegram-bot-api
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped

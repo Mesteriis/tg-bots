@@ -5,12 +5,19 @@ from mcp.server.fastmcp import FastMCP
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.applications import Starlette
 
-from tg_bot_aggregator.api_tokens import api_token_prefix, generate_api_token, hash_api_token
+from tg_bot_aggregator.api_tokens import (
+    api_token_prefix,
+    generate_api_token,
+    hash_api_token,
+    normalize_token_scopes,
+)
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.events import MemoryEventBus
 from tg_bot_aggregator.repositories import (
     AnalyticsRepository,
     ApiTokenRepository,
+    AuditRepository,
+    BotDiscoverySettingsRepository,
     BotRepository,
     DestinationRepository,
     McpSettingsRepository,
@@ -18,7 +25,7 @@ from tg_bot_aggregator.repositories import (
     TemplateRepository,
 )
 from tg_bot_aggregator.send_service import SendService
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
+from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
 
 SessionFactoryProvider = Callable[[], async_sessionmaker[AsyncSession]]
 
@@ -198,6 +205,142 @@ def create_mcp_server(
             ]
 
     @mcp.tool()
+    async def dry_run_send(
+        bot_id: int,
+        text: str | None = None,
+        tag: str | None = None,
+        destination_id: int | None = None,
+        destination_alias: str | None = None,
+        chat_id: str | None = None,
+        message_thread_id: int | None = None,
+        variables: dict[str, Any] | None = None,
+        media_type: str | None = None,
+        file_relative_path: str | None = None,
+        caption: str | None = None,
+    ) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "dry_run_send")
+        async with get_session_factory()() as session:
+            service = SendService(session, bot_api_client, settings, event_bus)
+            if file_relative_path:
+                return await service.dry_run_file(
+                    bot_id=bot_id,
+                    media_type=media_type or "document",
+                    file_relative_path=file_relative_path,
+                    destination_id=destination_id,
+                    destination_alias=destination_alias,
+                    chat_id=chat_id,
+                    caption=caption,
+                    message_thread_id=message_thread_id,
+                    variables=variables,
+                )
+            if tag:
+                return await service.dry_run_template(
+                    bot_id=bot_id,
+                    tag=tag,
+                    destination_id=destination_id,
+                    destination_alias=destination_alias,
+                    chat_id=chat_id,
+                    message_thread_id=message_thread_id,
+                    variables=variables,
+                )
+            return await service.dry_run_text(
+                bot_id=bot_id,
+                text=text or "",
+                destination_id=destination_id,
+                destination_alias=destination_alias,
+                chat_id=chat_id,
+                message_thread_id=message_thread_id,
+            )
+
+    @mcp.tool()
+    async def list_audit_events(limit: int = 20) -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_audit_events")
+        async with get_session_factory()() as session:
+            rows = await AuditRepository(session).list(limit=limit)
+            return [
+                {
+                    "id": item.id,
+                    "created_at": item.created_at.isoformat(),
+                    "source": item.source,
+                    "action": item.action,
+                    "status": item.status,
+                    "entity_type": item.entity_type,
+                    "entity_id": item.entity_id,
+                    "message": item.message,
+                }
+                for item in rows
+            ]
+
+    @mcp.tool()
+    async def get_discovery_settings() -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "get_discovery_settings")
+        async with get_session_factory()() as session:
+            rows = await BotDiscoverySettingsRepository(session).list()
+            return [
+                {
+                    "bot_id": item.bot_id,
+                    "is_enabled": item.is_enabled,
+                    "last_update_id": item.last_update_id,
+                    "last_error": item.last_error,
+                }
+                for item in rows
+            ]
+
+    @mcp.tool()
+    async def update_discovery_settings(bot_id: int, is_enabled: bool) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "update_discovery_settings")
+        async with get_session_factory()() as session:
+            bot = await BotRepository(session).get(bot_id)
+            if bot is None:
+                raise ValueError(f"bot {bot_id} not found")
+            row = await BotDiscoverySettingsRepository(session).upsert_for_bot(
+                bot_id,
+                is_enabled=is_enabled,
+            )
+            await session.commit()
+            return {"bot_id": row.bot_id, "is_enabled": row.is_enabled}
+
+    @mcp.tool()
+    async def check_destination(destination_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "check_destination")
+        async with get_session_factory()() as session:
+            destinations = DestinationRepository(session)
+            destination = await destinations.get(destination_id)
+            if destination is None:
+                raise ValueError(f"destination {destination_id} not found")
+            bot = await BotRepository(session).get(destination.bot_id)
+            if bot is None or not bot.is_active:
+                raise ValueError("destination bot is missing or inactive")
+            chat_response = await bot_api_client.get_chat(bot.token, destination.chat_id)
+            chat = chat_response.get("result") if isinstance(chat_response, dict) else {}
+            if not isinstance(chat, dict):
+                chat = {}
+            warnings: list[str] = []
+            member_count: int | None = None
+            try:
+                member_count = await bot_api_client.get_chat_member_count(
+                    bot.token,
+                    destination.chat_id,
+                )
+            except TelegramBotApiError as exc:
+                warnings.append(exc.description)
+            await destinations.update(
+                destination_id,
+                kind=str(chat.get("type") or destination.kind),
+                title=chat.get("title") or chat.get("first_name") or destination.title,
+                username=chat.get("username") or destination.username,
+                is_active=True,
+            )
+            await session.commit()
+            return {
+                "destination_id": destination_id,
+                "ok": True,
+                "chat": chat,
+                "member_count": member_count,
+                "warnings": warnings,
+            }
+
+    @mcp.tool()
     async def list_api_tokens() -> list[dict[str, Any]]:
         await ensure_mcp_tool_enabled(get_session_factory(), "list_api_tokens")
         async with get_session_factory()() as session:
@@ -216,7 +359,7 @@ def create_mcp_server(
             ]
 
     @mcp.tool()
-    async def create_api_token(name: str) -> dict[str, Any]:
+    async def create_api_token(name: str, scopes: list[str] | None = None) -> dict[str, Any]:
         await ensure_mcp_tool_enabled(get_session_factory(), "create_api_token")
         token = generate_api_token()
         async with get_session_factory()() as session:
@@ -224,12 +367,14 @@ def create_mcp_server(
                 name=name,
                 token_hash=hash_api_token(token),
                 token_prefix=api_token_prefix(token),
+                scopes_json=normalize_token_scopes(scopes),
             )
             await session.commit()
             return {
                 "id": row.id,
                 "name": row.name,
                 "token_prefix": row.token_prefix,
+                "scopes": row.scopes_json,
                 "token": token,
             }
 

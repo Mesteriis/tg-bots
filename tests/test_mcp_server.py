@@ -38,6 +38,11 @@ async def test_mcp_server_exposes_expected_tools() -> None:
         "list_api_tokens",
         "create_api_token",
         "revoke_api_token",
+        "dry_run_send",
+        "list_audit_events",
+        "get_discovery_settings",
+        "update_discovery_settings",
+        "check_destination",
     }.issubset(names)
     await engine.dispose()
 

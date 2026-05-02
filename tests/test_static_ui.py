@@ -53,3 +53,15 @@ def test_static_ui_exposes_mcp_and_api_token_management() -> None:
     assert "saveMcpSettings" in html
     assert "tg.sh-inc.ru" in html
     assert "tg.sh-inc.dev" in html
+
+
+def test_static_ui_exposes_ops_automation_controls() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert "destination_alias" in html
+    assert "Dry run" in html
+    assert "copyCurl" in html
+    assert "discoverySettings" in html
+    assert "auditEvents" in html
+    assert "send_mode" in html
+    assert "tokenScopes" in html

@@ -2,6 +2,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.repositories import (
     AnalyticsRepository,
+    ApiTokenRepository,
+    AuditRepository,
+    BotDiscoveryEventRepository,
+    BotDiscoverySettingsRepository,
     BotRepository,
     DestinationRepository,
     DiagnosticSettingsRepository,
@@ -83,3 +87,83 @@ async def test_diagnostic_settings_repository_upserts_singleton(
     assert loaded.is_enabled is False
     assert loaded.last_update_id == 10
     assert loaded.last_error == "disabled"
+
+
+async def test_ops_repositories_support_scopes_alias_idempotency_audit_and_discovery(
+    db_session: AsyncSession,
+) -> None:
+    bots = BotRepository(db_session)
+    tokens = ApiTokenRepository(db_session)
+    destinations = DestinationRepository(db_session)
+    history = SendHistoryRepository(db_session)
+    audit = AuditRepository(db_session)
+    discovery_settings = BotDiscoverySettingsRepository(db_session)
+    discovery_events = BotDiscoveryEventRepository(db_session)
+
+    bot = await bots.create(name="ops", token="123:token")
+    token = await tokens.create(
+        name="sender",
+        token_hash="hash",
+        token_prefix="tga_sender",
+        scopes_json=["send"],
+    )
+    destination = await destinations.create(
+        bot_id=bot.id,
+        kind="channel",
+        chat_id="@ops",
+        alias="ops_channel",
+    )
+    row = await history.create(
+        bot_id=bot.id,
+        destination_id=destination.id,
+        chat_id="@ops",
+        text="hello",
+        media_type="none",
+        status="queued",
+        idempotency_key="idem-1",
+        idempotency_fingerprint="fingerprint",
+        send_mode="queued",
+    )
+    settings = await discovery_settings.upsert_for_bot(
+        bot.id,
+        is_enabled=True,
+        last_update_id=7,
+    )
+    event = await discovery_events.create(
+        bot_id=bot.id,
+        update_id=8,
+        chat_id="-100",
+        kind="supergroup",
+        old_status="left",
+        new_status="member",
+        raw_update_json={"update_id": 8},
+    )
+    audit_row = await audit.create(
+        source="api",
+        action="send.text",
+        status="accepted",
+        api_token_id=token.id,
+        host="tg.sh-inc.ru",
+        path="/api/v1/send/text",
+        method="POST",
+        entity_type="send_history",
+        entity_id=str(row.id),
+        metadata_json={"idempotency_key": "idem-1"},
+    )
+    await db_session.commit()
+
+    assert token.scopes_json == ["send"]
+    assert (await destinations.get_by_alias(bot.id, "ops_channel")).id == destination.id
+    assert (await history.get_by_idempotency_key("idem-1")).id == row.id
+
+    await history.mark_sending(row, attempt_count=2)
+    await history.mark_queued(row, task_id="task-1")
+    await db_session.commit()
+
+    loaded_settings = await discovery_settings.get_for_bot(bot.id)
+    assert row.status == "queued"
+    assert row.queued_task_id == "task-1"
+    assert row.attempt_count == 2
+    assert settings.id == loaded_settings.id
+    assert (await discovery_events.list(limit=1))[0].id == event.id
+    assert (await audit.list(limit=1))[0].id == audit_row.id

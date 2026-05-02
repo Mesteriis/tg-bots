@@ -71,6 +71,7 @@ async def test_dashboard_can_create_and_use_permanent_api_token_for_protected_do
     assert protected.status_code == 200
     assert listed.status_code == 200
     assert listed.json()[0]["name"] == "nginx-ui"
+    assert set(listed.json()[0]["scopes"]) == {"read", "send", "mcp_admin", "tg_compat"}
     assert "token" not in listed.json()[0]
 
 
@@ -118,3 +119,60 @@ async def test_revoked_api_token_is_rejected() -> None:
 
     assert deleted.status_code == 204
     assert protected.status_code == 401
+
+
+async def test_protected_domain_enforces_api_token_scopes() -> None:
+    client = await _client()
+
+    async with client:
+        read_token = (
+            await client.post(
+                "/api/v1/auth/tokens",
+                json={"name": "reader", "scopes": ["read"]},
+                headers={"Host": "127.0.0.1:8000"},
+            )
+        ).json()["token"]
+        send_token = (
+            await client.post(
+                "/api/v1/auth/tokens",
+                json={"name": "sender", "scopes": ["send"]},
+                headers={"Host": "127.0.0.1:8000"},
+            )
+        ).json()["token"]
+
+        read_ok = await client.get(
+            "/api/v1/health",
+            headers={"Host": "tg.sh-inc.ru", "X-API-Token": read_token},
+        )
+        read_denied_for_send = await client.post(
+            "/api/v1/send/text",
+            json={"bot_id": 1, "chat_id": "@ops", "text": "hello"},
+            headers={"Host": "tg.sh-inc.ru", "X-API-Token": read_token},
+        )
+        send_denied_for_read = await client.get(
+            "/api/v1/health",
+            headers={"Host": "tg.sh-inc.ru", "X-API-Token": send_token},
+        )
+
+    assert read_ok.status_code == 200
+    assert read_denied_for_send.status_code == 403
+    assert read_denied_for_send.json() == {"detail": "api token scope 'send' required"}
+    assert send_denied_for_read.status_code == 403
+    assert send_denied_for_read.json() == {"detail": "api token scope 'read' required"}
+
+
+async def test_dashboard_can_list_audit_events() -> None:
+    client = await _client()
+
+    async with client:
+        created = await client.post(
+            "/api/v1/auth/tokens",
+            json={"name": "audited", "scopes": ["read"]},
+            headers={"Host": "127.0.0.1:8000"},
+        )
+        audit = await client.get("/api/v1/audit", headers={"Host": "127.0.0.1:8000"})
+
+    assert created.status_code == 201
+    assert audit.status_code == 200
+    assert audit.json()[0]["action"] == "auth.tokens.create"
+    assert audit.json()[0]["status"] == "succeeded"

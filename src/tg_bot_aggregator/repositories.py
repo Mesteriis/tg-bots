@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 
 from sqlalchemy import Select, select
@@ -9,7 +11,10 @@ from tg_bot_aggregator.models import (
     AnalyticsSnapshot,
     AnalyticsTarget,
     ApiToken,
+    AuditEvent,
     Bot,
+    BotDiscoveryEvent,
+    BotDiscoverySettings,
     Destination,
     DiagnosticBotSettings,
     McpSettings,
@@ -190,6 +195,13 @@ class DestinationRepository:
         )
         return (await self.session.execute(statement)).scalars().first()
 
+    async def get_by_alias(self, bot_id: int, alias: str) -> Destination | None:
+        statement = select(Destination).where(
+            Destination.bot_id == bot_id,
+            Destination.alias == alias,
+        )
+        return (await self.session.execute(statement)).scalar_one_or_none()
+
     async def upsert_by_chat(
         self,
         bot_id: int,
@@ -281,6 +293,13 @@ class SendHistoryRepository:
         await self.session.flush()
         return row
 
+    async def get(self, row_id: int) -> SendHistory | None:
+        return await _get_or_none(self.session, SendHistory, row_id)
+
+    async def get_by_idempotency_key(self, idempotency_key: str) -> SendHistory | None:
+        statement = select(SendHistory).where(SendHistory.idempotency_key == idempotency_key)
+        return (await self.session.execute(statement)).scalar_one_or_none()
+
     async def list(self, limit: int = 100) -> list[SendHistory]:
         statement = select(SendHistory).order_by(SendHistory.id.desc()).limit(limit)
         return await _list(self.session, statement)
@@ -292,9 +311,23 @@ class SendHistoryRepository:
         response: dict[str, Any],
     ) -> SendHistory:
         row.status = "succeeded"
+        row.error_code = None
+        row.error_message = None
         row.telegram_message_id = telegram_message_id
         row.response_payload_json = response
         row.sent_at = utc_now()
+        await self.session.flush()
+        return row
+
+    async def mark_queued(self, row: SendHistory, task_id: str | None = None) -> SendHistory:
+        row.status = "queued"
+        row.queued_task_id = task_id
+        await self.session.flush()
+        return row
+
+    async def mark_sending(self, row: SendHistory, attempt_count: int) -> SendHistory:
+        row.status = "sending"
+        row.attempt_count = attempt_count
         await self.session.flush()
         return row
 
@@ -312,6 +345,68 @@ class SendHistoryRepository:
         row.failed_at = utc_now()
         await self.session.flush()
         return row
+
+
+class AuditRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create(self, **values: Any) -> AuditEvent:
+        row = AuditEvent(**values)
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def list(self, limit: int = 100) -> list[AuditEvent]:
+        statement = select(AuditEvent).order_by(AuditEvent.id.desc()).limit(limit)
+        return await _list(self.session, statement)
+
+
+class BotDiscoverySettingsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def list(self) -> list[BotDiscoverySettings]:
+        statement = select(BotDiscoverySettings).order_by(BotDiscoverySettings.id)
+        return await _list(self.session, statement)
+
+    async def get(self, settings_id: int) -> BotDiscoverySettings | None:
+        return await _get_or_none(self.session, BotDiscoverySettings, settings_id)
+
+    async def get_for_bot(self, bot_id: int) -> BotDiscoverySettings | None:
+        statement = select(BotDiscoverySettings).where(BotDiscoverySettings.bot_id == bot_id)
+        return (await self.session.execute(statement)).scalar_one_or_none()
+
+    async def upsert_for_bot(self, bot_id: int, **values: Any) -> BotDiscoverySettings:
+        row = await self.get_for_bot(bot_id)
+        if row is None:
+            row = BotDiscoverySettings(bot_id=bot_id, **values)
+            self.session.add(row)
+        else:
+            for key, value in values.items():
+                setattr(row, key, value)
+            row.updated_at = utc_now()
+        await self.session.flush()
+        return row
+
+    async def list_enabled(self) -> list[BotDiscoverySettings]:
+        statement = select(BotDiscoverySettings).where(BotDiscoverySettings.is_enabled.is_(True))
+        return await _list(self.session, statement.order_by(BotDiscoverySettings.id))
+
+
+class BotDiscoveryEventRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create(self, **values: Any) -> BotDiscoveryEvent:
+        row = BotDiscoveryEvent(**values)
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def list(self, limit: int = 100) -> list[BotDiscoveryEvent]:
+        statement = select(BotDiscoveryEvent).order_by(BotDiscoveryEvent.id.desc()).limit(limit)
+        return await _list(self.session, statement)
 
 
 class MtprotoSessionRepository:

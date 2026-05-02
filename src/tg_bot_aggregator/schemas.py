@@ -49,6 +49,9 @@ class DiagnosticBotSettingsRead(BaseModel):
 
 class ApiTokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    scopes: list[Literal["read", "send", "mcp_admin", "tg_compat"]] = Field(
+        default_factory=lambda: ["read", "send", "mcp_admin", "tg_compat"]
+    )
 
 
 class ApiTokenSessionRequest(BaseModel):
@@ -61,6 +64,7 @@ class ApiTokenRead(BaseModel):
     id: int
     name: str
     token_prefix: str
+    scopes_json: list[str] = Field(serialization_alias="scopes")
     is_active: bool
     created_at: datetime
     last_used_at: datetime | None
@@ -99,6 +103,7 @@ class DestinationCreate(BaseModel):
     kind: Literal["private", "group", "supergroup", "channel", "forum_topic"]
     chat_id: str
     message_thread_id: int | None = None
+    alias: str | None = None
     title: str | None = None
     username: str | None = None
     is_active: bool = True
@@ -108,6 +113,7 @@ class DestinationUpdate(BaseModel):
     kind: Literal["private", "group", "supergroup", "channel", "forum_topic"] | None = None
     chat_id: str | None = None
     message_thread_id: int | None = None
+    alias: str | None = None
     title: str | None = None
     username: str | None = None
     is_active: bool | None = None
@@ -121,6 +127,7 @@ class DestinationRead(BaseModel):
     kind: str
     chat_id: str
     message_thread_id: int | None
+    alias: str | None
     title: str | None
     username: str | None
     is_active: bool
@@ -156,19 +163,24 @@ class SendTextRequest(BaseModel):
     bot_id: int
     text: str
     destination_id: int | None = None
+    destination_alias: str | None = None
     chat_id: str | None = None
     tag: str | None = None
     parse_mode: str | None = None
     disable_web_page_preview: bool | None = None
     message_thread_id: int | None = None
+    send_mode: Literal["sync", "queued"] = "sync"
 
 
 class SendTemplateRequest(BaseModel):
     bot_id: int
     tag: str
     destination_id: int | None = None
+    destination_alias: str | None = None
     chat_id: str | None = None
     message_thread_id: int | None = None
+    variables: dict[str, Any] = Field(default_factory=dict)
+    send_mode: Literal["sync", "queued"] = "sync"
 
 
 class SendFileRequest(BaseModel):
@@ -176,11 +188,14 @@ class SendFileRequest(BaseModel):
     media_type: Literal["document", "video"]
     file_relative_path: str
     destination_id: int | None = None
+    destination_alias: str | None = None
     chat_id: str | None = None
     caption: str | None = None
     tag: str | None = None
     parse_mode: str | None = None
     message_thread_id: int | None = None
+    variables: dict[str, Any] = Field(default_factory=dict)
+    send_mode: Literal["sync", "queued"] = "sync"
 
 
 class SendHistoryRead(BaseModel):
@@ -198,6 +213,10 @@ class SendHistoryRead(BaseModel):
     file_size_bytes: int | None
     telegram_message_id: int | None
     status: str
+    send_mode: str
+    idempotency_key: str | None
+    attempt_count: int
+    queued_task_id: str | None
     error_code: str | None
     error_message: str | None
     created_at: datetime
@@ -209,6 +228,71 @@ class EventEnvelope(BaseModel):
     schema_version: str = "v1"
     event_type: str
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+class SendDryRunRead(BaseModel):
+    ok: bool = True
+    method: str
+    bot_id: int
+    chat_id: str
+    message_thread_id: int | None = None
+    destination_id: int | None = None
+    payload: dict[str, Any]
+
+
+class DestinationCheckRead(BaseModel):
+    destination_id: int
+    ok: bool
+    chat: dict[str, Any] | None = None
+    member_count: int | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class AuditEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    source: str
+    action: str
+    status: str
+    api_token_id: int | None
+    host: str | None
+    path: str | None
+    method: str | None
+    entity_type: str | None
+    entity_id: str | None
+    message: str | None
+    metadata_json: dict[str, Any] | None
+
+
+class BotDiscoverySettingsUpdate(BaseModel):
+    is_enabled: bool | None = None
+
+
+class BotDiscoverySettingsRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    bot_id: int
+    is_enabled: bool
+    last_update_id: int | None
+    last_error: str | None
+    updated_at: datetime
+
+
+class BotDiscoveryEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    bot_id: int
+    update_id: int
+    chat_id: str
+    kind: str
+    old_status: str | None
+    new_status: str | None
+    raw_update_json: dict[str, Any] | None
+    created_at: datetime
 
 
 class MtprotoLoginStartRequest(BaseModel):

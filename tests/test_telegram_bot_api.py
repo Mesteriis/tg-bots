@@ -136,3 +136,34 @@ async def test_bot_api_client_sends_reply_markup() -> None:
     await client.send_message("123:token", "-100123", "diagnostic", reply_markup=reply_markup)
 
     assert seen["reply_markup"] == reply_markup
+
+
+async def test_bot_api_client_checks_chat_metadata() -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.url.path.rsplit("/", 1)[-1], json.loads(request.read())))
+        if request.url.path.endswith("/getChat"):
+            return httpx.Response(
+                200,
+                json={
+                    "ok": True,
+                    "result": {"id": -100, "type": "supergroup", "title": "Ops"},
+                },
+            )
+        return httpx.Response(200, json={"ok": True, "result": 42})
+
+    client = TelegramBotApiClient(
+        "http://telegram-bot-api:8081",
+        httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+
+    chat = await client.get_chat("123:token", "-100")
+    count = await client.get_chat_member_count("123:token", "-100")
+
+    assert chat["result"]["title"] == "Ops"
+    assert count == 42
+    assert calls == [
+        ("getChat", {"chat_id": "-100"}),
+        ("getChatMemberCount", {"chat_id": "-100"}),
+    ]
