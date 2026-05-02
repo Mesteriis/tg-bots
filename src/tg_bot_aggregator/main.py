@@ -12,6 +12,7 @@ from tg_bot_aggregator.api import analytics, bots, destinations, events, health,
 from tg_bot_aggregator.config import Settings, get_settings
 from tg_bot_aggregator.db import create_engine, create_session_factory
 from tg_bot_aggregator.events import MemoryEventBus
+from tg_bot_aggregator.mcp_server import create_mcp_asgi_app, create_mcp_server
 from tg_bot_aggregator.models import Base
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
@@ -72,6 +73,18 @@ def create_app(
     app.include_router(mtproto.router, prefix=prefix)
     app.include_router(analytics.router, prefix=prefix)
     app.include_router(events.router, prefix=prefix)
+
+    def mcp_session_factory() -> async_sessionmaker[AsyncSession]:
+        return app.state.session_factory
+
+    mcp = create_mcp_server(
+        settings=resolved_settings,
+        get_session_factory=mcp_session_factory,
+        event_bus=app.state.event_bus,
+        bot_api_client=app.state.bot_api_client,
+    )
+    app.state.mcp_server = mcp
+    app.mount(resolved_settings.mcp_v1_prefix, create_mcp_asgi_app(mcp))
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
