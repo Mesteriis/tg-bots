@@ -6,7 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from tg_bot_aggregator.api import bots, destinations, events, health, send, templates
+from typing import Awaitable, Callable
+
+from tg_bot_aggregator.api import analytics, bots, destinations, events, health, mtproto, send, templates
 from tg_bot_aggregator.config import Settings, get_settings
 from tg_bot_aggregator.db import create_engine, create_session_factory
 from tg_bot_aggregator.events import MemoryEventBus
@@ -19,6 +21,7 @@ def create_app(
     session_factory: async_sessionmaker[AsyncSession] | None = None,
     event_bus: MemoryEventBus | None = None,
     bot_api_client: TelegramBotApiClient | None = None,
+    enqueue_analytics_refresh: Callable[[int, int], Awaitable[str | None]] | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
 
@@ -42,6 +45,16 @@ def create_app(
         resolved_settings.telegram_bot_api_base_url
     )
 
+    async def default_enqueue_analytics_refresh(target_id: int, run_id: int) -> str | None:
+        from tg_bot_aggregator.tasks import refresh_analytics_target
+
+        task = await refresh_analytics_target.kiq(target_id, run_id)
+        return task.task_id
+
+    app.state.enqueue_analytics_refresh = (
+        enqueue_analytics_refresh or default_enqueue_analytics_refresh
+    )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_allowed_origins,
@@ -56,6 +69,8 @@ def create_app(
     app.include_router(destinations.router, prefix=prefix)
     app.include_router(templates.router, prefix=prefix)
     app.include_router(send.router, prefix=prefix)
+    app.include_router(mtproto.router, prefix=prefix)
+    app.include_router(analytics.router, prefix=prefix)
     app.include_router(events.router, prefix=prefix)
 
     @app.get("/", include_in_schema=False)
@@ -75,4 +90,3 @@ def run() -> None:
         host=settings.app_host,
         port=settings.app_port,
     )
-

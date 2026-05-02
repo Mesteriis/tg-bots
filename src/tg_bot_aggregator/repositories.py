@@ -220,9 +220,50 @@ class AnalyticsRepository:
     async def get_target(self, target_id: int) -> AnalyticsTarget | None:
         return await _get_or_none(self.session, AnalyticsTarget, target_id)
 
+    async def update_target(self, target_id: int, **values: Any) -> AnalyticsTarget:
+        target = await self.get_target(target_id)
+        if target is None:
+            raise NotFoundError(f"analytics target {target_id} not found")
+        for key, value in values.items():
+            setattr(target, key, value)
+        target.updated_at = utc_now()
+        await self.session.flush()
+        return target
+
+    async def delete_target(self, target_id: int) -> bool:
+        target = await self.get_target(target_id)
+        if target is None:
+            return False
+        await self.session.delete(target)
+        await self.session.flush()
+        return True
+
     async def create_run(self, **values: Any) -> AnalyticsRun:
         run = AnalyticsRun(**values)
         self.session.add(run)
+        await self.session.flush()
+        return run
+
+    async def get_run(self, run_id: int) -> AnalyticsRun | None:
+        return await _get_or_none(self.session, AnalyticsRun, run_id)
+
+    async def mark_run_started(self, run: AnalyticsRun) -> AnalyticsRun:
+        run.status = "started"
+        run.started_at = utc_now()
+        await self.session.flush()
+        return run
+
+    async def mark_run_finished(self, run: AnalyticsRun, snapshots_created: int) -> AnalyticsRun:
+        run.status = "finished"
+        run.finished_at = utc_now()
+        run.snapshots_created = snapshots_created
+        await self.session.flush()
+        return run
+
+    async def mark_run_failed(self, run: AnalyticsRun, error_message: str) -> AnalyticsRun:
+        run.status = "failed"
+        run.finished_at = utc_now()
+        run.error_message = error_message
         await self.session.flush()
         return run
 
@@ -241,4 +282,3 @@ class AnalyticsRepository:
         if target_id is not None:
             statement = statement.where(AnalyticsSnapshot.target_id == target_id)
         return await _list(self.session, statement)
-
