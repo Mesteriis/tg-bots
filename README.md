@@ -45,6 +45,19 @@ revoke_api_token
 
 For protected domains, send `X-API-Token: <token>` or `Authorization: Bearer <token>`. Browser SSE uses `/api/v1/auth/session` to set an HttpOnly cookie because native `EventSource` cannot send custom headers.
 
+## Telegram-Compatible Send API
+
+The app exposes a small Telegram Bot API-compatible facade for integrations that already know how to call Telegram actions:
+
+```text
+POST /bot{telegram_bot_token}/getMe
+POST /bot{telegram_bot_token}/sendMessage
+POST /bot{telegram_bot_token}/sendDocument
+POST /bot{telegram_bot_token}/sendVideo
+```
+
+The token is resolved against bots stored in SQLite. The facade is intentionally allowlisted: it does not expose polling, webhooks, or arbitrary Telegram methods. Successful sends are recorded in send history and the returned Telegram `chat` object is used to create or update a matching destination automatically. Protected domains still require a permanent API token.
+
 ## Shared Media
 
 The app does not upload large file bodies. An external uploader writes files to the OMW `media` share. The Docker host must mount:

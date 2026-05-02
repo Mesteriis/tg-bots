@@ -1,5 +1,7 @@
+import logging
 import re
 from collections.abc import Mapping, Sequence
+from logging import Filter, LogRecord
 from typing import Any
 from urllib.parse import urlparse
 
@@ -12,6 +14,26 @@ TOKEN_RE = re.compile(r"\b\d{5,}:[A-Za-z0-9_-]{16,}\b")
 def redact_text(value: str) -> str:
     value = BOT_URL_RE.sub(f"/bot{REDACTED}/", value)
     return TOKEN_RE.sub(REDACTED, value)
+
+
+class RedactBotTokenAccessLogFilter(Filter):
+    def filter(self, record: LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                redact_text(item) if isinstance(item, str) else item for item in record.args
+            )
+        elif isinstance(record.args, dict):
+            record.args = {
+                key: redact_text(item) if isinstance(item, str) else item
+                for key, item in record.args.items()
+            }
+        return True
+
+
+def install_secret_log_filters() -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(item, RedactBotTokenAccessLogFilter) for item in access_logger.filters):
+        access_logger.addFilter(RedactBotTokenAccessLogFilter())
 
 
 def redact_secrets(value: Any) -> Any:

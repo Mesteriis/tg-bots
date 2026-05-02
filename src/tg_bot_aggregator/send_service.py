@@ -80,6 +80,33 @@ class SendService:
             resolved_thread_id = destination.message_thread_id
         return Target(resolved_chat_id, resolved_thread_id, destination_id)
 
+    async def _upsert_destination_from_response(
+        self,
+        bot_id: int,
+        target: Target,
+        response: dict[str, Any],
+    ) -> None:
+        result = response.get("result", {})
+        chat = result.get("chat")
+        if not isinstance(chat, dict):
+            return
+        chat_id = str(chat.get("id") or target.chat_id)
+        chat_type = str(chat.get("type") or "private")
+        kind = "forum_topic" if target.message_thread_id is not None else chat_type
+        if kind not in {"private", "group", "supergroup", "channel", "forum_topic"}:
+            kind = "group"
+        title = chat.get("title") or chat.get("first_name") or chat.get("username") or chat_id
+        username = chat.get("username")
+        await self.destinations.upsert_by_chat(
+            bot_id=bot_id,
+            chat_id=chat_id,
+            message_thread_id=target.message_thread_id,
+            kind=kind,
+            title=str(title) if title is not None else None,
+            username=str(username) if username is not None else None,
+            is_active=True,
+        )
+
     async def send_text(
         self,
         bot_id: int,
@@ -130,6 +157,7 @@ class SendService:
             return row
 
         message_id = response.get("result", {}).get("message_id")
+        await self._upsert_destination_from_response(bot_id, target, response)
         await self.history.mark_succeeded(row, message_id, redact_secrets(response))
         await self.session.commit()
         await self.events.publish("send.succeeded", {"send_history_id": row.id})
@@ -231,8 +259,77 @@ class SendService:
             return row
 
         message_id = response.get("result", {}).get("message_id")
+        await self._upsert_destination_from_response(bot_id, target, response)
         await self.history.mark_succeeded(row, message_id, redact_secrets(response))
         await self.session.commit()
         await self.events.publish("send.succeeded", {"send_history_id": row.id})
         return row
 
+    async def send_media_reference(
+        self,
+        bot_id: int,
+        media_type: str,
+        file_reference: str,
+        destination_id: int | None = None,
+        chat_id: str | None = None,
+        caption: str | None = None,
+        parse_mode: str | None = None,
+        message_thread_id: int | None = None,
+    ) -> SendHistory:
+        if media_type not in {"document", "video"}:
+            raise SendServiceError("media_type must be document or video")
+
+        token = await self._bot_token(bot_id)
+        target = await self._target(destination_id, chat_id, message_thread_id)
+        request_payload = {
+            "chat_id": target.chat_id,
+            "caption": caption,
+            "parse_mode": parse_mode,
+            "message_thread_id": target.message_thread_id,
+            "media_type": media_type,
+            "file_reference": file_reference,
+        }
+        row = await self.history.create(
+            bot_id=bot_id,
+            destination_id=target.destination_id,
+            chat_id=target.chat_id,
+            message_thread_id=target.message_thread_id,
+            text=caption,
+            media_type=media_type,
+            status="created",
+            request_payload_json=redact_secrets(request_payload),
+        )
+        await self.session.commit()
+        await self.events.publish("send.created", {"send_history_id": row.id})
+
+        try:
+            if media_type == "document":
+                response = await self.bot_api.send_document(
+                    token=token,
+                    chat_id=target.chat_id,
+                    document=file_reference,
+                    caption=caption,
+                    parse_mode=parse_mode,
+                    message_thread_id=target.message_thread_id,
+                )
+            else:
+                response = await self.bot_api.send_video(
+                    token=token,
+                    chat_id=target.chat_id,
+                    video=file_reference,
+                    caption=caption,
+                    parse_mode=parse_mode,
+                    message_thread_id=target.message_thread_id,
+                )
+        except TelegramBotApiError as exc:
+            await self.history.mark_failed(row, str(exc.error_code), exc.description, exc.payload)
+            await self.session.commit()
+            await self.events.publish("send.failed", {"send_history_id": row.id})
+            return row
+
+        message_id = response.get("result", {}).get("message_id")
+        await self._upsert_destination_from_response(bot_id, target, response)
+        await self.history.mark_succeeded(row, message_id, redact_secrets(response))
+        await self.session.commit()
+        await self.events.publish("send.succeeded", {"send_history_id": row.id})
+        return row

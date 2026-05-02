@@ -1,5 +1,6 @@
 from tg_bot_aggregator.security import (
     REDACTED,
+    RedactBotTokenAccessLogFilter,
     host_matches,
     is_allowed_origin,
     is_protected_host_request,
@@ -40,6 +41,31 @@ def test_protected_host_detection_uses_host_or_origin() -> None:
         )
         is True
     )
+
+
+def test_access_log_filter_redacts_telegram_compatible_bot_token() -> None:
+    import logging
+
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname="",
+        lineno=1,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=(
+            "127.0.0.1:1",
+            "POST",
+            "/bot123456:ABCdef_123456789012345/sendMessage",
+            "1.1",
+            200,
+        ),
+        exc_info=None,
+    )
+
+    RedactBotTokenAccessLogFilter().filter(record)
+
+    assert "123456:ABCdef" not in record.args[2]
+    assert REDACTED in record.args[2]
 
 
 def test_origin_validation_allows_missing_origin_and_configured_origins() -> None:

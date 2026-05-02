@@ -47,6 +47,7 @@ class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):
         if not (
             path.startswith(self.settings.api_v1_prefix)
             or path.startswith(self.settings.mcp_v1_prefix)
+            or path.startswith("/bot")
         ):
             return False
         host = request.headers.get("x-forwarded-host") or request.headers.get("host")

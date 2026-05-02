@@ -48,6 +48,10 @@ class BotRepository:
     async def get(self, bot_id: int) -> Bot | None:
         return await _get_or_none(self.session, Bot, bot_id)
 
+    async def get_by_token(self, token: str) -> Bot | None:
+        statement = select(Bot).where(Bot.token == token)
+        return (await self.session.execute(statement)).scalar_one_or_none()
+
     async def update(self, bot_id: int, **values: Any) -> Bot:
         bot = await self.get(bot_id)
         if bot is None:
@@ -170,6 +174,44 @@ class DestinationRepository:
 
     async def get(self, destination_id: int) -> Destination | None:
         return await _get_or_none(self.session, Destination, destination_id)
+
+    async def get_by_chat(
+        self,
+        bot_id: int,
+        chat_id: str,
+        message_thread_id: int | None = None,
+    ) -> Destination | None:
+        statement = select(Destination).where(
+            Destination.bot_id == bot_id,
+            Destination.chat_id == chat_id,
+            Destination.message_thread_id.is_(message_thread_id)
+            if message_thread_id is None
+            else Destination.message_thread_id == message_thread_id,
+        )
+        return (await self.session.execute(statement)).scalars().first()
+
+    async def upsert_by_chat(
+        self,
+        bot_id: int,
+        chat_id: str,
+        message_thread_id: int | None = None,
+        **values: Any,
+    ) -> Destination:
+        row = await self.get_by_chat(bot_id, chat_id, message_thread_id)
+        if row is None:
+            row = Destination(
+                bot_id=bot_id,
+                chat_id=chat_id,
+                message_thread_id=message_thread_id,
+                **values,
+            )
+            self.session.add(row)
+        else:
+            for key, value in values.items():
+                setattr(row, key, value)
+            row.updated_at = utc_now()
+        await self.session.flush()
+        return row
 
     async def update(self, destination_id: int, **values: Any) -> Destination:
         destination = await self.get(destination_id)

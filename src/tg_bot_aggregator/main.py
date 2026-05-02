@@ -17,6 +17,7 @@ from tg_bot_aggregator.api import (
     mcp_settings,
     mtproto,
     send,
+    telegram_compat,
     templates,
 )
 from tg_bot_aggregator.auth_middleware import ProtectedHostAuthMiddleware
@@ -25,6 +26,7 @@ from tg_bot_aggregator.db import create_engine, create_session_factory
 from tg_bot_aggregator.events import MemoryEventBus
 from tg_bot_aggregator.mcp_server import create_mcp_asgi_app, create_mcp_server
 from tg_bot_aggregator.models import Base
+from tg_bot_aggregator.security import install_secret_log_filters
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 
@@ -36,6 +38,7 @@ def create_app(
     enqueue_analytics_refresh: Callable[[int, int], Awaitable[str | None]] | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
+    install_secret_log_filters()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -88,6 +91,7 @@ def create_app(
     app.include_router(mcp_settings.router, prefix=prefix)
     app.include_router(analytics.router, prefix=prefix)
     app.include_router(events.router, prefix=prefix)
+    app.include_router(telegram_compat.router)
 
     def mcp_session_factory() -> async_sessionmaker[AsyncSession]:
         return app.state.session_factory
