@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Telegram Bot Aggregator</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --line: #d9dee7;
+        --text: #161a22;
+        --muted: #667085;
+        --accent: #1565c0;
+        --danger: #b42318;
+        --ok: #087443;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 650;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        min-height: calc(100vh - 56px);
+      }
+      nav {
+        border-right: 1px solid var(--line);
+        background: #fff;
+        padding: 12px;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      .tab {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 10px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        text-align: left;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .tab.active {
+        background: #eaf2ff;
+        color: var(--accent);
+      }
+      .content {
+        padding: 18px;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        gap: 12px;
+      }
+      h2 {
+        margin: 0;
+        font-size: 17px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 14px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+      }
+      label {
+        display: grid;
+        gap: 5px;
+        margin-bottom: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 9px;
+        color: var(--text);
+        background: #fff;
+      }
+      textarea {
+        min-height: 88px;
+        resize: vertical;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--text);
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid var(--line);
+      }
+      th,
+      td {
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        font-size: 13px;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        background: #fbfcfe;
+      }
+      .status {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .ok {
+        color: var(--ok);
+      }
+      .danger {
+        color: var(--danger);
+      }
+      @media (max-width: 760px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+        nav {
+          display: flex;
+          overflow-x: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .tab {
+          min-width: 140px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>Telegram Bot Aggregator</h1>
+        <div class="status" :class="{ ok: eventState === 'live', danger: eventState === 'closed' }">
+          {{ eventState }}
+        </div>
+      </header>
+      <main>
+        <nav>
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            class="tab"
+            :class="{ active: activeTab === tab.id }"
+            @click="activeTab = tab.id"
+          >
+            <i :data-lucide="tab.icon"></i>{{ tab.label }}
+          </button>
+        </nav>
+        <section class="content">
+          <div class="toolbar">
+            <h2>{{ currentTab.label }}</h2>
+            <button class="btn" @click="refreshAll"><i data-lucide="refresh-cw"></i>Refresh</button>
+          </div>
+
+          <div v-if="activeTab === 'bots'" class="grid">
+            <form class="panel" @submit.prevent="createBot">
+              <label>Name<input v-model="forms.bot.name" required /></label>
+              <label>Token<input v-model="forms.bot.token" required /></label>
+              <label>Description<textarea v-model="forms.bot.description"></textarea></label>
+              <button class="btn primary"><i data-lucide="plus"></i>Add bot</button>
+            </form>
+            <div class="panel">
+              <table>
+                <thead><tr><th>Name</th><th>Username</th><th></th></tr></thead>
+                <tbody>
+                  <tr v-for="bot in bots" :key="bot.id">
+                    <td>{{ bot.name }}</td>
+                    <td>{{ bot.username || '-' }}</td>
+                    <td><button class="btn" @click="checkBot(bot.id)"><i data-lucide="check"></i></button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div v-if="activeTab === 'destinations'" class="grid">
+            <form class="panel" @submit.prevent="createDestination">
+              <label>Bot<select v-model.number="forms.destination.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Kind<select v-model="forms.destination.kind"><option>private</option><option>group</option><option>supergroup</option><option>channel</option><option>forum_topic</option></select></label>
+              <label>Chat ID<input v-model="forms.destination.chat_id" required /></label>
+              <label>Thread ID<input v-model.number="forms.destination.message_thread_id" type="number" /></label>
+              <label>Title<input v-model="forms.destination.title" /></label>
+              <button class="btn primary"><i data-lucide="plus"></i>Add destination</button>
+            </form>
+            <div class="panel">
+              <table><thead><tr><th>Title</th><th>Kind</th><th>Chat</th><th>Thread</th></tr></thead><tbody><tr v-for="item in destinations" :key="item.id"><td>{{ item.title || '-' }}</td><td>{{ item.kind }}</td><td>{{ item.chat_id }}</td><td>{{ item.message_thread_id || '-' }}</td></tr></tbody></table>
+            </div>
+          </div>
+
+          <div v-if="activeTab === 'templates'" class="grid">
+            <form class="panel" @submit.prevent="createTemplate">
+              <label>Tag<input v-model="forms.template.tag" required /></label>
+              <label>Title<input v-model="forms.template.title" required /></label>
+              <label>Text<textarea v-model="forms.template.text" required></textarea></label>
+              <label>Parse mode<input v-model="forms.template.parse_mode" /></label>
+              <button class="btn primary"><i data-lucide="plus"></i>Add template</button>
+            </form>
+            <div class="panel">
+              <table><thead><tr><th>Tag</th><th>Title</th><th>Text</th></tr></thead><tbody><tr v-for="item in templates" :key="item.id"><td>{{ item.tag }}</td><td>{{ item.title }}</td><td>{{ item.text }}</td></tr></tbody></table>
+            </div>
+          </div>
+
+          <div v-if="activeTab === 'send'" class="grid">
+            <form class="panel" @submit.prevent="sendText">
+              <label>Bot<select v-model.number="forms.send.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Destination<select v-model.number="forms.send.destination_id"><option :value="null">Manual chat</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
+              <label>Chat ID<input v-model="forms.send.chat_id" /></label>
+              <label>Tag<input v-model="forms.send.tag" /></label>
+              <label>Text<textarea v-model="forms.send.text"></textarea></label>
+              <button class="btn primary"><i data-lucide="send"></i>Send text</button>
+            </form>
+            <form class="panel" @submit.prevent="sendFile">
+              <label>Media type<select v-model="forms.file.media_type"><option>video</option><option>document</option></select></label>
+              <label>Bot<select v-model.number="forms.file.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Destination<select v-model.number="forms.file.destination_id"><option :value="null">Manual chat</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
+              <label>Chat ID<input v-model="forms.file.chat_id" /></label>
+              <label>Shared path<input v-model="forms.file.file_relative_path" placeholder="telegram-outbox/video.mp4" /></label>
+              <label>Caption<textarea v-model="forms.file.caption"></textarea></label>
+              <button class="btn primary"><i data-lucide="file-video"></i>Send file</button>
+            </form>
+          </div>
+
+          <div v-if="activeTab === 'history'" class="panel">
+            <table><thead><tr><th>ID</th><th>Status</th><th>Chat</th><th>Tag</th><th>Error</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td>{{ item.id }}</td><td>{{ item.status }}</td><td>{{ item.chat_id }}</td><td>{{ item.tag || '-' }}</td><td>{{ item.error_message || '-' }}</td></tr></tbody></table>
+          </div>
+
+          <div v-if="activeTab === 'mtproto'" class="grid">
+            <form class="panel" @submit.prevent="startLogin">
+              <label>Phone<input v-model="forms.mtproto.phone" /></label>
+              <button class="btn primary"><i data-lucide="smartphone"></i>Start</button>
+            </form>
+            <form class="panel" @submit.prevent="confirmCode">
+              <label>Code<input v-model="forms.mtproto.code" /></label>
+              <button class="btn"><i data-lucide="key-round"></i>Confirm code</button>
+            </form>
+            <form class="panel" @submit.prevent="confirmPassword">
+              <label>Password<input v-model="forms.mtproto.password" type="password" /></label>
+              <button class="btn"><i data-lucide="lock-keyhole"></i>Confirm password</button>
+            </form>
+          </div>
+
+          <div v-if="activeTab === 'analytics'" class="grid">
+            <form class="panel" @submit.prevent="createAnalyticsTarget">
+              <label>Peer ref<input v-model="forms.analytics.peer_ref" required /></label>
+              <label>Title<input v-model="forms.analytics.title" /></label>
+              <button class="btn primary"><i data-lucide="plus"></i>Add target</button>
+            </form>
+            <div class="panel">
+              <table><thead><tr><th>Peer</th><th>Title</th><th></th></tr></thead><tbody><tr v-for="target in analyticsTargets" :key="target.id"><td>{{ target.peer_ref }}</td><td>{{ target.title || '-' }}</td><td><button class="btn" @click="refreshAnalytics(target.id)"><i data-lucide="refresh-cw"></i></button></td></tr></tbody></table>
+            </div>
+          </div>
+
+          <div v-if="activeTab === 'health'" class="panel">
+            <pre>{{ JSON.stringify(health, null, 2) }}</pre>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const { createApp, nextTick } = Vue;
+      createApp({
+        data() {
+          return {
+            activeTab: "bots",
+            eventState: "connecting",
+            tabs: [
+              { id: "bots", label: "Bots", icon: "bot" },
+              { id: "destinations", label: "Destinations", icon: "send-to-back" },
+              { id: "templates", label: "Templates", icon: "file-text" },
+              { id: "send", label: "Send", icon: "send" },
+              { id: "history", label: "History", icon: "history" },
+              { id: "mtproto", label: "MTProto", icon: "smartphone" },
+              { id: "analytics", label: "Analytics", icon: "chart-no-axes-combined" },
+              { id: "health", label: "Health", icon: "activity" },
+            ],
+            bots: [], destinations: [], templates: [], history: [], analyticsTargets: [], health: {},
+            forms: {
+              bot: { name: "", token: "", description: "" },
+              destination: { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, title: "" },
+              template: { tag: "", title: "", text: "", parse_mode: "" },
+              send: { bot_id: null, destination_id: null, chat_id: "", tag: "", text: "" },
+              file: { bot_id: null, destination_id: null, chat_id: "", media_type: "video", file_relative_path: "", caption: "" },
+              mtproto: { phone: "", code: "", password: "" },
+              analytics: { peer_ref: "", title: "" },
+            },
+          };
+        },
+        computed: {
+          currentTab() { return this.tabs.find((tab) => tab.id === this.activeTab); }
+        },
+        async mounted() {
+          await this.refreshAll();
+          this.connectEvents();
+          this.drawIcons();
+        },
+        updated() { this.drawIcons(); },
+        methods: {
+          drawIcons() { nextTick(() => lucide.createIcons({ attrs: { width: 16, height: 16 } })); },
+          async api(path, options = {}) {
+            const response = await fetch(`/api/v1${path}`, {
+              headers: { "Content-Type": "application/json" },
+              ...options,
+            });
+            if (!response.ok) throw new Error(await response.text());
+            if (response.status === 204) return null;
+            return response.json();
+          },
+          async refreshAll() {
+            const [health, bots, destinations, templates, history, analyticsTargets] = await Promise.all([
+              this.api("/health"),
+              this.api("/bots"),
+              this.api("/destinations"),
+              this.api("/templates"),
+              this.api("/send-history"),
+              this.api("/analytics/targets"),
+            ]);
+            Object.assign(this, { health, bots, destinations, templates, history, analyticsTargets });
+          },
+          connectEvents() {
+            const source = new EventSource("/api/v1/events");
+            source.onopen = () => { this.eventState = "live"; };
+            source.onerror = () => { this.eventState = "closed"; };
+            source.onmessage = () => this.refreshAll();
+            ["send.created", "send.succeeded", "send.failed", "analytics.run.queued", "analytics.run.finished", "bot.checked"].forEach((name) => {
+              source.addEventListener(name, () => this.refreshAll());
+            });
+          },
+          async createBot() { await this.api("/bots", { method: "POST", body: JSON.stringify(this.forms.bot) }); this.forms.bot = { name: "", token: "", description: "" }; await this.refreshAll(); },
+          async checkBot(id) { await this.api(`/bots/${id}/check`, { method: "POST" }); await this.refreshAll(); },
+          async createDestination() { await this.api("/destinations", { method: "POST", body: JSON.stringify(this.forms.destination) }); await this.refreshAll(); },
+          async createTemplate() { await this.api("/templates", { method: "POST", body: JSON.stringify(this.forms.template) }); this.forms.template = { tag: "", title: "", text: "", parse_mode: "" }; await this.refreshAll(); },
+          async sendText() { await this.api("/send/text", { method: "POST", body: JSON.stringify(this.forms.send) }); await this.refreshAll(); },
+          async sendFile() { await this.api("/send/file", { method: "POST", body: JSON.stringify(this.forms.file) }); await this.refreshAll(); },
+          async startLogin() { await this.api("/mtproto/login/start", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone }) }); },
+          async confirmCode() { await this.api("/mtproto/login/confirm-code", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone, code: this.forms.mtproto.code }) }); },
+          async confirmPassword() { await this.api("/mtproto/login/confirm-password", { method: "POST", body: JSON.stringify({ password: this.forms.mtproto.password }) }); },
+          async createAnalyticsTarget() { await this.api("/analytics/targets", { method: "POST", body: JSON.stringify(this.forms.analytics) }); this.forms.analytics = { peer_ref: "", title: "" }; await this.refreshAll(); },
+          async refreshAnalytics(target_id) { await this.api("/analytics/refresh", { method: "POST", body: JSON.stringify({ target_id }) }); await this.refreshAll(); },
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
+

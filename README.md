@@ -38,3 +38,12 @@ docker compose up --build
 
 The compose stack includes FastAPI app, Taskiq worker, Taskiq scheduler, Redis, and local Telegram Bot API server.
 
+`telegram-bot-api` uses the documented community image `aiogram/telegram-bot-api:latest` for the official `tdlib/telegram-bot-api` server. Set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` before starting the stack.
+
+## Validation
+
+```bash
+python -m pytest -q
+python -m ruff check .
+docker compose config
+```
