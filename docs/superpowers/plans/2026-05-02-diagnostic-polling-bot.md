@@ -17,7 +17,7 @@
 - `src/tg_bot_aggregator/diagnostics/formatter.py`: extract IDs, build copy keyboards, and format readable reports.
 - `src/tg_bot_aggregator/diagnostics/bot.py`: long-polling runner and CLI entrypoint.
 - `src/tg_bot_aggregator/config.py`: add diagnostic bot settings.
-- `docker-compose.yml`: add dedicated `diagnostic-bot` service.
+- `docker-compose.yml`: add dedicated `diagnostic-bot` service that reads dashboard settings from SQLite.
 - `.env.example`: document diagnostic settings.
 - `README.md`: document how to run and validate the diagnostic bot.
 - `tests/test_telegram_bot_api.py`: cover new Bot API client methods.
@@ -141,9 +141,10 @@ Expected: import/config failures.
 
 Add settings:
 
-- `DIAGNOSTIC_BOT_TOKEN`
 - `DIAGNOSTIC_POLL_TIMEOUT_SECONDS`
 - `DIAGNOSTIC_RETRY_DELAY_SECONDS`
+
+The selected diagnostic bot is managed through `/api/v1/diagnostics/bot` and persisted in SQLite, not through a standalone token variable.
 
 Implement:
 
@@ -176,7 +177,7 @@ git commit -m "feat: add diagnostic polling runner"
 
 - [ ] **Step 1: Write static tests**
 
-Add tests or extend existing static/config tests to confirm `diagnostic-bot`, `DIAGNOSTIC_BOT_TOKEN`, and the module command are documented.
+Add tests or extend existing static/config tests to confirm `diagnostic-bot`, `/api/v1/diagnostics/bot`, and the module command are documented.
 
 - [ ] **Step 2: Run static tests to verify failure**
 
@@ -196,7 +197,10 @@ diagnostic-bot:
       required: false
   command: ["python", "-m", "tg_bot_aggregator.diagnostics.bot"]
   environment:
+    DATABASE_URL: sqlite+aiosqlite:////data/app.db
     TELEGRAM_BOT_API_BASE_URL: http://telegram-bot-api:8081
+  volumes:
+    - app-data:/data
   depends_on:
     - telegram-bot-api
 ```
@@ -254,7 +258,7 @@ Run:
 python -m tg_bot_aggregator.diagnostics.bot --once
 ```
 
-Expected without `DIAGNOSTIC_BOT_TOKEN`: exits with a clear missing-token error and no stack trace.
+Expected when no diagnostic bot is enabled on the dashboard: prints `disabled` and exits without a stack trace.
 
 - [ ] **Step 5: Final status**
 

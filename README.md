@@ -40,6 +40,23 @@ The compose stack includes FastAPI app, Taskiq worker, Taskiq scheduler, Redis, 
 
 `telegram-bot-api` uses the documented community image `aiogram/telegram-bot-api:latest` for the official `tdlib/telegram-bot-api` server. Set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` before starting the stack.
 
+## Diagnostic Polling Bot
+
+The product includes one dashboard-managed diagnostic bot. Add its token on the Bots tab, then open the Diagnostics tab and select that bot. The setting is stored in SQLite and exposed through:
+
+```text
+GET /api/v1/diagnostics/bot
+PATCH /api/v1/diagnostics/bot
+```
+
+The dedicated `diagnostic-bot` compose service runs `python -m tg_bot_aggregator.diagnostics.bot`, reads the selected bot from the database, calls `getUpdates`, and replies to every received or forwarded message with a readable report. Forum topics are detected through `message_thread_id` and replies are sent back to the same topic. Important IDs are exposed as Telegram copy buttons where the client supports `copy_text`.
+
+Run one local polling iteration without starting the infinite loop:
+
+```bash
+python -m tg_bot_aggregator.diagnostics.bot --once
+```
+
 ## Validation
 
 ```bash

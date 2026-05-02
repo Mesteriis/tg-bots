@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from tg_bot_aggregator.config import Settings
 
 
@@ -26,3 +28,16 @@ def test_settings_parse_csv_origins() -> None:
         "http://127.0.0.1:8000",
     ]
     assert settings.mcp_allowed_origins == ["http://localhost:8000"]
+
+
+def test_diagnostic_bot_is_wired_in_compose_env_and_docs() -> None:
+    compose = Path("docker-compose.yml").read_text()
+    env_example = Path(".env.example").read_text()
+    readme = Path("README.md").read_text()
+
+    assert "diagnostic-bot:" in compose
+    assert 'python", "-m", "tg_bot_aggregator.diagnostics.bot' in compose
+    assert "DIAGNOSTIC_POLL_TIMEOUT_SECONDS" in env_example
+    assert "DIAGNOSTIC_RETRY_DELAY_SECONDS" in env_example
+    assert "Diagnostic Polling Bot" in readme
+    assert "/api/v1/diagnostics/bot" in readme

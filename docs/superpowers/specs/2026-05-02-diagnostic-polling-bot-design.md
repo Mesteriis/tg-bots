@@ -13,7 +13,8 @@ This is a separate product domain named `diagnostics`. It is not part of the exi
 Version 1 includes:
 
 - Dedicated long-polling process launched separately from FastAPI.
-- Dedicated configuration for the diagnostic bot token.
+- Dashboard management for selecting exactly one saved product bot as the diagnostic bot.
+- SQLite persistence for diagnostic bot settings and polling offset.
 - Telegram Bot API `getUpdates`, `deleteWebhook`, and diagnostic reply sending.
 - Human-readable message reports, not raw JSON dumps.
 - Explicit forum topic/thread detection through `message_thread_id` and `is_topic_message`.
@@ -36,16 +37,50 @@ The diagnostic bot is a separate process:
 python -m tg_bot_aggregator.diagnostics.bot
 ```
 
-Docker Compose runs it as a dedicated `diagnostic-bot` service. It shares the same code image and Bot API base URL configuration as the app, but it does not need the database.
+Docker Compose runs it as a dedicated `diagnostic-bot` service. It shares the same code image, SQLite data volume, and Bot API base URL configuration as the app.
 
 The process:
 
-1. Reads `DIAGNOSTIC_BOT_TOKEN`.
-2. Calls `deleteWebhook` once on startup to make polling valid.
-3. Runs `getUpdates` with long polling.
-4. For each `message`, `edited_message`, `channel_post`, or `edited_channel_post`, formats a report.
-5. Sends the report back to the source chat, preserving `message_thread_id` when present.
-6. Advances the update offset only after handling the update attempt.
+1. Reads the dashboard-managed diagnostic settings from SQLite.
+2. Resolves the selected active bot and token from the existing `bots` table.
+3. Calls `deleteWebhook` once on startup to make polling valid.
+4. Runs `getUpdates` with long polling.
+5. For each `message`, `edited_message`, `channel_post`, or `edited_channel_post`, formats a report.
+6. Sends the report back to the source chat, preserving `message_thread_id` when present.
+7. Advances the update offset only after handling the update attempt.
+
+## Dashboard Management
+
+The shared Vue dashboard includes a `Diagnostics` tab.
+
+The tab supports:
+
+- Selecting one existing bot record as the product diagnostic bot.
+- Enabling or disabling diagnostic polling.
+- Showing selected bot name and username.
+- Showing last processed update id.
+- Showing the last polling/reply error.
+
+The REST API is versioned under `/api/v1`:
+
+- `GET /api/v1/diagnostics/bot`
+- `PATCH /api/v1/diagnostics/bot`
+
+The polling process must not use a standalone token hidden outside the dashboard. It reads the configured bot from SQLite so dashboard state is the source of truth.
+
+## Database
+
+Table: `diagnostic_bot_settings`
+
+Fields:
+
+- `id`, singleton row id `1`
+- `bot_id`, nullable FK to `bots.id`
+- `is_enabled`
+- `last_update_id`
+- `last_error`
+- `created_at`
+- `updated_at`
 
 ## Report Content
 

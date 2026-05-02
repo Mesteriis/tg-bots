@@ -49,6 +49,22 @@ services:
     depends_on:
       - redis
 
+  diagnostic-bot:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    command: ["python", "-m", "tg_bot_aggregator.diagnostics.bot"]
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/app.db
+      TELEGRAM_BOT_API_BASE_URL: http://telegram-bot-api:8081
+      DIAGNOSTIC_POLL_TIMEOUT_SECONDS: "${DIAGNOSTIC_POLL_TIMEOUT_SECONDS:-30}"
+      DIAGNOSTIC_RETRY_DELAY_SECONDS: "${DIAGNOSTIC_RETRY_DELAY_SECONDS:-5}"
+    volumes:
+      - app-data:/data
+    depends_on:
+      - telegram-bot-api
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
