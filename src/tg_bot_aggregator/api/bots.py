@@ -17,9 +17,35 @@ async def list_bots(session: AsyncSession = Depends(get_session)) -> list[object
 
 
 @router.post("", response_model=BotRead, status_code=201)
-async def create_bot(payload: BotCreate, session: AsyncSession = Depends(get_session)) -> object:
-    bot = await BotRepository(session).create(**payload.model_dump())
+async def create_bot(
+    payload: BotCreate,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    bot_api: TelegramBotApiClient = Depends(get_bot_api_client),
+) -> object:
+    try:
+        response = await bot_api.get_me(payload.token)
+    except TelegramBotApiError as exc:
+        raise HTTPException(status_code=502, detail=exc.description) from exc
+
+    result = response.get("result", {})
+    username = result.get("username")
+    fallback_name = (
+        f"@{username}"
+        if username
+        else result.get("first_name") or f"bot-{result.get('id')}"
+    )
+    bot = await BotRepository(session).create(
+        name=payload.name or fallback_name,
+        token=payload.token,
+        username=username,
+        telegram_bot_id=result.get("id"),
+        description=payload.description,
+        is_active=payload.is_active,
+        last_checked_at=datetime.now(UTC),
+    )
     await session.commit()
+    await request.app.state.event_bus.publish("bot.checked", {"bot_id": bot.id})
     return bot
 
 
@@ -77,4 +103,3 @@ async def check_bot(
     await session.commit()
     await request.app.state.event_bus.publish("bot.checked", {"bot_id": bot_id})
     return updated
-

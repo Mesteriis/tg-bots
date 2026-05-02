@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class BotCreate(BaseModel):
-    name: str
+    name: str | None = None
     token: str
     description: str | None = None
     is_active: bool = True

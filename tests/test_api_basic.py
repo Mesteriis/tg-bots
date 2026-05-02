@@ -71,6 +71,20 @@ async def test_health_and_crud_and_send_flow() -> None:
         assert history[0]["telegram_message_id"] == 88
 
 
+async def test_create_bot_with_token_fetches_metadata_immediately() -> None:
+    client, event_bus = await _client()
+    async with client:
+        response = await client.post("/api/v1/bots", json={"token": "123:token"})
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["name"] == "@ops_bot"
+    assert payload["username"] == "ops_bot"
+    assert payload["telegram_bot_id"] == 123
+    assert payload["last_checked_at"] is not None
+    assert (await event_bus.latest()).event_type == "bot.checked"
+
+
 async def test_events_once_returns_sse_frame() -> None:
     client, event_bus = await _client()
     await event_bus.publish("send.created", {"send_history_id": 1})

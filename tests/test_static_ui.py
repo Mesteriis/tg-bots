@@ -8,3 +8,16 @@ def test_static_ui_uses_vue_api_and_events() -> None:
     assert "/api/v1" in html
     assert 'new EventSource("/api/v1/events")' in html
     assert "auth" not in html.lower()
+
+
+def test_static_ui_uses_onedark_motion_and_token_first_bot_flow() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert "#282c34" in html
+    assert "#61afef" in html
+    assert "@keyframes panelIn" in html
+    assert "prefers-reduced-motion" in html
+    assert 'placeholder="@username after check"' in html
+    assert 'v-model="forms.bot.name"' in html
+    assert 'v-model="forms.bot.name" required' not in html
+    assert "Fetching metadata" in html
