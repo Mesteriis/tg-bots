@@ -1,8 +1,11 @@
+import logging
 from typing import Any
 
 import httpx
 
-from tg_bot_aggregator.security import redact_secrets
+from tg_bot_aggregator.security import redact_secrets, redact_text
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 class TelegramBotApiError(RuntimeError):
@@ -41,7 +44,16 @@ class TelegramBotApiClient:
             client = httpx.AsyncClient(timeout=self._timeout)
             close_client = True
         try:
-            response = await client.post(self._build_url(token, method), json=payload)
+            try:
+                response = await client.post(self._build_url(token, method), json=payload)
+            except httpx.RequestError as exc:
+                message = redact_text(str(exc))
+                raise TelegramBotApiError(
+                    method=method,
+                    error_code=None,
+                    description=f"Telegram Bot API request failed: {message}",
+                    payload={},
+                ) from exc
             data = response.json()
         finally:
             if close_client:

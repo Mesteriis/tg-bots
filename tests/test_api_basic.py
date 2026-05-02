@@ -8,14 +8,17 @@ from tg_bot_aggregator.models import Base
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 
-async def _client() -> tuple[httpx.AsyncClient, MemoryEventBus]:
+async def _client(
+    handler: httpx.MockTransport | None = None,
+    raise_app_exceptions: bool = True,
+) -> tuple[httpx.AsyncClient, MemoryEventBus]:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     event_bus = MemoryEventBus()
 
-    async def handler(request: httpx.Request) -> httpx.Response:
+    async def default_handler(request: httpx.Request) -> httpx.Response:
         if str(request.url).endswith("/getMe"):
             return httpx.Response(
                 200, json={"ok": True, "result": {"id": 123, "username": "ops_bot"}}
@@ -23,7 +26,8 @@ async def _client() -> tuple[httpx.AsyncClient, MemoryEventBus]:
         return httpx.Response(200, json={"ok": True, "result": {"message_id": 88}})
 
     bot_api = TelegramBotApiClient(
-        "http://telegram-bot-api:8081", httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        "http://telegram-bot-api:8081",
+        httpx.AsyncClient(transport=handler or httpx.MockTransport(default_handler)),
     )
     app = create_app(
         settings=Settings(DATABASE_URL="sqlite+aiosqlite:///:memory:"),
@@ -31,7 +35,13 @@ async def _client() -> tuple[httpx.AsyncClient, MemoryEventBus]:
         event_bus=event_bus,
         bot_api_client=bot_api,
     )
-    client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+    client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(
+            app=app,
+            raise_app_exceptions=raise_app_exceptions,
+        ),
+        base_url="http://test",
+    )
     return client, event_bus
 
 
@@ -83,6 +93,23 @@ async def test_create_bot_with_token_fetches_metadata_immediately() -> None:
     assert payload["telegram_bot_id"] == 123
     assert payload["last_checked_at"] is not None
     assert (await event_bus.latest()).event_type == "bot.checked"
+
+
+async def test_create_bot_returns_gateway_error_when_bot_api_unreachable() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("name resolution failed", request=request)
+
+    client, _ = await _client(
+        handler=httpx.MockTransport(handler),
+        raise_app_exceptions=False,
+    )
+    async with client:
+        response = await client.post("/api/v1/bots", json={"token": "123:token"})
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Telegram Bot API request failed: name resolution failed"
+    }
 
 
 async def test_events_once_returns_sse_frame() -> None:

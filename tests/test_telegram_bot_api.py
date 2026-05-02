@@ -60,3 +60,17 @@ async def test_bot_api_client_raises_redacted_error() -> None:
     assert exc_info.value.error_code == 400
     assert "123456:ABCdef" not in str(exc_info.value.payload)
 
+
+async def test_bot_api_client_does_not_log_tokenized_urls(caplog: pytest.LogCaptureFixture) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"ok": True, "result": {"id": 1}})
+
+    caplog.set_level("INFO")
+    client = TelegramBotApiClient(
+        "http://telegram-bot-api:8081",
+        httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+
+    await client.get_me("123456:ABCdef_123456789012345")
+
+    assert not any("123456:ABCdef" in record.getMessage() for record in caplog.records)

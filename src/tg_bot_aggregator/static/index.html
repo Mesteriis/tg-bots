@@ -227,6 +227,15 @@
         font-size: 12px;
         margin-top: 8px;
       }
+      .error-banner {
+        margin-bottom: 14px;
+        padding: 10px 12px;
+        border: 1px solid rgba(224, 108, 117, 0.36);
+        border-radius: 6px;
+        background: rgba(224, 108, 117, 0.1);
+        color: var(--danger);
+        font-size: 13px;
+      }
       @keyframes panelIn {
         from {
           opacity: 0;
@@ -286,6 +295,7 @@
             <h2>{{ currentTab.label }}</h2>
             <button class="btn" @click="refreshAll"><i data-lucide="refresh-cw"></i>Refresh</button>
           </div>
+          <div v-if="lastError" class="error-banner" role="alert">{{ lastError }}</div>
 
           <div v-if="activeTab === 'bots'" class="grid">
             <form class="panel" @submit.prevent="createBot">
@@ -403,6 +413,7 @@
             activeTab: "bots",
             eventState: "connecting",
             botSaving: false,
+            lastError: "",
             tabs: [
               { id: "bots", label: "Bots", icon: "bot" },
               { id: "destinations", label: "Destinations", icon: "send-to-back" },
@@ -441,7 +452,17 @@
               headers: { "Content-Type": "application/json" },
               ...options,
             });
-            if (!response.ok) throw new Error(await response.text());
+            if (!response.ok) {
+              let detail = await response.text();
+              try {
+                detail = JSON.parse(detail).detail || detail;
+              } catch {
+                // Keep the raw response text for non-JSON errors.
+              }
+              this.lastError = detail;
+              throw new Error(detail);
+            }
+            this.lastError = "";
             if (response.status === 204) return null;
             return response.json();
           },
@@ -471,6 +492,8 @@
               await this.api("/bots", { method: "POST", body: JSON.stringify(this.forms.bot) });
               this.forms.bot = { name: "", token: "", description: "" };
               await this.refreshAll();
+            } catch (error) {
+              this.lastError = error instanceof Error ? error.message : "Request failed";
             } finally {
               this.botSaving = false;
             }
