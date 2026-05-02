@@ -17,10 +17,10 @@ def test_static_ui_uses_onedark_motion_and_token_first_bot_flow() -> None:
     assert "#61afef" in html
     assert "@keyframes panelIn" in html
     assert "prefers-reduced-motion" in html
-    assert 'placeholder="@username after check"' in html
+    assert 'placeholder="@username после проверки"' in html
     assert 'v-model="forms.bot.name"' in html
     assert 'v-model="forms.bot.name" required' not in html
-    assert "Fetching metadata" in html
+    assert "Получаю данные" in html
 
 
 def test_static_ui_shows_api_errors_for_bot_create() -> None:
@@ -35,7 +35,7 @@ def test_static_ui_shows_api_errors_for_bot_create() -> None:
 def test_static_ui_exposes_diagnostic_bot_management() -> None:
     html = Path("src/tg_bot_aggregator/static/index.html").read_text()
 
-    assert '{ id: "diagnostics", label: "Diagnostics", icon: "scan-search" }' in html
+    assert '{ id: "diagnostics", label: "Диагностика", icon: "scan-search" }' in html
     assert "activeTab === 'diagnostics'" in html
     assert 'v-model.number="diagnosticSettings.bot_id"' in html
     assert 'v-model="diagnosticSettings.is_enabled"' in html
@@ -48,6 +48,7 @@ def test_static_ui_exposes_mcp_and_api_token_management() -> None:
 
     assert '{ id: "mcp", label: "MCP", icon: "plug-zap" }' in html
     assert "activeTab === 'mcp'" in html
+    assert 'activeTab === \'mcp\'" class="grid settings-grid"' in html
     assert "mcpSettings" in html
     assert "createApiToken" in html
     assert "saveMcpSettings" in html
@@ -59,9 +60,32 @@ def test_static_ui_exposes_ops_automation_controls() -> None:
     html = Path("src/tg_bot_aggregator/static/index.html").read_text()
 
     assert "destination_alias" in html
-    assert "Dry run" in html
+    assert "Проверить" in html
     assert "copyCurl" in html
     assert "discoverySettings" in html
     assert "auditEvents" in html
     assert "send_mode" in html
     assert "tokenScopes" in html
+
+
+def test_static_ui_contains_tables_and_mcp_scope_controls() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert "minmax(0, 1fr)" in html
+    assert ".table-wrap" in html
+    assert 'class="table-wrap"' in html
+    assert 'class="tools-table"' in html
+    assert 'class="token-scope-grid"' in html
+    assert 'class="btn icon-only"' in html
+
+
+def test_static_ui_is_russian_first_and_explains_mtproto() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert '<html lang="ru">' in html
+    assert "Агрегатор Telegram-ботов" in html
+    assert '{ id: "bots", label: "Боты", icon: "bot" }' in html
+    assert '{ id: "send", label: "Отправка", icon: "send" }' in html
+    assert "Зачем нужен MTProto" in html
+    assert "Запросить код" in html
+    assert "любой клиент с доступом к ней сможет пользоваться сохраненной MTProto-сессией" in html

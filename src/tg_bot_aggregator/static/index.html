@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Telegram Bot Aggregator</title>
+    <title>Агрегатор Telegram-ботов</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -26,6 +26,10 @@
       * {
         box-sizing: border-box;
       }
+      html,
+      #app {
+        min-height: 100%;
+      }
       body {
         margin: 0;
         font-family:
@@ -35,6 +39,7 @@
           linear-gradient(180deg, var(--bg), var(--bg-deep));
         color: var(--text);
         min-height: 100vh;
+        overflow-x: hidden;
       }
       header {
         height: 56px;
@@ -54,8 +59,9 @@
       }
       main {
         display: grid;
-        grid-template-columns: 220px 1fr;
+        grid-template-columns: 220px minmax(0, 1fr);
         min-height: calc(100vh - 56px);
+        min-width: 0;
       }
       nav {
         border-right: 1px solid var(--line);
@@ -96,6 +102,8 @@
       }
       .content {
         padding: 18px;
+        min-width: 0;
+        overflow-x: hidden;
       }
       .toolbar {
         display: flex;
@@ -110,16 +118,28 @@
       }
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
         gap: 14px;
+        align-items: start;
+      }
+      .settings-grid {
+        grid-template-columns:
+          minmax(270px, 0.85fr)
+          minmax(520px, 1.25fr)
+          minmax(300px, 0.9fr)
+          minmax(300px, 0.9fr);
       }
       .panel {
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 14px;
+        min-width: 0;
         box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
         animation: panelIn 220ms ease both;
+      }
+      .panel.compact {
+        padding: 12px;
       }
       label {
         display: grid;
@@ -187,11 +207,80 @@
         color: #1c2128;
         border-color: var(--accent);
       }
+      .btn.icon-only {
+        width: 34px;
+        height: 34px;
+        justify-content: center;
+        padding: 0;
+      }
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        margin-bottom: 10px;
+      }
+      .checkbox-label input {
+        width: auto;
+        margin: 0;
+      }
+      .token-scope-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .token-scope-grid .checkbox-label {
+        margin: 0;
+        padding: 7px 8px;
+        border: 1px solid rgba(171, 178, 191, 0.16);
+        border-radius: 6px;
+        background: rgba(33, 37, 43, 0.42);
+      }
+      .table-wrap {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+      }
+      .table-wrap table {
+        border: 0;
+      }
       table {
         width: 100%;
+        min-width: 100%;
         border-collapse: collapse;
         background: var(--panel);
         border: 1px solid var(--line);
+      }
+      .tools-table {
+        min-width: 560px;
+        table-layout: fixed;
+      }
+      .tools-table th:nth-child(1),
+      .tools-table td:nth-child(1) {
+        width: 45%;
+      }
+      .tools-table th:nth-child(2),
+      .tools-table td:nth-child(2),
+      .tools-table th:nth-child(3),
+      .tools-table td:nth-child(3) {
+        width: 18%;
+      }
+      .tools-table th:nth-child(4),
+      .tools-table td:nth-child(4) {
+        width: 19%;
+      }
+      .token-table {
+        min-width: 360px;
+        table-layout: fixed;
+      }
+      .meta-table {
+        table-layout: fixed;
+      }
+      .meta-table th {
+        width: 42%;
       }
       th,
       td {
@@ -200,6 +289,7 @@
         text-align: left;
         font-size: 13px;
         vertical-align: top;
+        overflow-wrap: anywhere;
       }
       th {
         color: var(--muted);
@@ -227,6 +317,35 @@
         font-size: 12px;
         margin-top: 8px;
       }
+      .guide-panel {
+        display: grid;
+        gap: 10px;
+        border-color: rgba(97, 175, 239, 0.34);
+        background:
+          linear-gradient(135deg, rgba(97, 175, 239, 0.1), transparent 42%),
+          var(--panel);
+      }
+      .guide-title {
+        margin: 0;
+        color: var(--text-strong);
+        font-size: 14px;
+        font-weight: 650;
+      }
+      .guide-text,
+      .guide-list {
+        margin: 0;
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .guide-list {
+        padding-left: 20px;
+      }
+      .field-hint {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
       .error-banner {
         margin-bottom: 14px;
         padding: 10px 12px;
@@ -235,6 +354,10 @@
         background: rgba(224, 108, 117, 0.1);
         color: var(--danger);
         font-size: 13px;
+      }
+      pre {
+        max-width: 100%;
+        overflow: auto;
       }
       @keyframes panelIn {
         from {
@@ -254,9 +377,29 @@
           transition-duration: 1ms !important;
         }
       }
+      @media (max-width: 1700px) {
+        .settings-grid {
+          grid-template-columns: repeat(2, minmax(min(360px, 100%), 1fr));
+        }
+      }
+      @media (max-width: 960px) {
+        .settings-grid {
+          grid-template-columns: 1fr;
+        }
+        .toolbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
       @media (max-width: 760px) {
         main {
           grid-template-columns: 1fr;
+        }
+        header {
+          padding: 0 14px;
+        }
+        .content {
+          padding: 14px;
         }
         nav {
           display: flex;
@@ -273,9 +416,9 @@
   <body>
     <div id="app">
       <header>
-        <h1>Telegram Bot Aggregator</h1>
+        <h1>Агрегатор Telegram-ботов</h1>
         <div class="status" :class="{ ok: eventState === 'live', danger: eventState === 'closed' }">
-          {{ eventState }}
+          {{ eventStateLabel }}
         </div>
       </header>
       <main>
@@ -293,246 +436,299 @@
         <section class="content">
           <div class="toolbar">
             <h2>{{ currentTab.label }}</h2>
-            <button class="btn" @click="refreshAll"><i data-lucide="refresh-cw"></i>Refresh</button>
+            <button class="btn" @click="refreshAll"><i data-lucide="refresh-cw"></i>Обновить</button>
           </div>
           <div v-if="lastError" class="error-banner" role="alert">{{ lastError }}</div>
           <div v-if="isProtectedHost" class="panel" style="margin-bottom: 14px;">
-            <label>API token for tg.sh-inc.ru / tg.sh-inc.dev
+            <label>API-токен для tg.sh-inc.ru / tg.sh-inc.dev
               <input v-model="apiToken" type="password" placeholder="tga_..." />
             </label>
             <div class="actions">
-              <button class="btn primary" @click="saveApiToken"><i data-lucide="shield-check"></i>Use token</button>
-              <button class="btn" @click="clearApiToken"><i data-lucide="log-out"></i>Clear</button>
+              <button class="btn primary" @click="saveApiToken"><i data-lucide="shield-check"></i>Использовать</button>
+              <button class="btn" @click="clearApiToken"><i data-lucide="log-out"></i>Очистить</button>
             </div>
-            <div class="hint">Protected proxy domains require a permanent API token. Localhost stays open.</div>
+            <div class="hint">На прокси-доменах нужен постоянный API-токен. Локальный адрес остается открытым.</div>
           </div>
 
           <div v-if="activeTab === 'bots'" class="grid">
             <form class="panel" @submit.prevent="createBot">
-              <label>Name<input v-model="forms.bot.name" placeholder="@username after check" /></label>
-              <label>Token<input v-model="forms.bot.token" required /></label>
-              <label>Description<textarea v-model="forms.bot.description"></textarea></label>
+              <label>Имя<input v-model="forms.bot.name" placeholder="@username после проверки" /></label>
+              <label>Токен<input v-model="forms.bot.token" required /></label>
+              <label>Описание<textarea v-model="forms.bot.description"></textarea></label>
               <button class="btn primary" :disabled="botSaving">
-                <i data-lucide="radar"></i>{{ botSaving ? "Fetching metadata" : "Add bot" }}
+                <i data-lucide="radar"></i>{{ botSaving ? "Получаю данные" : "Добавить бота" }}
               </button>
-              <div class="hint">Token lookup runs getMe immediately; name stays editable.</div>
+              <div class="hint">После добавления сразу выполняется getMe: username и ID подтянутся автоматически, имя можно отредактировать.</div>
             </form>
             <div class="panel">
-              <table>
-                <thead><tr><th>Name</th><th>Username</th><th></th></tr></thead>
-                <tbody>
-                  <tr v-for="bot in bots" :key="bot.id">
-                    <td>{{ bot.name }}</td>
-                    <td>{{ bot.username || '-' }}</td>
-                    <td><button class="btn" @click="checkBot(bot.id)"><i data-lucide="check"></i></button></td>
-                  </tr>
-                </tbody>
-              </table>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Имя</th><th>Username</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="bot in bots" :key="bot.id">
+                      <td>{{ bot.name }}</td>
+                      <td>{{ bot.username || '-' }}</td>
+                      <td><button class="btn icon-only" title="Проверить бота" @click="checkBot(bot.id)"><i data-lucide="check"></i></button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
           <div v-if="activeTab === 'destinations'" class="grid">
             <form class="panel" @submit.prevent="createDestination">
-              <label>Bot<select v-model.number="forms.destination.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
-              <label>Kind<select v-model="forms.destination.kind"><option>private</option><option>group</option><option>supergroup</option><option>channel</option><option>forum_topic</option></select></label>
+              <label>Бот<select v-model.number="forms.destination.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Тип<select v-model="forms.destination.kind"><option value="private">личный чат</option><option value="group">группа</option><option value="supergroup">супергруппа</option><option value="channel">канал</option><option value="forum_topic">тема форума</option></select></label>
               <label>Chat ID<input v-model="forms.destination.chat_id" required /></label>
               <label>Thread ID<input v-model.number="forms.destination.message_thread_id" type="number" /></label>
-              <label>Alias<input v-model="forms.destination.alias" placeholder="ops_channel" /></label>
-              <label>Title<input v-model="forms.destination.title" /></label>
-              <button class="btn primary"><i data-lucide="plus"></i>Add destination</button>
+              <label>Алиас<input v-model="forms.destination.alias" placeholder="ops_channel" /></label>
+              <label>Название<input v-model="forms.destination.title" /></label>
+              <button class="btn primary"><i data-lucide="plus"></i>Добавить адресата</button>
             </form>
             <div class="panel">
-              <table><thead><tr><th>Title</th><th>Alias</th><th>Kind</th><th>Chat</th><th>Thread</th><th></th></tr></thead><tbody><tr v-for="item in destinations" :key="item.id"><td>{{ item.title || '-' }}</td><td>{{ item.alias || '-' }}</td><td>{{ item.kind }}</td><td>{{ item.chat_id }}</td><td>{{ item.message_thread_id || '-' }}</td><td><button class="btn" @click="checkDestination(item.id)"><i data-lucide="radar"></i></button></td></tr></tbody></table>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Название</th><th>Алиас</th><th>Тип</th><th>Chat</th><th>Thread</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="item in destinations" :key="item.id">
+                      <td>{{ item.title || '-' }}</td>
+                      <td>{{ item.alias || '-' }}</td>
+                      <td>{{ kindLabel(item.kind) }}</td>
+                      <td>{{ item.chat_id }}</td>
+                      <td>{{ item.message_thread_id || '-' }}</td>
+                      <td><button class="btn icon-only" title="Проверить адресата" @click="checkDestination(item.id)"><i data-lucide="radar"></i></button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
           <div v-if="activeTab === 'templates'" class="grid">
             <form class="panel" @submit.prevent="createTemplate">
               <label>Tag<input v-model="forms.template.tag" required /></label>
-              <label>Title<input v-model="forms.template.title" required /></label>
-              <label>Text<textarea v-model="forms.template.text" required></textarea></label>
+              <label>Название<input v-model="forms.template.title" required /></label>
+              <label>Текст<textarea v-model="forms.template.text" required></textarea></label>
               <label>Parse mode<input v-model="forms.template.parse_mode" /></label>
-              <button class="btn primary"><i data-lucide="plus"></i>Add template</button>
+              <button class="btn primary"><i data-lucide="plus"></i>Добавить шаблон</button>
             </form>
             <div class="panel">
-              <table><thead><tr><th>Tag</th><th>Title</th><th>Text</th></tr></thead><tbody><tr v-for="item in templates" :key="item.id"><td>{{ item.tag }}</td><td>{{ item.title }}</td><td>{{ item.text }}</td></tr></tbody></table>
+              <div class="table-wrap">
+                <table><thead><tr><th>Tag</th><th>Название</th><th>Текст</th></tr></thead><tbody><tr v-for="item in templates" :key="item.id"><td>{{ item.tag }}</td><td>{{ item.title }}</td><td>{{ item.text }}</td></tr></tbody></table>
+              </div>
             </div>
           </div>
 
           <div v-if="activeTab === 'send'" class="grid">
             <form class="panel" @submit.prevent="sendText">
-              <label>Bot<select v-model.number="forms.send.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
-              <label>Destination<select v-model.number="forms.send.destination_id"><option :value="null">Manual chat</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
-              <label>Destination alias<input v-model="forms.send.destination_alias" placeholder="ops_channel" /></label>
+              <label>Бот<select v-model.number="forms.send.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Адресат<select v-model.number="forms.send.destination_id"><option :value="null">ручной chat ID</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
+              <label>Алиас адресата<input v-model="forms.send.destination_alias" placeholder="ops_channel" /></label>
               <label>Chat ID<input v-model="forms.send.chat_id" /></label>
-              <label>Send mode<select v-model="forms.send.send_mode"><option>sync</option><option>queued</option></select></label>
+              <label>Режим отправки<select v-model="forms.send.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
               <label>Tag<input v-model="forms.send.tag" /></label>
-              <label>Text<textarea v-model="forms.send.text"></textarea></label>
+              <label>Текст<textarea v-model="forms.send.text"></textarea></label>
               <div class="actions">
-                <button class="btn primary"><i data-lucide="send"></i>Send text</button>
-                <button class="btn" type="button" @click="dryRunText"><i data-lucide="scan-line"></i>Dry run</button>
+                <button class="btn primary"><i data-lucide="send"></i>Отправить текст</button>
+                <button class="btn" type="button" @click="dryRunText"><i data-lucide="scan-line"></i>Проверить</button>
                 <button class="btn" type="button" @click="copyCurl('text')"><i data-lucide="copy"></i>cURL</button>
               </div>
               <pre v-if="sendDryRun">{{ JSON.stringify(sendDryRun, null, 2) }}</pre>
             </form>
             <form class="panel" @submit.prevent="sendFile">
-              <label>Media type<select v-model="forms.file.media_type"><option>video</option><option>document</option></select></label>
-              <label>Bot<select v-model.number="forms.file.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
-              <label>Destination<select v-model.number="forms.file.destination_id"><option :value="null">Manual chat</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
-              <label>Destination alias<input v-model="forms.file.destination_alias" placeholder="ops_channel" /></label>
+              <label>Тип файла<select v-model="forms.file.media_type"><option value="video">видео</option><option value="document">документ</option></select></label>
+              <label>Бот<select v-model.number="forms.file.bot_id"><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Адресат<select v-model.number="forms.file.destination_id"><option :value="null">ручной chat ID</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
+              <label>Алиас адресата<input v-model="forms.file.destination_alias" placeholder="ops_channel" /></label>
               <label>Chat ID<input v-model="forms.file.chat_id" /></label>
-              <label>Send mode<select v-model="forms.file.send_mode"><option>sync</option><option>queued</option></select></label>
-              <label>Shared path<input v-model="forms.file.file_relative_path" placeholder="telegram-outbox/video.mp4" /></label>
-              <label>Caption<textarea v-model="forms.file.caption"></textarea></label>
+              <label>Режим отправки<select v-model="forms.file.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
+              <label>Путь на шаре<input v-model="forms.file.file_relative_path" placeholder="telegram-outbox/video.mp4" /></label>
+              <label>Подпись<textarea v-model="forms.file.caption"></textarea></label>
               <div class="actions">
-                <button class="btn primary"><i data-lucide="file-video"></i>Send file</button>
-                <button class="btn" type="button" @click="dryRunFile"><i data-lucide="scan-line"></i>Dry run</button>
+                <button class="btn primary"><i data-lucide="file-video"></i>Отправить файл</button>
+                <button class="btn" type="button" @click="dryRunFile"><i data-lucide="scan-line"></i>Проверить</button>
                 <button class="btn" type="button" @click="copyCurl('file')"><i data-lucide="copy"></i>cURL</button>
               </div>
             </form>
           </div>
 
           <div v-if="activeTab === 'history'" class="panel">
-            <table><thead><tr><th>ID</th><th>Status</th><th>Chat</th><th>Tag</th><th>Error</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td>{{ item.id }}</td><td>{{ item.status }}</td><td>{{ item.chat_id }}</td><td>{{ item.tag || '-' }}</td><td>{{ item.error_message || '-' }}</td></tr></tbody></table>
+            <div class="table-wrap">
+              <table><thead><tr><th>ID</th><th>Статус</th><th>Chat</th><th>Tag</th><th>Ошибка</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td>{{ item.id }}</td><td>{{ statusLabel(item.status) }}</td><td>{{ item.chat_id }}</td><td>{{ item.tag || '-' }}</td><td>{{ item.error_message || '-' }}</td></tr></tbody></table>
+            </div>
           </div>
 
           <div v-if="activeTab === 'mtproto'" class="grid">
+            <div class="panel guide-panel">
+              <p class="guide-title">Зачем нужен MTProto</p>
+              <p class="guide-text">Это вход пользовательской Telegram-сессией через Telethon. Она нужна только для аналитики каналов и чатов, где Bot API не отдает достаточно данных.</p>
+              <ol class="guide-list">
+                <li>Введи телефон в международном формате и нажми «Запросить код».</li>
+                <li>Код придет в Telegram. Вставь его в поле «Код» и подтверди.</li>
+                <li>Если включена 2FA, введи пароль Telegram Cloud Password.</li>
+              </ol>
+              <p class="guide-text">Важно: в локальной сети админка без авторизации, поэтому любой клиент с доступом к ней сможет пользоваться сохраненной MTProto-сессией через функции приложения.</p>
+            </div>
             <form class="panel" @submit.prevent="startLogin">
-              <label>Phone<input v-model="forms.mtproto.phone" /></label>
-              <button class="btn primary"><i data-lucide="smartphone"></i>Start</button>
+              <label>Телефон
+                <input v-model="forms.mtproto.phone" placeholder="+79990000000" />
+                <span class="field-hint">Номер аккаунта, которым будем читать аналитику.</span>
+              </label>
+              <button class="btn primary"><i data-lucide="smartphone"></i>Запросить код</button>
             </form>
             <form class="panel" @submit.prevent="confirmCode">
-              <label>Code<input v-model="forms.mtproto.code" /></label>
-              <button class="btn"><i data-lucide="key-round"></i>Confirm code</button>
+              <label>Код
+                <input v-model="forms.mtproto.code" inputmode="numeric" />
+                <span class="field-hint">Код из Telegram после запроса на предыдущем шаге.</span>
+              </label>
+              <button class="btn"><i data-lucide="key-round"></i>Подтвердить код</button>
             </form>
             <form class="panel" @submit.prevent="confirmPassword">
-              <label>Password<input v-model="forms.mtproto.password" type="password" /></label>
-              <button class="btn"><i data-lucide="lock-keyhole"></i>Confirm password</button>
+              <label>Пароль 2FA
+                <input v-model="forms.mtproto.password" type="password" />
+                <span class="field-hint">Нужен только если Telegram запросит облачный пароль.</span>
+              </label>
+              <button class="btn"><i data-lucide="lock-keyhole"></i>Подтвердить пароль</button>
             </form>
           </div>
 
           <div v-if="activeTab === 'analytics'" class="grid">
             <form class="panel" @submit.prevent="createAnalyticsTarget">
               <label>Peer ref<input v-model="forms.analytics.peer_ref" required /></label>
-              <label>Title<input v-model="forms.analytics.title" /></label>
-              <button class="btn primary"><i data-lucide="plus"></i>Add target</button>
+              <label>Название<input v-model="forms.analytics.title" /></label>
+              <button class="btn primary"><i data-lucide="plus"></i>Добавить цель</button>
             </form>
             <div class="panel">
-              <table><thead><tr><th>Peer</th><th>Title</th><th></th></tr></thead><tbody><tr v-for="target in analyticsTargets" :key="target.id"><td>{{ target.peer_ref }}</td><td>{{ target.title || '-' }}</td><td><button class="btn" @click="refreshAnalytics(target.id)"><i data-lucide="refresh-cw"></i></button></td></tr></tbody></table>
+              <div class="table-wrap">
+                <table><thead><tr><th>Peer</th><th>Название</th><th></th></tr></thead><tbody><tr v-for="target in analyticsTargets" :key="target.id"><td>{{ target.peer_ref }}</td><td>{{ target.title || '-' }}</td><td><button class="btn icon-only" title="Обновить аналитику" @click="refreshAnalytics(target.id)"><i data-lucide="refresh-cw"></i></button></td></tr></tbody></table>
+              </div>
             </div>
           </div>
 
           <div v-if="activeTab === 'diagnostics'" class="grid">
             <form class="panel" @submit.prevent="saveDiagnosticSettings">
-              <label>Diagnostic bot
+              <label>Диагностический бот
                 <select v-model.number="diagnosticSettings.bot_id">
-                  <option :value="null">Not selected</option>
+                  <option :value="null">не выбран</option>
                   <option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option>
                 </select>
               </label>
-              <label><input v-model="diagnosticSettings.is_enabled" type="checkbox" /> Enabled</label>
-              <button class="btn primary"><i data-lucide="save"></i>Save diagnostics</button>
-              <div class="hint">This bot runs polling only for this product and replies with message IDs.</div>
+              <label class="checkbox-label"><input v-model="diagnosticSettings.is_enabled" type="checkbox" /> Включен</label>
+              <button class="btn primary"><i data-lucide="save"></i>Сохранить диагностику</button>
+              <div class="hint">Этот бот работает polling-режимом только для продукта и отвечает красивой карточкой с ID сообщения, chat ID и thread ID.</div>
             </form>
             <div class="panel">
-              <table>
-                <tbody>
-                  <tr><th>Bot</th><td>{{ diagnosticSettings.bot_name || '-' }}</td></tr>
-                  <tr><th>Username</th><td>{{ diagnosticSettings.bot_username || '-' }}</td></tr>
-                  <tr><th>Enabled</th><td>{{ diagnosticSettings.is_enabled ? 'yes' : 'no' }}</td></tr>
-                  <tr><th>Last update</th><td>{{ diagnosticSettings.last_update_id || '-' }}</td></tr>
-                  <tr><th>Last error</th><td>{{ diagnosticSettings.last_error || '-' }}</td></tr>
-                </tbody>
-              </table>
+              <div class="table-wrap">
+                <table class="meta-table">
+                  <tbody>
+                    <tr><th>Бот</th><td>{{ diagnosticSettings.bot_name || '-' }}</td></tr>
+                    <tr><th>Username</th><td>{{ diagnosticSettings.bot_username || '-' }}</td></tr>
+                    <tr><th>Включен</th><td>{{ boolLabel(diagnosticSettings.is_enabled) }}</td></tr>
+                    <tr><th>Последний update</th><td>{{ diagnosticSettings.last_update_id || '-' }}</td></tr>
+                    <tr><th>Последняя ошибка</th><td>{{ diagnosticSettings.last_error || '-' }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
           <div v-if="activeTab === 'discovery'" class="grid">
             <div class="panel">
-              <table>
-                <thead><tr><th>Bot</th><th>Enabled</th><th>Last update</th><th>Error</th></tr></thead>
-                <tbody>
-                  <tr v-for="bot in bots" :key="bot.id">
-                    <td>{{ bot.name }}</td>
-                    <td><input :checked="discoveryEnabled(bot.id)" type="checkbox" @change="saveDiscoverySettings(bot.id, $event.target.checked)" /></td>
-                    <td>{{ discoveryFor(bot.id)?.last_update_id || '-' }}</td>
-                    <td>{{ discoveryFor(bot.id)?.last_error || '-' }}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <div class="hint">Discovery polls only my_chat_member updates to register chats where a managed bot is added.</div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Бот</th><th>Включен</th><th>Последний update</th><th>Ошибка</th></tr></thead>
+                  <tbody>
+                    <tr v-for="bot in bots" :key="bot.id">
+                      <td>{{ bot.name }}</td>
+                      <td><input :checked="discoveryEnabled(bot.id)" type="checkbox" @change="saveDiscoverySettings(bot.id, $event.target.checked)" /></td>
+                      <td>{{ discoveryFor(bot.id)?.last_update_id || '-' }}</td>
+                      <td>{{ discoveryFor(bot.id)?.last_error || '-' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="hint">Автопоиск читает только my_chat_member updates и автоматически добавляет чаты, куда управляемого бота добавили администратором.</div>
             </div>
           </div>
 
-          <div v-if="activeTab === 'mcp'" class="grid">
-            <div class="panel">
-              <label><input v-model="mcpSettings.is_enabled" type="checkbox" /> MCP enabled</label>
-              <label><input v-model="mcpSettings.allow_legacy_sse" type="checkbox" /> Legacy SSE transport</label>
+          <div v-if="activeTab === 'mcp'" class="grid settings-grid">
+            <div class="panel compact">
+              <label class="checkbox-label"><input v-model="mcpSettings.is_enabled" type="checkbox" /> MCP включен</label>
+              <label class="checkbox-label"><input v-model="mcpSettings.allow_legacy_sse" type="checkbox" /> Старый SSE-транспорт</label>
               <div class="actions">
-                <button class="btn" @click="setMcpPreset('read')"><i data-lucide="eye"></i>Read only</button>
-                <button class="btn" @click="setMcpPreset('sender')"><i data-lucide="send"></i>Sender</button>
-                <button class="btn" @click="setMcpPreset('full')"><i data-lucide="unlock"></i>Full</button>
-                <button class="btn primary" @click="saveMcpSettings"><i data-lucide="save"></i>Save MCP</button>
+                <button class="btn" @click="setMcpPreset('read')"><i data-lucide="eye"></i>Только чтение</button>
+                <button class="btn" @click="setMcpPreset('sender')"><i data-lucide="send"></i>Отправка</button>
+                <button class="btn" @click="setMcpPreset('full')"><i data-lucide="unlock"></i>Полный</button>
+                <button class="btn primary" @click="saveMcpSettings"><i data-lucide="save"></i>Сохранить MCP</button>
               </div>
-              <div class="hint">Disabled tools are rejected at call time. Reconnect MCP clients to refresh discovery.</div>
+              <div class="hint">Отключенные инструменты отклоняются при вызове. После изменения переподключи MCP-клиент, чтобы он обновил discovery.</div>
             </div>
-            <div class="panel">
-              <table>
-                <thead><tr><th>Tool</th><th>Category</th><th>Risk</th><th>Enabled</th></tr></thead>
-                <tbody>
-                  <tr v-for="tool in mcpSettings.tools" :key="tool.name">
-                    <td>{{ tool.name }}</td>
-                    <td>{{ tool.category }}</td>
-                    <td>{{ tool.risk }}</td>
-                    <td><input v-model="tool.enabled" type="checkbox" /></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <form class="panel" @submit.prevent="createApiToken">
-              <label>New permanent token name<input v-model="forms.apiToken.name" required /></label>
-              <div class="actions">
-                <label v-for="scope in tokenScopes" :key="scope"><input v-model="forms.apiToken.scopes" type="checkbox" :value="scope" /> {{ scope }}</label>
+            <div class="panel compact">
+              <div class="table-wrap">
+                <table class="tools-table">
+                  <thead><tr><th>Инструмент</th><th>Категория</th><th>Риск</th><th>Включен</th></tr></thead>
+                  <tbody>
+                    <tr v-for="tool in mcpSettings.tools" :key="tool.name">
+                      <td>{{ tool.name }}</td>
+                      <td>{{ categoryLabel(tool.category) }}</td>
+                      <td>{{ riskLabel(tool.risk) }}</td>
+                      <td><input v-model="tool.enabled" type="checkbox" /></td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <button class="btn primary"><i data-lucide="key-round"></i>Create token</button>
-              <div v-if="createdApiToken" class="hint">Created token: <code>{{ createdApiToken }}</code></div>
+            </div>
+            <form class="panel compact" @submit.prevent="createApiToken">
+              <label>Имя нового постоянного токена<input v-model="forms.apiToken.name" required /></label>
+              <div class="token-scope-grid">
+                <label class="checkbox-label" v-for="scope in tokenScopes" :key="scope"><input v-model="forms.apiToken.scopes" type="checkbox" :value="scope" /> {{ scopeLabel(scope) }}</label>
+              </div>
+              <button class="btn primary"><i data-lucide="key-round"></i>Создать токен</button>
+              <div v-if="createdApiToken" class="hint">Создан токен: <code>{{ createdApiToken }}</code></div>
             </form>
-            <div class="panel">
-              <table>
-                <thead><tr><th>Name</th><th>Prefix</th><th>Status</th><th></th></tr></thead>
-                <tbody>
-                  <tr v-for="token in apiTokens" :key="token.id">
-                    <td>{{ token.name }}</td>
-                    <td>{{ token.token_prefix }}</td>
-                    <td>{{ token.is_active ? 'active' : 'revoked' }}</td>
-                    <td><button class="btn" @click="revokeApiToken(token.id)"><i data-lucide="ban"></i></button></td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="panel compact">
+              <div class="table-wrap">
+                <table class="token-table">
+                  <thead><tr><th>Имя</th><th>Префикс</th><th>Статус</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="token in apiTokens" :key="token.id">
+                      <td>{{ token.name }}</td>
+                      <td>{{ token.token_prefix }}</td>
+                      <td>{{ token.is_active ? 'активен' : 'отозван' }}</td>
+                      <td><button class="btn icon-only" title="Отозвать токен" @click="revokeApiToken(token.id)"><i data-lucide="ban"></i></button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div class="panel">
-              <table>
-                <tbody>
-                  <tr><th>Protected hosts</th><td>{{ mcpSettings.protected_hosts?.join(', ') || 'tg.sh-inc.ru, tg.sh-inc.dev' }}</td></tr>
-                  <tr v-for="transport in mcpSettings.transports" :key="transport.name"><th>{{ transport.name }}</th><td>{{ transport.path }} / {{ transport.enabled ? 'enabled' : 'disabled' }}</td></tr>
-                </tbody>
-              </table>
+            <div class="panel compact">
+              <div class="table-wrap">
+                <table class="meta-table">
+                  <tbody>
+                    <tr><th>Защищенные хосты</th><td>{{ mcpSettings.protected_hosts?.join(', ') || 'tg.sh-inc.ru, tg.sh-inc.dev' }}</td></tr>
+                    <tr v-for="transport in mcpSettings.transports" :key="transport.name"><th>{{ transport.name }}</th><td>{{ transport.path }} / {{ transport.enabled ? 'включен' : 'отключен' }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
           <div v-if="activeTab === 'audit'" class="panel">
-            <table>
-              <thead><tr><th>ID</th><th>Action</th><th>Status</th><th>Path</th><th>Message</th></tr></thead>
-              <tbody>
-                <tr v-for="event in auditEvents" :key="event.id">
-                  <td>{{ event.id }}</td>
-                  <td>{{ event.action }}</td>
-                  <td>{{ event.status }}</td>
-                  <td>{{ event.path || '-' }}</td>
-                  <td>{{ event.message || '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>ID</th><th>Действие</th><th>Статус</th><th>Путь</th><th>Сообщение</th></tr></thead>
+                <tbody>
+                  <tr v-for="event in auditEvents" :key="event.id">
+                    <td>{{ event.id }}</td>
+                    <td>{{ event.action }}</td>
+                    <td>{{ statusLabel(event.status) }}</td>
+                    <td>{{ event.path || '-' }}</td>
+                    <td>{{ event.message || '-' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div v-if="activeTab === 'health'" class="panel">
@@ -552,18 +748,18 @@
             botSaving: false,
             lastError: "",
             tabs: [
-              { id: "bots", label: "Bots", icon: "bot" },
-              { id: "destinations", label: "Destinations", icon: "send-to-back" },
-              { id: "templates", label: "Templates", icon: "file-text" },
-              { id: "send", label: "Send", icon: "send" },
-              { id: "history", label: "History", icon: "history" },
+              { id: "bots", label: "Боты", icon: "bot" },
+              { id: "destinations", label: "Адресаты", icon: "send-to-back" },
+              { id: "templates", label: "Шаблоны", icon: "file-text" },
+              { id: "send", label: "Отправка", icon: "send" },
+              { id: "history", label: "История", icon: "history" },
               { id: "mtproto", label: "MTProto", icon: "smartphone" },
-              { id: "analytics", label: "Analytics", icon: "chart-no-axes-combined" },
-              { id: "diagnostics", label: "Diagnostics", icon: "scan-search" },
-              { id: "discovery", label: "Discovery", icon: "radar" },
+              { id: "analytics", label: "Аналитика", icon: "chart-no-axes-combined" },
+              { id: "diagnostics", label: "Диагностика", icon: "scan-search" },
+              { id: "discovery", label: "Автопоиск", icon: "radar" },
               { id: "mcp", label: "MCP", icon: "plug-zap" },
-              { id: "audit", label: "Audit", icon: "list-checks" },
-              { id: "health", label: "Health", icon: "activity" },
+              { id: "audit", label: "Аудит", icon: "list-checks" },
+              { id: "health", label: "Состояние", icon: "activity" },
             ],
             apiToken: localStorage.getItem("tgApiToken") || "",
             createdApiToken: "",
@@ -589,6 +785,7 @@
         },
         computed: {
           currentTab() { return this.tabs.find((tab) => tab.id === this.activeTab); },
+          eventStateLabel() { return this.statusLabel(this.eventState); },
           isProtectedHost() { return ["tg.sh-inc.ru", "tg.sh-inc.dev"].includes(window.location.hostname); }
         },
         async mounted() {
@@ -600,6 +797,54 @@
         updated() { this.drawIcons(); },
         methods: {
           drawIcons() { nextTick(() => lucide.createIcons({ attrs: { width: 16, height: 16 } })); },
+          boolLabel(value) { return value ? "да" : "нет"; },
+          categoryLabel(value) {
+            return {
+              read: "чтение",
+              send: "отправка",
+              task: "задачи",
+              security: "безопасность",
+            }[value] || value;
+          },
+          kindLabel(value) {
+            return {
+              private: "личный чат",
+              group: "группа",
+              supergroup: "супергруппа",
+              channel: "канал",
+              forum_topic: "тема форума",
+            }[value] || value;
+          },
+          riskLabel(value) {
+            return {
+              read: "чтение",
+              write: "запись",
+              admin: "админ",
+            }[value] || value;
+          },
+          scopeLabel(value) {
+            return {
+              read: "чтение",
+              send: "отправка",
+              mcp_admin: "админ MCP",
+              tg_compat: "TG API",
+            }[value] || value;
+          },
+          statusLabel(value) {
+            return {
+              active: "активен",
+              closed: "нет связи",
+              connecting: "подключение",
+              created: "создано",
+              failed: "ошибка",
+              finished: "завершено",
+              live: "онлайн",
+              queued: "в очереди",
+              revoked: "отозван",
+              started: "запущено",
+              succeeded: "успешно",
+            }[value] || value;
+          },
           async api(path, options = {}) {
             const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
             if (this.apiToken) headers["X-API-Token"] = this.apiToken;
@@ -628,7 +873,7 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ token: this.apiToken }),
             });
-            if (!response.ok) throw new Error("Invalid API token");
+            if (!response.ok) throw new Error("Неверный API-токен");
           },
           async saveApiToken() {
             localStorage.setItem("tgApiToken", this.apiToken);
@@ -672,7 +917,7 @@
               this.forms.bot = { name: "", token: "", description: "" };
               await this.refreshAll();
             } catch (error) {
-              this.lastError = error instanceof Error ? error.message : "Request failed";
+              this.lastError = error instanceof Error ? error.message : "Запрос не выполнен";
             } finally {
               this.botSaving = false;
             }

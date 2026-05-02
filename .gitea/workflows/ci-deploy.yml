@@ -1,0 +1,77 @@
+name: CI and RNet Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CT_ID: 103
+  CT_NAME: tg-bots
+  CT_MEMORY: 8192
+  CT_CORES: 4
+  CT_DISK: 64
+  PVE_HOST: 192.168.1.2
+  NGINX_UI_CT_ID: 112
+
+jobs:
+  test:
+    runs-on: python
+    steps:
+      - uses: actions/checkout@v4
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run pytest
+
+  deploy:
+    needs: test
+    runs-on: main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure Proxmox LXC
+        run: pve-deploy ensure $CT_ID $CT_NAME $CT_MEMORY $CT_CORES $CT_DISK
+
+      - name: Configure Proxmox LXC
+        run: bash deploy/proxmox/configure-lxc.sh "$CT_ID"
+
+      - name: Write runtime environment
+        run: |
+          cat > .env <<EOF
+          APP_HOST=0.0.0.0
+          APP_PORT=8000
+          DATABASE_URL=sqlite+aiosqlite:////data/app.db
+          REDIS_URL=redis://redis:6379/0
+          TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_BOT_API_BASE_URL=http://telegram-bot-api:8081
+          SHARED_MEDIA_ROOT=/shared/media
+          MAX_LOCAL_FILE_BYTES=2097152000
+          CORS_ALLOWED_ORIGINS=http://127.0.0.1:8000,http://localhost:8000,https://tg.sh-inc.ru,https://tg.sh-inc.dev
+          MCP_ALLOWED_ORIGINS=http://127.0.0.1:8000,http://localhost:8000,https://tg.sh-inc.ru,https://tg.sh-inc.dev
+          PROTECTED_API_HOSTS=tg.sh-inc.ru,tg.sh-inc.dev
+          TELETHON_SESSION_DIR=/data/telethon
+          SCHEDULER_INTERVAL_SECONDS=3600
+          DIAGNOSTIC_POLL_TIMEOUT_SECONDS=30
+          DIAGNOSTIC_RETRY_DELAY_SECONDS=5
+          DISCOVERY_POLL_TIMEOUT_SECONDS=30
+          DISCOVERY_RETRY_DELAY_SECONDS=5
+          SEND_RETRY_MAX_ATTEMPTS=3
+          SEND_RETRY_DELAY_SECONDS=1
+          EOF
+
+      - name: Deploy Docker Compose stack
+        run: pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml
+
+      - name: Update nginx-ui upstream
+        run: |
+          APP_IP="$(bash deploy/proxmox/ct-ip.sh "$CT_ID")"
+          APP_UPSTREAM="http://${APP_IP}:8000" bash deploy/nginx/update-nginx-ui.sh "$CT_ID"
+          curl -fsS "http://${APP_IP}:8000/api/v1/health"
+
+      - if: success()
+        run: tg-notify "tg-bots deployed to CT ${CT_ID}" --success
+
+      - if: failure()
+        run: tg-notify "tg-bots deploy failed" --fail

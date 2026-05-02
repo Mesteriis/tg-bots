@@ -6,7 +6,26 @@ build-backend = "setuptools.build_meta"
 name = "tg-bot-aggregator"
 version = "0.1.0"
 description = "Local async FastAPI service for Telegram bot sending, MCP, and analytics."
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "avm" },
+]
+keywords = ["telegram", "fastapi", "mcp", "taskiq", "bot-api"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Communications :: Chat",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Typing :: Typed",
+]
 dependencies = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
@@ -33,6 +52,11 @@ dev = [
 
 [project.scripts]
 tg-bot-aggregator = "tg_bot_aggregator.main:run"
+
+[project.urls]
+Homepage = "https://git.sh-inc.ru/avm/tg-bots"
+Repository = "https://git.sh-inc.ru/avm/tg-bots"
+Issues = "https://git.sh-inc.ru/avm/tg-bots/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

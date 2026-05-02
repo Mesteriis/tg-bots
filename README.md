@@ -2,6 +2,10 @@
 
 Local async FastAPI service for managing Telegram bot tokens, sending tagged text/media messages, exposing MCP tools, and collecting MTProto analytics.
 
+## OSS Status
+
+This repository is distributed under the MIT License. Contributions are welcome through focused issues and pull requests. Do not include bot tokens, API tokens, `.env` files, SQLite databases, or Telethon session files in public reports or commits.
+
 ## Security Model
 
 This project is intentionally designed for a trusted local network. Localhost and ordinary LAN access remain unauthenticated. Requests whose `Host`, `X-Forwarded-Host`, or `Origin` matches `PROTECTED_API_HOSTS` require a permanent API token for `/api/v1/*`, `/api/v1/events`, and `/mcp/v1/*`. The default protected hosts are `tg.sh-inc.ru` and `tg.sh-inc.dev`.
@@ -125,6 +129,22 @@ docker compose up --build
 The compose stack includes FastAPI app, Taskiq worker, Taskiq scheduler, Redis, and local Telegram Bot API server.
 
 `telegram-bot-api` uses the documented community image `aiogram/telegram-bot-api:latest` for the official `tdlib/telegram-bot-api` server. Set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` before starting the stack.
+
+## RNet / Proxmox Deployment
+
+The repository includes a Gitea Actions workflow for the local RNet runner:
+
+```text
+.gitea/workflows/ci-deploy.yml
+```
+
+It runs tests on the `python` runner label, then deploys `main` to Proxmox LXC `103` named `tg-bots` through `pve-deploy`. The deploy job also updates nginx-ui CT `112` so `tg.sh-inc.ru` and `tg.sh-inc.dev` proxy to the deployed app.
+
+Deployment details and manual commands are documented in:
+
+```text
+docs/deployment/rnet-proxmox.md
+```
 
 ## Diagnostic Polling Bot
 

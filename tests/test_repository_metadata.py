@@ -1,0 +1,61 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_oss_repository_files_exist() -> None:
+    expected = [
+        "LICENSE",
+        "CONTRIBUTING.md",
+        "SECURITY.md",
+        "CODE_OF_CONDUCT.md",
+        "CHANGELOG.md",
+        ".gitea/ISSUE_TEMPLATE/bug_report.md",
+        ".gitea/ISSUE_TEMPLATE/feature_request.md",
+    ]
+
+    missing = [path for path in expected if not (ROOT / path).is_file()]
+
+    assert missing == []
+
+
+def test_rnet_deploy_workflow_uses_pve_deploy_and_nginx_update() -> None:
+    workflow = (ROOT / ".gitea/workflows/ci-deploy.yml").read_text()
+
+    assert "runs-on: python" in workflow
+    assert "uv sync --extra dev" in workflow
+    assert "pve-deploy ensure $CT_ID $CT_NAME" in workflow
+    assert "pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml" in workflow
+    assert "deploy/nginx/update-nginx-ui.sh" in workflow
+    assert "curl -fsS \"http://${APP_IP}:8000/api/v1/health\"" in workflow
+
+
+def test_deploy_scripts_are_present_and_do_not_commit_telegram_secrets() -> None:
+    scripts = [
+        "deploy/proxmox/configure-lxc.sh",
+        "deploy/proxmox/ct-ip.sh",
+        "deploy/nginx/update-nginx-ui.sh",
+    ]
+
+    for script in scripts:
+        content = (ROOT / script).read_text()
+        assert content.startswith("#!/usr/bin/env bash")
+        assert "TELEGRAM_API_HASH=" not in content
+        assert "TELEGRAM_API_ID=" not in content
+        assert "8578509043:" not in content
+
+
+def test_deploy_compose_contains_runtime_services() -> None:
+    compose = (ROOT / "deploy/docker-compose.lxc.yml").read_text()
+
+    for service in [
+        "app:",
+        "worker:",
+        "scheduler:",
+        "diagnostic-bot:",
+        "discovery-bot:",
+        "redis:",
+        "telegram-bot-api:",
+    ]:
+        assert service in compose
+    assert "/mnt/omw-media:/shared/media:ro" in compose
