@@ -1,4 +1,11 @@
-from tg_bot_aggregator.security import REDACTED, is_allowed_origin, redact_secrets, redact_text
+from tg_bot_aggregator.security import (
+    REDACTED,
+    host_matches,
+    is_allowed_origin,
+    is_protected_host_request,
+    redact_secrets,
+    redact_text,
+)
 
 
 def test_redact_text_removes_bot_token_from_url_and_plain_text() -> None:
@@ -20,8 +27,22 @@ def test_redact_secrets_handles_nested_payloads() -> None:
     assert REDACTED in redacted["nested"][0]["url"]
 
 
+def test_protected_host_detection_uses_host_or_origin() -> None:
+    protected = ["tg.sh-inc.ru", "tg.sh-inc.dev"]
+
+    assert host_matches("tg.sh-inc.ru:443", protected) is True
+    assert host_matches("127.0.0.1:8000", protected) is False
+    assert (
+        is_protected_host_request(
+            host="127.0.0.1:8000",
+            origin="https://tg.sh-inc.dev",
+            protected_hosts=protected,
+        )
+        is True
+    )
+
+
 def test_origin_validation_allows_missing_origin_and_configured_origins() -> None:
     assert is_allowed_origin(None, ["http://localhost:8000"]) is True
     assert is_allowed_origin("http://localhost:8000", ["http://localhost:8000"]) is True
     assert is_allowed_origin("http://evil.test", ["http://localhost:8000"]) is False
-

@@ -4,7 +4,9 @@ Local async FastAPI service for managing Telegram bot tokens, sending tagged tex
 
 ## Security Model
 
-This project is intentionally designed for a trusted local network and has no authentication in version 1. Anyone who can reach the service can manage bots, send Telegram messages, start MTProto login, and trigger analytics refreshes. Default bind is `127.0.0.1`; LAN exposure requires explicit `APP_HOST=0.0.0.0`.
+This project is intentionally designed for a trusted local network. Localhost and ordinary LAN access remain unauthenticated. Requests whose `Host`, `X-Forwarded-Host`, or `Origin` matches `PROTECTED_API_HOSTS` require a permanent API token for `/api/v1/*`, `/api/v1/events`, and `/mcp/v1/*`. The default protected hosts are `tg.sh-inc.ru` and `tg.sh-inc.dev`.
+
+Create permanent API tokens from the dashboard MCP tab or through MCP tools while connected locally. Tokens are shown once, stored in SQLite only as hashes, and can be revoked from the dashboard.
 
 Bot tokens are stored in SQLite as plain text by product decision. Do not expose the app or database outside the trusted network.
 
@@ -17,6 +19,31 @@ uvicorn tg_bot_aggregator.main:create_app --factory --reload
 ```
 
 The API is versioned under `/api/v1`. MCP endpoints are under `/mcp/v1`.
+
+## MCP Settings and Protected Domains
+
+Dashboard path: open the `MCP` tab.
+
+REST endpoints:
+
+```text
+GET /api/v1/mcp/settings
+PATCH /api/v1/mcp/settings
+GET /api/v1/auth/tokens
+POST /api/v1/auth/tokens
+DELETE /api/v1/auth/tokens/{token_id}
+POST /api/v1/auth/session
+```
+
+MCP admin tools:
+
+```text
+list_api_tokens
+create_api_token
+revoke_api_token
+```
+
+For protected domains, send `X-API-Token: <token>` or `Authorization: Bearer <token>`. Browser SSE uses `/api/v1/auth/session` to set an HttpOnly cookie because native `EventSource` cannot send custom headers.
 
 ## Shared Media
 

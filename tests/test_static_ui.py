@@ -7,7 +7,7 @@ def test_static_ui_uses_vue_api_and_events() -> None:
     assert "https://unpkg.com/vue@3" in html
     assert "/api/v1" in html
     assert 'new EventSource("/api/v1/events")' in html
-    assert "auth" not in html.lower()
+    assert "apiToken" in html
 
 
 def test_static_ui_uses_onedark_motion_and_token_first_bot_flow() -> None:
@@ -41,3 +41,15 @@ def test_static_ui_exposes_diagnostic_bot_management() -> None:
     assert 'v-model="diagnosticSettings.is_enabled"' in html
     assert 'saveDiagnosticSettings' in html
     assert 'this.api("/diagnostics/bot"' in html
+
+
+def test_static_ui_exposes_mcp_and_api_token_management() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert '{ id: "mcp", label: "MCP", icon: "plug-zap" }' in html
+    assert "activeTab === 'mcp'" in html
+    assert "mcpSettings" in html
+    assert "createApiToken" in html
+    assert "saveMcpSettings" in html
+    assert "tg.sh-inc.ru" in html
+    assert "tg.sh-inc.dev" in html

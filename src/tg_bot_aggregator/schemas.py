@@ -47,6 +47,53 @@ class DiagnosticBotSettingsRead(BaseModel):
     updated_at: datetime | None
 
 
+class ApiTokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ApiTokenSessionRequest(BaseModel):
+    token: str = Field(min_length=1)
+
+
+class ApiTokenRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    token_prefix: str
+    is_active: bool
+    created_at: datetime
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+
+
+class ApiTokenCreated(ApiTokenRead):
+    token: str
+
+
+class McpToolRead(BaseModel):
+    name: str
+    title: str
+    category: str
+    risk: str
+    enabled: bool
+
+
+class McpSettingsRead(BaseModel):
+    is_enabled: bool
+    allow_legacy_sse: bool
+    protected_hosts: list[str]
+    transports: list[dict[str, str | bool]]
+    tools: list[McpToolRead]
+    tools_by_name: dict[str, McpToolRead]
+
+
+class McpSettingsUpdate(BaseModel):
+    is_enabled: bool | None = None
+    allow_legacy_sse: bool | None = None
+    enabled_tools: list[str] | None = None
+
+
 class DestinationCreate(BaseModel):
     bot_id: int
     kind: Literal["private", "group", "supergroup", "channel", "forum_topic"]

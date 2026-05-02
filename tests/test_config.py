@@ -14,6 +14,7 @@ def test_settings_defaults_are_local_and_versioned() -> None:
     assert settings.max_local_file_bytes == 2_097_152_000
     assert settings.diagnostic_poll_timeout_seconds == 30
     assert settings.diagnostic_retry_delay_seconds == 5.0
+    assert settings.protected_api_hosts == ["tg.sh-inc.ru", "tg.sh-inc.dev"]
     assert settings.is_local_bot_api is True
 
 
@@ -28,6 +29,12 @@ def test_settings_parse_csv_origins() -> None:
         "http://127.0.0.1:8000",
     ]
     assert settings.mcp_allowed_origins == ["http://localhost:8000"]
+
+
+def test_settings_parse_protected_api_hosts() -> None:
+    settings = Settings(PROTECTED_API_HOSTS="tg.sh-inc.ru,tg.sh-inc.dev")
+
+    assert settings.protected_api_hosts == ["tg.sh-inc.ru", "tg.sh-inc.dev"]
 
 
 def test_diagnostic_bot_is_wired_in_compose_env_and_docs() -> None:

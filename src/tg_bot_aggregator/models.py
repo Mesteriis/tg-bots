@@ -4,6 +4,8 @@ from typing import Any
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from tg_bot_aggregator.mcp_catalog import MCP_TOOL_NAMES
+
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
@@ -51,6 +53,37 @@ class DiagnosticBotSettings(Base):
     )
 
     bot: Mapped[Bot | None] = relationship(back_populates="diagnostic_settings")
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    token_prefix: Mapped[str] = mapped_column(String(32), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class McpSettings(Base):
+    __tablename__ = "mcp_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    enabled_tools_json: Mapped[list[str]] = mapped_column(
+        JSON, default=lambda: list(MCP_TOOL_NAMES), nullable=False
+    )
+    allow_legacy_sse: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
 
 
 class Destination(Base):

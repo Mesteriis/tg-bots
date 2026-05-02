@@ -42,6 +42,10 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://127.0.0.1:8000", "http://localhost:8000"],
         validation_alias="MCP_ALLOWED_ORIGINS",
     )
+    protected_api_hosts: list[str] = Field(
+        default_factory=lambda: ["tg.sh-inc.ru", "tg.sh-inc.dev"],
+        validation_alias="PROTECTED_API_HOSTS",
+    )
     telethon_session_dir: str = Field(
         default="/data/telethon", validation_alias="TELETHON_SESSION_DIR"
     )
@@ -52,7 +56,12 @@ class Settings(BaseSettings):
         default=5.0, validation_alias="DIAGNOSTIC_RETRY_DELAY_SECONDS"
     )
 
-    @field_validator("cors_allowed_origins", "mcp_allowed_origins", mode="before")
+    @field_validator(
+        "cors_allowed_origins",
+        "mcp_allowed_origins",
+        "protected_api_hosts",
+        mode="before",
+    )
     @classmethod
     def parse_origins(cls, value: str | list[str]) -> list[str]:
         return _split_csv(value)

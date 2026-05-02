@@ -296,6 +296,16 @@
             <button class="btn" @click="refreshAll"><i data-lucide="refresh-cw"></i>Refresh</button>
           </div>
           <div v-if="lastError" class="error-banner" role="alert">{{ lastError }}</div>
+          <div v-if="isProtectedHost" class="panel" style="margin-bottom: 14px;">
+            <label>API token for tg.sh-inc.ru / tg.sh-inc.dev
+              <input v-model="apiToken" type="password" placeholder="tga_..." />
+            </label>
+            <div class="actions">
+              <button class="btn primary" @click="saveApiToken"><i data-lucide="shield-check"></i>Use token</button>
+              <button class="btn" @click="clearApiToken"><i data-lucide="log-out"></i>Clear</button>
+            </div>
+            <div class="hint">Protected proxy domains require a permanent API token. Localhost stays open.</div>
+          </div>
 
           <div v-if="activeTab === 'bots'" class="grid">
             <form class="panel" @submit.prevent="createBot">
@@ -423,6 +433,59 @@
             </div>
           </div>
 
+          <div v-if="activeTab === 'mcp'" class="grid">
+            <div class="panel">
+              <label><input v-model="mcpSettings.is_enabled" type="checkbox" /> MCP enabled</label>
+              <label><input v-model="mcpSettings.allow_legacy_sse" type="checkbox" /> Legacy SSE transport</label>
+              <div class="actions">
+                <button class="btn" @click="setMcpPreset('read')"><i data-lucide="eye"></i>Read only</button>
+                <button class="btn" @click="setMcpPreset('sender')"><i data-lucide="send"></i>Sender</button>
+                <button class="btn" @click="setMcpPreset('full')"><i data-lucide="unlock"></i>Full</button>
+                <button class="btn primary" @click="saveMcpSettings"><i data-lucide="save"></i>Save MCP</button>
+              </div>
+              <div class="hint">Disabled tools are rejected at call time. Reconnect MCP clients to refresh discovery.</div>
+            </div>
+            <div class="panel">
+              <table>
+                <thead><tr><th>Tool</th><th>Category</th><th>Risk</th><th>Enabled</th></tr></thead>
+                <tbody>
+                  <tr v-for="tool in mcpSettings.tools" :key="tool.name">
+                    <td>{{ tool.name }}</td>
+                    <td>{{ tool.category }}</td>
+                    <td>{{ tool.risk }}</td>
+                    <td><input v-model="tool.enabled" type="checkbox" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <form class="panel" @submit.prevent="createApiToken">
+              <label>New permanent token name<input v-model="forms.apiToken.name" required /></label>
+              <button class="btn primary"><i data-lucide="key-round"></i>Create token</button>
+              <div v-if="createdApiToken" class="hint">Created token: <code>{{ createdApiToken }}</code></div>
+            </form>
+            <div class="panel">
+              <table>
+                <thead><tr><th>Name</th><th>Prefix</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  <tr v-for="token in apiTokens" :key="token.id">
+                    <td>{{ token.name }}</td>
+                    <td>{{ token.token_prefix }}</td>
+                    <td>{{ token.is_active ? 'active' : 'revoked' }}</td>
+                    <td><button class="btn" @click="revokeApiToken(token.id)"><i data-lucide="ban"></i></button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="panel">
+              <table>
+                <tbody>
+                  <tr><th>Protected hosts</th><td>{{ mcpSettings.protected_hosts?.join(', ') || 'tg.sh-inc.ru, tg.sh-inc.dev' }}</td></tr>
+                  <tr v-for="transport in mcpSettings.transports" :key="transport.name"><th>{{ transport.name }}</th><td>{{ transport.path }} / {{ transport.enabled ? 'enabled' : 'disabled' }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div v-if="activeTab === 'health'" class="panel">
             <pre>{{ JSON.stringify(health, null, 2) }}</pre>
           </div>
@@ -448,11 +511,17 @@
               { id: "mtproto", label: "MTProto", icon: "smartphone" },
               { id: "analytics", label: "Analytics", icon: "chart-no-axes-combined" },
               { id: "diagnostics", label: "Diagnostics", icon: "scan-search" },
+              { id: "mcp", label: "MCP", icon: "plug-zap" },
               { id: "health", label: "Health", icon: "activity" },
             ],
+            apiToken: localStorage.getItem("tgApiToken") || "",
+            createdApiToken: "",
             bots: [], destinations: [], templates: [], history: [], analyticsTargets: [], health: {},
+            apiTokens: [],
+            mcpSettings: { is_enabled: true, allow_legacy_sse: true, protected_hosts: ["tg.sh-inc.ru", "tg.sh-inc.dev"], transports: [], tools: [] },
             diagnosticSettings: { bot_id: null, bot_name: null, bot_username: null, is_enabled: false, last_update_id: null, last_error: null },
             forms: {
+              apiToken: { name: "dashboard" },
               bot: { name: "", token: "", description: "" },
               destination: { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, title: "" },
               template: { tag: "", title: "", text: "", parse_mode: "" },
@@ -464,20 +533,24 @@
           };
         },
         computed: {
-          currentTab() { return this.tabs.find((tab) => tab.id === this.activeTab); }
+          currentTab() { return this.tabs.find((tab) => tab.id === this.activeTab); },
+          isProtectedHost() { return ["tg.sh-inc.ru", "tg.sh-inc.dev"].includes(window.location.hostname); }
         },
         async mounted() {
-          await this.refreshAll();
-          this.connectEvents();
+          if (this.apiToken) await this.establishApiSession();
+          await this.refreshAll().catch((error) => { this.lastError = error.message; });
+          if (!this.isProtectedHost || this.apiToken) this.connectEvents();
           this.drawIcons();
         },
         updated() { this.drawIcons(); },
         methods: {
           drawIcons() { nextTick(() => lucide.createIcons({ attrs: { width: 16, height: 16 } })); },
           async api(path, options = {}) {
+            const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+            if (this.apiToken) headers["X-API-Token"] = this.apiToken;
             const response = await fetch(`/api/v1${path}`, {
-              headers: { "Content-Type": "application/json" },
               ...options,
+              headers,
             });
             if (!response.ok) {
               let detail = await response.text();
@@ -493,8 +566,27 @@
             if (response.status === 204) return null;
             return response.json();
           },
+          async establishApiSession() {
+            if (!this.apiToken) return;
+            const response = await fetch("/api/v1/auth/session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token: this.apiToken }),
+            });
+            if (!response.ok) throw new Error("Invalid API token");
+          },
+          async saveApiToken() {
+            localStorage.setItem("tgApiToken", this.apiToken);
+            await this.establishApiSession();
+            await this.refreshAll();
+            this.connectEvents();
+          },
+          clearApiToken() {
+            this.apiToken = "";
+            localStorage.removeItem("tgApiToken");
+          },
           async refreshAll() {
-            const [health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings] = await Promise.all([
+            const [health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings, mcpSettings, apiTokens] = await Promise.all([
               this.api("/health"),
               this.api("/bots"),
               this.api("/destinations"),
@@ -502,8 +594,10 @@
               this.api("/send-history"),
               this.api("/analytics/targets"),
               this.api("/diagnostics/bot"),
+              this.api("/mcp/settings"),
+              this.api("/auth/tokens"),
             ]);
-            Object.assign(this, { health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings });
+            Object.assign(this, { health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings, mcpSettings, apiTokens });
           },
           connectEvents() {
             const source = new EventSource("/api/v1/events");
@@ -537,6 +631,34 @@
           async createAnalyticsTarget() { await this.api("/analytics/targets", { method: "POST", body: JSON.stringify(this.forms.analytics) }); this.forms.analytics = { peer_ref: "", title: "" }; await this.refreshAll(); },
           async refreshAnalytics(target_id) { await this.api("/analytics/refresh", { method: "POST", body: JSON.stringify({ target_id }) }); await this.refreshAll(); },
           async saveDiagnosticSettings() { await this.api("/diagnostics/bot", { method: "PATCH", body: JSON.stringify({ bot_id: this.diagnosticSettings.bot_id, is_enabled: this.diagnosticSettings.is_enabled }) }); await this.refreshAll(); },
+          setMcpPreset(preset) {
+            const allowed = {
+              read: ["list_bots", "list_destinations", "list_message_templates", "get_analytics_summary", "get_send_history"],
+              sender: ["list_bots", "list_destinations", "list_message_templates", "get_analytics_summary", "get_send_history", "send_text", "send_template", "send_file_from_shared_path"],
+              full: this.mcpSettings.tools.map((tool) => tool.name),
+            }[preset];
+            this.mcpSettings.tools.forEach((tool) => { tool.enabled = allowed.includes(tool.name); });
+          },
+          async saveMcpSettings() {
+            await this.api("/mcp/settings", {
+              method: "PATCH",
+              body: JSON.stringify({
+                is_enabled: this.mcpSettings.is_enabled,
+                allow_legacy_sse: this.mcpSettings.allow_legacy_sse,
+                enabled_tools: this.mcpSettings.tools.filter((tool) => tool.enabled).map((tool) => tool.name),
+              }),
+            });
+            await this.refreshAll();
+          },
+          async createApiToken() {
+            const created = await this.api("/auth/tokens", { method: "POST", body: JSON.stringify(this.forms.apiToken) });
+            this.createdApiToken = created.token;
+            this.apiToken = created.token;
+            localStorage.setItem("tgApiToken", created.token);
+            await this.establishApiSession();
+            await this.refreshAll();
+          },
+          async revokeApiToken(token_id) { await this.api(`/auth/tokens/${token_id}`, { method: "DELETE" }); await this.refreshAll(); },
         },
       }).mount("#app");
     </script>

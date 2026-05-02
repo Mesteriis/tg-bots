@@ -1,6 +1,7 @@
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
+from urllib.parse import urlparse
 
 SECRET_KEYS = {"token", "authorization", "password", "api_hash", "telegram_api_hash"}
 REDACTED = "[REDACTED]"
@@ -34,3 +35,37 @@ def is_allowed_origin(origin: str | None, allowed_origins: Sequence[str]) -> boo
         return True
     return origin in allowed_origins
 
+
+def normalize_host(value: str | None) -> str | None:
+    if value is None:
+        return None
+    first = value.split(",", 1)[0].strip()
+    if not first:
+        return None
+    parsed = urlparse(first if "://" in first else f"//{first}")
+    return parsed.hostname.lower() if parsed.hostname else None
+
+
+def host_matches(host: str | None, protected_hosts: Sequence[str]) -> bool:
+    normalized = normalize_host(host)
+    if normalized is None:
+        return False
+    for protected in protected_hosts:
+        candidate = protected.strip().lower()
+        if not candidate:
+            continue
+        if candidate == normalized:
+            return True
+        if candidate.startswith("*.") and normalized.endswith(candidate[1:]):
+            return True
+        if candidate.endswith(".*") and normalized.startswith(candidate[:-1]):
+            return True
+    return False
+
+
+def is_protected_host_request(
+    host: str | None,
+    origin: str | None,
+    protected_hosts: Sequence[str],
+) -> bool:
+    return host_matches(host, protected_hosts) or host_matches(origin, protected_hosts)

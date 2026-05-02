@@ -8,15 +8,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tg_bot_aggregator.api import (
     analytics,
+    auth,
     bots,
     destinations,
     diagnostics,
     events,
     health,
+    mcp_settings,
     mtproto,
     send,
     templates,
 )
+from tg_bot_aggregator.auth_middleware import ProtectedHostAuthMiddleware
 from tg_bot_aggregator.config import Settings, get_settings
 from tg_bot_aggregator.db import create_engine, create_session_factory
 from tg_bot_aggregator.events import MemoryEventBus
@@ -71,15 +74,18 @@ def create_app(
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
+    app.add_middleware(ProtectedHostAuthMiddleware, settings=resolved_settings)
 
     prefix = resolved_settings.api_v1_prefix
     app.include_router(health.router, prefix=prefix)
+    app.include_router(auth.router, prefix=prefix)
     app.include_router(bots.router, prefix=prefix)
     app.include_router(destinations.router, prefix=prefix)
     app.include_router(diagnostics.router, prefix=prefix)
     app.include_router(templates.router, prefix=prefix)
     app.include_router(send.router, prefix=prefix)
     app.include_router(mtproto.router, prefix=prefix)
+    app.include_router(mcp_settings.router, prefix=prefix)
     app.include_router(analytics.router, prefix=prefix)
     app.include_router(events.router, prefix=prefix)
 

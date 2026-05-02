@@ -35,6 +35,9 @@ async def test_mcp_server_exposes_expected_tools() -> None:
         "refresh_analytics",
         "get_analytics_summary",
         "get_send_history",
+        "list_api_tokens",
+        "create_api_token",
+        "revoke_api_token",
     }.issubset(names)
     await engine.dispose()
 

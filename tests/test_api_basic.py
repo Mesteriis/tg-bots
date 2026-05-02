@@ -133,6 +133,24 @@ async def test_dashboard_can_manage_diagnostic_bot_settings() -> None:
     assert updated["last_update_id"] is None
 
 
+async def test_dashboard_can_manage_mcp_settings() -> None:
+    client, _ = await _client()
+    async with client:
+        settings = (await client.get("/api/v1/mcp/settings")).json()
+        patched = (
+            await client.patch(
+                "/api/v1/mcp/settings",
+                json={"is_enabled": True, "enabled_tools": ["list_bots", "get_send_history"]},
+            )
+        ).json()
+
+    assert settings["is_enabled"] is True
+    assert settings["protected_hosts"] == ["tg.sh-inc.ru", "tg.sh-inc.dev"]
+    assert {tool["name"] for tool in settings["tools"]} >= {"send_text", "create_api_token"}
+    assert patched["tools_by_name"]["list_bots"]["enabled"] is True
+    assert patched["tools_by_name"]["send_text"]["enabled"] is False
+
+
 async def test_events_once_returns_sse_frame() -> None:
     client, event_bus = await _client()
     await event_bus.publish("send.created", {"send_history_id": 1})
