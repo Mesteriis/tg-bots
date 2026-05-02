@@ -10,6 +10,8 @@ def test_settings_defaults_are_local_and_versioned() -> None:
     assert settings.shared_media_root == "/shared/media"
     assert settings.telegram_bot_api_base_url == "http://telegram-bot-api:8081"
     assert settings.max_local_file_bytes == 2_097_152_000
+    assert settings.diagnostic_poll_timeout_seconds == 30
+    assert settings.diagnostic_retry_delay_seconds == 5.0
     assert settings.is_local_bot_api is True
 
 
@@ -24,4 +26,3 @@ def test_settings_parse_csv_origins() -> None:
         "http://127.0.0.1:8000",
     ]
     assert settings.mcp_allowed_origins == ["http://localhost:8000"]
-

@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     telethon_session_dir: str = Field(
         default="/data/telethon", validation_alias="TELETHON_SESSION_DIR"
     )
+    diagnostic_poll_timeout_seconds: int = Field(
+        default=30, validation_alias="DIAGNOSTIC_POLL_TIMEOUT_SECONDS"
+    )
+    diagnostic_retry_delay_seconds: float = Field(
+        default=5.0, validation_alias="DIAGNOSTIC_RETRY_DELAY_SECONDS"
+    )
 
     @field_validator("cors_allowed_origins", "mcp_allowed_origins", mode="before")
     @classmethod

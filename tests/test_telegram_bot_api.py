@@ -98,7 +98,7 @@ async def test_bot_api_client_supports_polling_methods() -> None:
     updates = await client.get_updates(
         "123:token",
         offset=43,
-        timeout=10,
+        poll_timeout=10,
         allowed_updates=["message", "channel_post"],
     )
 

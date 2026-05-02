@@ -86,10 +86,10 @@ class TelegramBotApiClient:
         self,
         token: str,
         offset: int | None = None,
-        timeout: int = 30,
+        poll_timeout: int = 30,
         allowed_updates: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        payload: dict[str, Any] = {"timeout": timeout}
+        payload: dict[str, Any] = {"timeout": poll_timeout}
         if offset is not None:
             payload["offset"] = offset
         if allowed_updates is not None:
