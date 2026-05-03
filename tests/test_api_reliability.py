@@ -301,6 +301,63 @@ async def test_buckets_degraded_fallback_uses_recent_sqlite_counts(
             media_type="none",
             status="queued",
         )
+        attempt_history = await SendHistoryRepository(session).create(
+            bot_id=bot.id,
+            destination_id=9,
+            chat_id="@ops",
+            media_type="none",
+            status="succeeded",
+        )
+        ignored_policy_history = await SendHistoryRepository(session).create(
+            bot_id=bot.id,
+            destination_id=9,
+            chat_id="@ops",
+            media_type="none",
+            status="deferred",
+        )
+        attempts = SendAttemptRepository(session)
+        await attempts.create(
+            send_history_id=attempt_history.id,
+            attempt_number=1,
+            worker_id="worker-a",
+            started_at=utc_now(),
+            finished_at=utc_now(),
+            status="succeeded",
+            telegram_error_code=None,
+            error_kind=None,
+            error_message=None,
+            retry_after_seconds=None,
+            latency_ms=10,
+            response_payload_json={"ok": True},
+        )
+        await attempts.create(
+            send_history_id=attempt_history.id,
+            attempt_number=2,
+            worker_id="worker-a",
+            started_at=utc_now(),
+            finished_at=utc_now(),
+            status="deferred",
+            telegram_error_code="429",
+            error_kind="telegram_rate_limit",
+            error_message="Too Many Requests",
+            retry_after_seconds=1,
+            latency_ms=10,
+            response_payload_json={"ok": False},
+        )
+        await attempts.create(
+            send_history_id=ignored_policy_history.id,
+            attempt_number=1,
+            worker_id="worker-a",
+            started_at=utc_now(),
+            finished_at=utc_now(),
+            status="deferred",
+            telegram_error_code=None,
+            error_kind="rate_limit",
+            error_message="rate limit exceeded",
+            retry_after_seconds=60,
+            latency_ms=1,
+            response_payload_json={},
+        )
         await session.commit()
 
     redis_client = _FakeRedisClient(fail=True)
@@ -399,6 +456,16 @@ async def test_single_retry_endpoint_retries_and_enqueues_ready_row(
     assert payload["status"] == "queued"
     assert payload["queued_task_id"] == f"task-{row.id}"
     assert enqueued == [row.id]
+
+
+@pytest.mark.asyncio
+async def test_single_retry_endpoint_returns_404_for_missing_history(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with await _client(session_factory) as client:
+        response = await client.post("/api/v1/reliability/send-history/9999/retry")
+
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

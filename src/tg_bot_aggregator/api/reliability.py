@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from redis.exceptions import RedisError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import create_send_service, get_session
 from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.models import SendHistory, utc_now
+from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
 from tg_bot_aggregator.reliability import (
     RateBucketSnapshot,
     RateLimitStore,
@@ -99,9 +99,20 @@ async def _count_recent_sends(
     since: datetime,
     *conditions: object,
 ) -> int:
-    statement = select(func.count()).select_from(SendHistory).where(
-        SendHistory.created_at >= since,
-        *conditions,
+    statement = (
+        select(func.count())
+        .select_from(SendAttempt)
+        .join(SendHistory, SendAttempt.send_history_id == SendHistory.id)
+        .where(
+            SendAttempt.started_at >= since,
+            or_(
+                SendAttempt.error_kind.is_(None),
+                SendAttempt.error_kind.not_in(
+                    ("rate_limit", "worker_error", "worker_cancelled")
+                ),
+            ),
+            *conditions,
+        )
     )
     return int((await session.execute(statement)).scalar_one())
 
@@ -263,7 +274,9 @@ async def retry_send_history(
 ) -> object:
     try:
         return await _retry_send_history(send_history_id, request, session)
-    except (ValueError, SendServiceError, NotFoundError) as exc:
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ValueError, SendServiceError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
