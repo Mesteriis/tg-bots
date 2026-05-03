@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.mcp_catalog import MCP_TOOL_NAMES
@@ -20,6 +21,7 @@ from tg_bot_aggregator.models import (
     McpSettings,
     MessageTemplate,
     MtprotoSession,
+    SendAttempt,
     SendHistory,
     utc_now,
 )
@@ -304,6 +306,51 @@ class SendHistoryRepository:
         statement = select(SendHistory).order_by(SendHistory.id.desc()).limit(limit)
         return await _list(self.session, statement)
 
+    async def acquire_due_lease(
+        self,
+        row_id: int,
+        worker_id: str,
+        now: datetime,
+        lease_seconds: int,
+    ) -> SendHistory | None:
+        row = await self.get(row_id)
+        if row is None:
+            return None
+        if row.status not in {"queued", "deferred", "created"}:
+            return None
+        if row.next_retry_at is not None and row.next_retry_at > now:
+            return None
+        if row.lock_expires_at is not None and row.lock_expires_at > now:
+            return None
+        row.status = "sending"
+        row.locked_at = now
+        row.locked_by = worker_id
+        row.lock_expires_at = now + timedelta(seconds=lease_seconds)
+        await self.session.flush()
+        return row
+
+    async def list_ready_for_lease(self, now: datetime, limit: int = 100) -> list[SendHistory]:
+        statement = (
+            select(SendHistory)
+            .where(
+                SendHistory.status.in_(("queued", "deferred")),
+                or_(SendHistory.next_retry_at.is_(None), SendHistory.next_retry_at <= now),
+                or_(SendHistory.lock_expires_at.is_(None), SendHistory.lock_expires_at <= now),
+            )
+            .order_by(SendHistory.priority, SendHistory.next_retry_at, SendHistory.id)
+            .limit(limit)
+        )
+        return await _list(self.session, statement)
+
+    async def list_stale_locks(self, now: datetime, limit: int = 100) -> list[SendHistory]:
+        statement = (
+            select(SendHistory)
+            .where(SendHistory.status == "sending", SendHistory.lock_expires_at <= now)
+            .order_by(SendHistory.lock_expires_at, SendHistory.id)
+            .limit(limit)
+        )
+        return await _list(self.session, statement)
+
     async def mark_succeeded(
         self,
         row: SendHistory,
@@ -345,6 +392,100 @@ class SendHistoryRepository:
         row.failed_at = utc_now()
         await self.session.flush()
         return row
+
+    async def mark_deferred(
+        self,
+        row: SendHistory,
+        error_code: str | None,
+        error_message: str,
+        error_kind: str,
+        next_retry_at: datetime,
+        retry_after_seconds: int | None,
+        response: dict[str, Any] | None = None,
+    ) -> SendHistory:
+        row.status = "deferred"
+        row.error_code = error_code
+        row.error_message = error_message
+        row.last_error_kind = error_kind
+        row.next_retry_at = next_retry_at
+        row.retry_after_seconds = retry_after_seconds
+        row.response_payload_json = response
+        row.locked_at = None
+        row.locked_by = None
+        row.lock_expires_at = None
+        await self.session.flush()
+        return row
+
+    async def mark_dead_letter(
+        self,
+        row: SendHistory,
+        error_code: str | None,
+        error_message: str,
+        error_kind: str,
+        response: dict[str, Any] | None = None,
+    ) -> SendHistory:
+        row.status = "dead_letter"
+        row.error_code = error_code
+        row.error_message = error_message
+        row.last_error_kind = error_kind
+        row.response_payload_json = response
+        row.failed_at = utc_now()
+        row.locked_at = None
+        row.locked_by = None
+        row.lock_expires_at = None
+        await self.session.flush()
+        return row
+
+    async def mark_blocked(
+        self,
+        row: SendHistory,
+        error_code: str | None,
+        error_message: str,
+        error_kind: str,
+    ) -> SendHistory:
+        row.status = "blocked"
+        row.error_code = error_code
+        row.error_message = error_message
+        row.last_error_kind = error_kind
+        row.failed_at = utc_now()
+        row.locked_at = None
+        row.locked_by = None
+        row.lock_expires_at = None
+        await self.session.flush()
+        return row
+
+    async def release_stale_locks(self, now: datetime) -> int:
+        rows = await self.list_stale_locks(now, limit=1000)
+        for row in rows:
+            row.status = "queued"
+            row.locked_at = None
+            row.locked_by = None
+            row.lock_expires_at = None
+        await self.session.flush()
+        return len(rows)
+
+
+class SendAttemptRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create(self, **values: Any) -> SendAttempt:
+        row = SendAttempt(**values)
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def list_for_send(self, send_history_id: int) -> list[SendAttempt]:
+        statement = (
+            select(SendAttempt)
+            .where(SendAttempt.send_history_id == send_history_id)
+            .order_by(SendAttempt.attempt_number, SendAttempt.id)
+        )
+        return await _list(self.session, statement)
+
+    async def list(self, limit: int = 100) -> list[SendAttempt]:
+        statement = select(SendAttempt).order_by(SendAttempt.id.desc()).limit(limit)
+        return await _list(self.session, statement)
 
 
 class AuditRepository:

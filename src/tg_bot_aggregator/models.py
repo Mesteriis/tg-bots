@@ -152,6 +152,14 @@ class SendHistory(Base):
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     queued_task_id: Mapped[str | None] = mapped_column(String(200))
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    locked_by: Mapped[str | None] = mapped_column(String(200))
+    lock_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retry_after_seconds: Mapped[int | None] = mapped_column(Integer)
+    last_error_kind: Mapped[str | None] = mapped_column(String(80))
+    dedupe_window_key: Mapped[str | None] = mapped_column(String(200))
     error_code: Mapped[str | None] = mapped_column(String(100))
     error_message: Mapped[str | None] = mapped_column(Text)
     request_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
@@ -159,6 +167,27 @@ class SendHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SendAttempt(Base):
+    __tablename__ = "send_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    send_history_id: Mapped[int] = mapped_column(
+        ForeignKey("send_history.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    worker_id: Mapped[str | None] = mapped_column(String(200))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    telegram_error_code: Mapped[str | None] = mapped_column(String(100))
+    error_kind: Mapped[str | None] = mapped_column(String(80))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    retry_after_seconds: Mapped[int | None] = mapped_column(Integer)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    response_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
 class AuditEvent(Base):
