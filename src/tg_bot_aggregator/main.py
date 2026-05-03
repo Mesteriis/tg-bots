@@ -116,6 +116,7 @@ def create_app(
         get_session_factory=mcp_session_factory,
         event_bus=app.state.event_bus,
         bot_api_client=app.state.bot_api_client,
+        enqueue_send_history=app.state.enqueue_send_history,
     )
     app.state.mcp_server = mcp
     app.mount(resolved_settings.mcp_v1_prefix, create_mcp_asgi_app(mcp))

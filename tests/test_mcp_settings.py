@@ -10,12 +10,16 @@ from tg_bot_aggregator.repositories import McpSettingsRepository
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 
-async def test_mcp_settings_default_to_all_known_tools(db_session) -> None:
+async def test_mcp_settings_default_to_core_and_reliability_tools(db_session) -> None:
     settings = await McpSettingsRepository(db_session).get_or_create()
 
     assert settings.is_enabled is True
     assert "send_text" in settings.enabled_tools_json
     assert "create_api_token" in settings.enabled_tools_json
+    assert "bulk_retry_sends" in settings.enabled_tools_json
+    assert "get_reliability_summary" in settings.enabled_tools_json
+    assert "create_send_batch" not in settings.enabled_tools_json
+    assert "create_destination_from_diagnostic_update" not in settings.enabled_tools_json
 
 
 async def test_mcp_tool_call_is_rejected_when_tool_is_disabled() -> None:

@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import Select, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.mcp_catalog import MCP_TOOL_NAMES
+from tg_bot_aggregator.mcp_catalog import MCP_DEFAULT_ENABLED_TOOL_NAMES
 from tg_bot_aggregator.models import (
     AnalyticsRun,
     AnalyticsSnapshot,
@@ -148,7 +148,7 @@ class McpSettingsRepository:
     async def get_or_create(self) -> McpSettings:
         row = await self.get()
         if row is None:
-            row = McpSettings(id=1, enabled_tools_json=list(MCP_TOOL_NAMES))
+            row = McpSettings(id=1, enabled_tools_json=list(MCP_DEFAULT_ENABLED_TOOL_NAMES))
             self.session.add(row)
             await self.session.flush()
         return row

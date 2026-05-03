@@ -59,3 +59,30 @@ MCP_READ_ONLY_TOOL_NAMES: tuple[str, ...] = tuple(
 MCP_SENDER_TOOL_NAMES: tuple[str, ...] = tuple(
     tool.name for tool in MCP_TOOL_DEFINITIONS if tool.category in {"read", "send"}
 )
+
+MCP_DEFAULT_ENABLED_TOOL_NAMES: tuple[str, ...] = (
+    "list_bots",
+    "list_destinations",
+    "list_message_templates",
+    "get_analytics_summary",
+    "get_send_history",
+    "list_audit_events",
+    "get_discovery_settings",
+    "send_text",
+    "send_template",
+    "send_file_from_shared_path",
+    "dry_run_send",
+    "check_destination",
+    "refresh_analytics",
+    "update_discovery_settings",
+    "list_api_tokens",
+    "create_api_token",
+    "revoke_api_token",
+    "get_reliability_summary",
+    "get_reliability_graph",
+    "list_send_attempts",
+    "list_rate_limit_buckets",
+    "release_stale_send_locks",
+    "bulk_retry_sends",
+    "bulk_cancel_sends",
+)

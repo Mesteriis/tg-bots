@@ -14,7 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from tg_bot_aggregator.mcp_catalog import MCP_TOOL_NAMES
+from tg_bot_aggregator.mcp_catalog import MCP_DEFAULT_ENABLED_TOOL_NAMES
 
 
 def utc_now() -> datetime:
@@ -113,7 +113,7 @@ class McpSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     enabled_tools_json: Mapped[list[str]] = mapped_column(
-        JSON, default=lambda: list(MCP_TOOL_NAMES), nullable=False
+        JSON, default=lambda: list(MCP_DEFAULT_ENABLED_TOOL_NAMES), nullable=False
     )
     allow_legacy_sse: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

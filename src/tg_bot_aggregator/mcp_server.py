@@ -1,5 +1,5 @@
 import inspect
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -47,6 +47,7 @@ from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBot
 from tg_bot_aggregator.workflow_service import WorkflowService
 
 SessionFactoryProvider = Callable[[], async_sessionmaker[AsyncSession]]
+EnqueueSendHistory = Callable[[int], Awaitable[str | None]]
 
 
 async def ensure_mcp_tool_enabled(
@@ -162,11 +163,61 @@ def _serialize_rate_bucket_snapshot(item: RateBucketSnapshot) -> dict[str, Any]:
     }
 
 
+def _is_ready_for_enqueue(row: SendHistory, now: datetime) -> bool:
+    if row.status != "queued" or row.queued_task_id:
+        return False
+    if row.next_retry_at is None:
+        return True
+    next_retry_at = (
+        row.next_retry_at
+        if row.next_retry_at.tzinfo is not None
+        else row.next_retry_at.replace(tzinfo=now.tzinfo)
+    )
+    return next_retry_at <= now
+
+
+async def _enqueue_mcp_retry_if_ready(
+    *,
+    row: SendHistory,
+    session: AsyncSession,
+    enqueue_send_history: EnqueueSendHistory | None,
+) -> None:
+    if enqueue_send_history is None or not _is_ready_for_enqueue(row, utc_now()):
+        return
+
+    task_id = await enqueue_send_history(row.id)
+    if task_id:
+        await SendHistoryRepository(session).mark_queued(row, task_id=task_id)
+        await session.commit()
+
+
+async def _retry_send_history_for_mcp(
+    *,
+    send_history_id: int,
+    service: SendService,
+    session: AsyncSession,
+    enqueue_send_history: EnqueueSendHistory | None,
+) -> SendHistory:
+    existing = await SendHistoryRepository(session).get(send_history_id)
+    previous_next_retry_at = existing.next_retry_at if existing is not None else None
+    row = await service.retry_history(send_history_id)
+    if previous_next_retry_at is not None:
+        row.next_retry_at = previous_next_retry_at
+        await session.commit()
+    await _enqueue_mcp_retry_if_ready(
+        row=row,
+        session=session,
+        enqueue_send_history=enqueue_send_history,
+    )
+    return row
+
+
 def create_mcp_server(
     settings: Settings,
     get_session_factory: SessionFactoryProvider,
     event_bus: MemoryEventBus,
     bot_api_client: TelegramBotApiClient,
+    enqueue_send_history: EnqueueSendHistory | None = None,
 ) -> FastMCP:
     mcp = FastMCP(
         "Telegram Bot Aggregator",
@@ -414,7 +465,12 @@ def create_mcp_server(
             service = SendService(session, bot_api_client, settings, event_bus)
             for send_history_id in send_history_ids:
                 try:
-                    await service.retry_history(send_history_id)
+                    await _retry_send_history_for_mcp(
+                        send_history_id=send_history_id,
+                        service=service,
+                        session=session,
+                        enqueue_send_history=enqueue_send_history,
+                    )
                 except (NotFoundError, ValueError, SendServiceError):
                     skipped += 1
                 else:
