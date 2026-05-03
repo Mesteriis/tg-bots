@@ -2208,12 +2208,21 @@
             return this.reliabilityGraph.nodes.length ? this.reliabilityGraph.nodes : this.reliabilityFallbackNodes;
           },
           reliabilityEdges() {
-            if (this.reliabilityGraph.edges.length) return this.reliabilityGraph.edges;
+            if (this.reliabilityGraph.edges.length) {
+              return this.reliabilityGraph.edges.map((edge) => ({
+                from: edge.from || edge.source,
+                to: edge.to || edge.target,
+                count: edge.count ?? (edge.active ? 1 : 0),
+                status: edge.status || "ok",
+                active: Boolean(edge.active),
+              }));
+            }
             return this.reliabilityFallbackNodes.slice(0, -1).map((node, index) => ({
               from: node.id,
               to: this.reliabilityFallbackNodes[index + 1].id,
               count: 0,
               status: "ok",
+              active: false,
             }));
           },
           reliabilityEdgeFromNode(id) {
