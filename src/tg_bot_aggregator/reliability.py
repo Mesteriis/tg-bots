@@ -6,6 +6,9 @@ from datetime import datetime, timedelta
 from math import ceil
 from typing import Any, Protocol
 
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.models import SendHistory, utc_now
 from tg_bot_aggregator.repositories import SendAttemptRepository, SendHistoryRepository
@@ -443,3 +446,92 @@ class SendQueueService:
             latency_ms=latency_ms,
             response_payload_json=redact_secrets(response_payload),
         )
+
+
+class ReliabilityReadService:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.history = SendHistoryRepository(session)
+        self.attempts = SendAttemptRepository(session)
+
+    async def summary(self) -> dict[str, Any]:
+        statement = select(SendHistory.status, func.count()).group_by(SendHistory.status)
+        rows = (await self.session.execute(statement)).all()
+        stale_locks = await self.history.list_stale_locks(utc_now(), limit=1000)
+        return {
+            "status_counts": {str(status): int(count) for status, count in rows},
+            "stale_locks": len(stale_locks),
+            "degraded": False,
+        }
+
+    async def graph(self) -> dict[str, Any]:
+        summary = await self.summary()
+        counts = summary["status_counts"]
+        result_errors = counts.get("dead_letter", 0) + counts.get("blocked", 0)
+        sending = counts.get("sending", 0)
+
+        nodes = [
+            {
+                "id": "source",
+                "label": "Batch / Manual",
+                "status": "ok",
+                "count": counts.get("created", 0),
+            },
+            {"id": "queue", "label": "Queue", "status": "ok", "count": counts.get("queued", 0)},
+            {
+                "id": "policy",
+                "label": "Policy gate",
+                "status": "warning",
+                "count": counts.get("deferred", 0),
+            },
+            {"id": "worker", "label": "Worker lease", "status": "ok", "count": sending},
+            {"id": "bot", "label": "Bot bucket", "status": "ok", "count": 0},
+            {"id": "chat", "label": "Chat bucket", "status": "ok", "count": 0},
+            {
+                "id": "telegram",
+                "label": "Telegram",
+                "status": "ok",
+                "count": counts.get("succeeded", 0),
+            },
+            {"id": "result", "label": "Result", "status": "danger", "count": result_errors},
+        ]
+        edges = [
+            {
+                "source": "source",
+                "target": "queue",
+                "status": "ok",
+                "active": counts.get("queued", 0) > 0,
+            },
+            {
+                "source": "queue",
+                "target": "policy",
+                "status": "warning",
+                "active": counts.get("deferred", 0) > 0,
+            },
+            {
+                "source": "policy",
+                "target": "worker",
+                "status": "ok",
+                "active": sending > 0,
+            },
+            {
+                "source": "worker",
+                "target": "bot",
+                "status": "ok",
+                "active": sending > 0,
+            },
+            {"source": "bot", "target": "chat", "status": "ok", "active": sending > 0},
+            {
+                "source": "chat",
+                "target": "telegram",
+                "status": "ok",
+                "active": counts.get("succeeded", 0) > 0,
+            },
+            {
+                "source": "telegram",
+                "target": "result",
+                "status": "danger",
+                "active": result_errors > 0,
+            },
+        ]
+        return {"nodes": nodes, "edges": edges}

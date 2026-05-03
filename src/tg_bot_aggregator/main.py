@@ -18,6 +18,7 @@ from tg_bot_aggregator.api import (
     health,
     mcp_settings,
     mtproto,
+    reliability,
     send,
     telegram_compat,
     templates,
@@ -99,6 +100,7 @@ def create_app(
     app.include_router(diagnostics.router, prefix=prefix)
     app.include_router(discovery.router, prefix=prefix)
     app.include_router(templates.router, prefix=prefix)
+    app.include_router(reliability.router, prefix=prefix)
     app.include_router(send.router, prefix=prefix)
     app.include_router(mtproto.router, prefix=prefix)
     app.include_router(mcp_settings.router, prefix=prefix)
