@@ -275,6 +275,10 @@ def test_static_ui_exposes_reliability_graph_and_preserves_existing_tabs() -> No
     assert "Telegram" in html
     assert "Result" in html
     assert "@keyframes edgeFlow" in html
+    assert "grid-auto-flow: column" in html
+    assert "repeat(7, 140px)" not in html
+    assert '{ id: "source", label: "Batch / Manual"' in html
+    assert '{ id: "queue", label: "Queue"' in html
 
     for tab in [
         "Боты",
@@ -303,6 +307,9 @@ def test_static_ui_reliability_calls_new_api_and_keeps_history_actions() -> None
     assert 'this.api("/reliability/stale-locks/release"' in html
     assert "edge.from || edge.source" in html
     assert "edge.to || edge.target" in html
+    assert "reliabilityAttemptMatchesNode" in html
+    assert '["source", "queue", "worker", "result"].includes(nodeId)' in html
+    assert "matched.length ? matched : this.reliabilityAttempts" in html
     assert "retrySendHistory" in html
     assert "cancelSendHistory" in html
     assert "deadLetter" in html

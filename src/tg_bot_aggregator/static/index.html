@@ -492,10 +492,12 @@
       .reliability-graph {
         position: relative;
         display: grid;
-        grid-template-columns: repeat(7, 140px);
+        grid-auto-flow: column;
+        grid-auto-columns: 140px;
         align-items: center;
+        width: max-content;
+        min-width: 100%;
         gap: 26px;
-        min-width: 1136px;
         padding: 18px 4px;
       }
       .reliability-node {
@@ -1867,11 +1869,12 @@
             reliabilityAttempts: [],
             selectedReliabilityNode: "queue",
             reliabilityFallbackNodes: [
-              { id: "queue", label: "Batch / Manual", status: "ok", count: 0 },
+              { id: "source", label: "Batch / Manual", status: "ok", count: 0 },
+              { id: "queue", label: "Queue", status: "ok", count: 0 },
               { id: "policy", label: "Policy gate", status: "ok", count: 0 },
-              { id: "lease", label: "Worker lease", status: "ok", count: 0 },
-              { id: "bot_bucket", label: "Bot bucket", status: "ok", count: 0 },
-              { id: "chat_bucket", label: "Chat bucket", status: "ok", count: 0 },
+              { id: "worker", label: "Worker lease", status: "ok", count: 0 },
+              { id: "bot", label: "Bot bucket", status: "ok", count: 0 },
+              { id: "chat", label: "Chat bucket", status: "ok", count: 0 },
               { id: "telegram", label: "Telegram", status: "ok", count: 0 },
               { id: "result", label: "Result", status: "ok", count: 0 },
             ],
@@ -2228,11 +2231,24 @@
           reliabilityEdgeFromNode(id) {
             return this.reliabilityEdges().find((edge) => edge.from === id);
           },
+          reliabilityAttemptMatchesNode(attempt, nodeId) {
+            const status = attempt.status || "";
+            const errorKind = attempt.error_kind || "";
+            if (["source", "queue", "worker", "result"].includes(nodeId)) return true;
+            if (nodeId === "policy") {
+              return ["deferred", "blocked", "dead_letter"].includes(status) || Boolean(errorKind);
+            }
+            if (nodeId === "bot" || nodeId === "chat") {
+              return ["rate_limit", "telegram_rate_limit"].includes(errorKind);
+            }
+            if (nodeId === "telegram") {
+              return status === "succeeded" || errorKind.startsWith("telegram_") || ["blocked", "dead_letter"].includes(status);
+            }
+            return true;
+          },
           reliabilityAttemptsForNode(nodeId) {
-            return this.reliabilityAttempts.filter((attempt) => {
-              const stage = attempt.node_id || attempt.stage || attempt.bucket || attempt.status;
-              return !stage || stage === nodeId;
-            });
+            const matched = this.reliabilityAttempts.filter((attempt) => this.reliabilityAttemptMatchesNode(attempt, nodeId));
+            return matched.length ? matched : this.reliabilityAttempts;
           },
           connectEvents() {
             const source = new EventSource("/api/v1/events");
