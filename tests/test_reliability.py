@@ -1,9 +1,9 @@
 from datetime import timedelta
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from tg_bot_aggregator.models import utc_now
+from tg_bot_aggregator.models import Base, utc_now
 from tg_bot_aggregator.repositories import (
     BotRepository,
     SendAttemptRepository,
@@ -69,6 +69,61 @@ async def test_send_history_lease_prevents_double_processing(
     assert leased.locked_by == "worker-a"
     assert leased.lock_expires_at is not None
     assert duplicate is None
+
+
+@pytest.mark.asyncio
+async def test_send_history_lease_acquisition_is_atomic_across_sessions(tmp_path) -> None:
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'reliability.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with session_factory() as setup_session:
+            bot = await BotRepository(setup_session).create(name="ops", token="123:abc")
+            row = await SendHistoryRepository(setup_session).create(
+                bot_id=bot.id,
+                chat_id="@ops",
+                media_type="none",
+                status="queued",
+                send_mode="queued",
+                request_payload_json={
+                    "method": "sendMessage",
+                    "chat_id": "@ops",
+                    "text": "hello",
+                },
+            )
+            row_id = row.id
+            await setup_session.commit()
+
+        async with session_factory() as first_session, session_factory() as second_session:
+            first_history = SendHistoryRepository(first_session)
+            second_history = SendHistoryRepository(second_session)
+
+            cached = await second_history.get(row_id)
+            assert cached is not None
+            assert cached.status == "queued"
+
+            first_lease = await first_history.acquire_due_lease(
+                row_id=row_id,
+                worker_id="worker-a",
+                now=utc_now(),
+                lease_seconds=30,
+            )
+            await first_session.commit()
+
+            second_lease = await second_history.acquire_due_lease(
+                row_id=row_id,
+                worker_id="worker-b",
+                now=utc_now(),
+                lease_seconds=30,
+            )
+
+            assert first_lease is not None
+            assert first_lease.locked_by == "worker-a"
+            assert second_lease is None
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.asyncio

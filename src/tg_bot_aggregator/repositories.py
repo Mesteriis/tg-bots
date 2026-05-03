@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.mcp_catalog import MCP_TOOL_NAMES
@@ -313,20 +313,29 @@ class SendHistoryRepository:
         now: datetime,
         lease_seconds: int,
     ) -> SendHistory | None:
-        row = await self.get(row_id)
-        if row is None:
+        statement = (
+            update(SendHistory)
+            .where(
+                SendHistory.id == row_id,
+                SendHistory.status.in_(("queued", "deferred", "created")),
+                or_(SendHistory.next_retry_at.is_(None), SendHistory.next_retry_at <= now),
+                or_(SendHistory.lock_expires_at.is_(None), SendHistory.lock_expires_at <= now),
+            )
+            .values(
+                status="sending",
+                locked_at=now,
+                locked_by=worker_id,
+                lock_expires_at=now + timedelta(seconds=lease_seconds),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        result = await self.session.execute(statement)
+        if result.rowcount != 1:
             return None
-        if row.status not in {"queued", "deferred", "created"}:
-            return None
-        if row.next_retry_at is not None and row.next_retry_at > now:
-            return None
-        if row.lock_expires_at is not None and row.lock_expires_at > now:
-            return None
-        row.status = "sending"
-        row.locked_at = now
-        row.locked_by = worker_id
-        row.lock_expires_at = now + timedelta(seconds=lease_seconds)
         await self.session.flush()
+        row = await self.get(row_id)
+        if row is not None:
+            await self.session.refresh(row)
         return row
 
     async def list_ready_for_lease(self, now: datetime, limit: int = 100) -> list[SendHistory]:
