@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.models import Base, utc_now
 from tg_bot_aggregator.reliability import (
+    MemoryRateLimitStore,
     RetryDecision,
+    SendRateLimiter,
     classify_telegram_error,
     compute_retry_decision,
 )
@@ -310,3 +312,46 @@ def test_exponential_backoff_is_capped_by_max_delay() -> None:
     assert decision.retry is True
     assert decision.retry_after_seconds == 5
     assert decision.next_retry_at == datetime(2026, 5, 3, 12, 0, 5, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_blocks_when_bot_bucket_is_full() -> None:
+    store = MemoryRateLimitStore()
+    limiter = SendRateLimiter(
+        store=store,
+        global_limit_per_minute=None,
+        bot_limit_per_minute=2,
+        chat_limit_per_minute=None,
+        destination_limit_per_minute=None,
+    )
+
+    first = await limiter.check_and_increment(bot_id=1, chat_id="@ops", destination_id=None)
+    second = await limiter.check_and_increment(bot_id=1, chat_id="@ops", destination_id=None)
+    third = await limiter.check_and_increment(bot_id=1, chat_id="@ops", destination_id=None)
+
+    assert first.allowed is True
+    assert second.allowed is True
+    assert third.allowed is False
+    assert third.bucket_key == "send:bot:1"
+    assert third.retry_after_seconds is not None
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_reports_bucket_snapshots() -> None:
+    store = MemoryRateLimitStore()
+    limiter = SendRateLimiter(
+        store=store,
+        global_limit_per_minute=10,
+        bot_limit_per_minute=2,
+        chat_limit_per_minute=5,
+        destination_limit_per_minute=4,
+    )
+
+    await limiter.check_and_increment(bot_id=7, chat_id="-1001", destination_id=3)
+    snapshots = await limiter.snapshots(bot_id=7, chat_id="-1001", destination_id=3)
+
+    by_key = {item.bucket_key: item for item in snapshots}
+    assert by_key["send:global"].limit == 10
+    assert by_key["send:bot:7"].used == 1
+    assert by_key["send:chat:-1001"].used == 1
+    assert by_key["send:destination:3"].used == 1

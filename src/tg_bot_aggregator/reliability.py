@@ -1,6 +1,8 @@
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import ceil
+from typing import Protocol
 
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiError
@@ -13,6 +15,166 @@ class RetryDecision:
     error_kind: str
     retry_after_seconds: int | None
     next_retry_at: datetime | None
+
+
+@dataclass(frozen=True)
+class RateLimitDecision:
+    allowed: bool
+    bucket_key: str | None
+    retry_after_seconds: int | None
+    message: str | None
+
+
+@dataclass(frozen=True)
+class RateBucketSnapshot:
+    bucket_key: str
+    limit: int
+    used: int
+    retry_after_seconds: int | None
+
+
+class RateLimitStore(Protocol):
+    async def increment_window(self, key: str, window_seconds: int) -> int:
+        ...
+
+    async def get_count(self, key: str) -> int:
+        ...
+
+    async def retry_after(self, key: str) -> int | None:
+        ...
+
+
+class MemoryRateLimitStore:
+    def __init__(self) -> None:
+        self.counts: dict[str, int] = defaultdict(int)
+
+    async def increment_window(self, key: str, window_seconds: int) -> int:
+        self.counts[key] += 1
+        return self.counts[key]
+
+    async def get_count(self, key: str) -> int:
+        return self.counts[key]
+
+    async def retry_after(self, key: str) -> int | None:
+        return 60
+
+
+class RedisRateLimitStore:
+    def __init__(self, redis_client) -> None:
+        self.redis = redis_client
+
+    async def increment_window(self, key: str, window_seconds: int) -> int:
+        value = await self.redis.incr(key)
+        if value == 1:
+            await self.redis.expire(key, window_seconds)
+        return int(value)
+
+    async def get_count(self, key: str) -> int:
+        value = await self.redis.get(key)
+        return int(value or 0)
+
+    async def retry_after(self, key: str) -> int | None:
+        ttl = await self.redis.ttl(key)
+        if ttl is None or int(ttl) < 0:
+            return None
+        return int(ttl)
+
+
+class SendRateLimiter:
+    def __init__(
+        self,
+        *,
+        store: RateLimitStore,
+        global_limit_per_minute: int | None,
+        bot_limit_per_minute: int | None,
+        chat_limit_per_minute: int | None,
+        destination_limit_per_minute: int | None,
+    ) -> None:
+        self.store = store
+        self.limits = {
+            "send:global": global_limit_per_minute,
+            "send:bot": bot_limit_per_minute,
+            "send:chat": chat_limit_per_minute,
+            "send:destination": destination_limit_per_minute,
+        }
+
+    def _bucket_limits(
+        self,
+        *,
+        bot_id: int,
+        chat_id: str,
+        destination_id: int | None,
+    ) -> list[tuple[str, int]]:
+        buckets: list[tuple[str, int]] = []
+        global_limit = self.limits["send:global"]
+        bot_limit = self.limits["send:bot"]
+        chat_limit = self.limits["send:chat"]
+        destination_limit = self.limits["send:destination"]
+        if global_limit is not None:
+            buckets.append(("send:global", global_limit))
+        if bot_limit is not None:
+            buckets.append((f"send:bot:{bot_id}", bot_limit))
+        if chat_limit is not None:
+            buckets.append((f"send:chat:{chat_id}", chat_limit))
+        if destination_limit is not None and destination_id is not None:
+            buckets.append((f"send:destination:{destination_id}", destination_limit))
+        return buckets
+
+    async def check_and_increment(
+        self,
+        *,
+        bot_id: int,
+        chat_id: str,
+        destination_id: int | None,
+    ) -> RateLimitDecision:
+        for key, limit in self._bucket_limits(
+            bot_id=bot_id,
+            chat_id=chat_id,
+            destination_id=destination_id,
+        ):
+            current = await self.store.get_count(key)
+            if current >= limit:
+                return RateLimitDecision(
+                    allowed=False,
+                    bucket_key=key,
+                    retry_after_seconds=await self.store.retry_after(key),
+                    message=f"rate limit exceeded for {key}",
+                )
+        for key, _limit in self._bucket_limits(
+            bot_id=bot_id,
+            chat_id=chat_id,
+            destination_id=destination_id,
+        ):
+            await self.store.increment_window(key, 60)
+        return RateLimitDecision(
+            allowed=True,
+            bucket_key=None,
+            retry_after_seconds=None,
+            message=None,
+        )
+
+    async def snapshots(
+        self,
+        *,
+        bot_id: int,
+        chat_id: str,
+        destination_id: int | None,
+    ) -> list[RateBucketSnapshot]:
+        rows: list[RateBucketSnapshot] = []
+        for key, limit in self._bucket_limits(
+            bot_id=bot_id,
+            chat_id=chat_id,
+            destination_id=destination_id,
+        ):
+            rows.append(
+                RateBucketSnapshot(
+                    bucket_key=key,
+                    limit=limit,
+                    used=await self.store.get_count(key),
+                    retry_after_seconds=await self.store.retry_after(key),
+                )
+            )
+        return rows
 
 
 def _retry_after_from_payload(payload: dict | None) -> int | None:
