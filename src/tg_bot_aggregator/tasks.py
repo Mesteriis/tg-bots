@@ -91,6 +91,7 @@ async def run_send_history(send_history_id: int) -> int:
     engine = create_engine(settings)
     session_factory = create_session_factory(engine)
     redis_client: redis.Redis | None = None
+    events: RedisEventBus | None = None
     try:
         async with session_factory() as session:
             settings = apply_runtime_settings(
@@ -114,6 +115,8 @@ async def run_send_history(send_history_id: int) -> int:
             )
             return row.id
     finally:
+        if events is not None:
+            await events.close()
         await _close_redis_client(redis_client)
         await engine.dispose()
 
@@ -128,6 +131,7 @@ async def run_due_send_history(limit: int = 100) -> list[int]:
     engine = create_engine(settings)
     session_factory = create_session_factory(engine)
     redis_client: redis.Redis | None = None
+    events: RedisEventBus | None = None
     try:
         async with session_factory() as session:
             settings = apply_runtime_settings(
@@ -161,6 +165,8 @@ async def run_due_send_history(limit: int = 100) -> list[int]:
                 )
             return processed
     finally:
+        if events is not None:
+            await events.close()
         await _close_redis_client(redis_client)
         await engine.dispose()
 

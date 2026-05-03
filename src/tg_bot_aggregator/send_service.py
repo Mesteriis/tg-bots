@@ -288,6 +288,16 @@ class SendService:
         row: SendHistory,
         response: dict[str, Any],
     ) -> SendHistory:
+        await self._persist_success_from_response(row, response)
+        await self._publish_event("send.succeeded", {"send_history_id": row.id})
+        await self._publish_terminal_callback("send.succeeded", row)
+        return row
+
+    async def _persist_success_from_response(
+        self,
+        row: SendHistory,
+        response: dict[str, Any],
+    ) -> None:
         message_id = response.get("result", {}).get("message_id")
         await self._upsert_destination_from_response(
             row.bot_id,
@@ -296,9 +306,6 @@ class SendService:
         )
         await self.history.mark_succeeded(row, message_id, redact_secrets(response))
         await self.session.commit()
-        await self._publish_event("send.succeeded", {"send_history_id": row.id})
-        await self._publish_terminal_callback("send.succeeded", row)
-        return row
 
     async def _send_existing_row(self, token: str, row: SendHistory) -> SendHistory:
         try:
@@ -336,6 +343,79 @@ class SendService:
             response_payload=None,
         )
         await self.session.commit()
+
+    async def _record_success_attempt_once(
+        self,
+        *,
+        row: SendHistory,
+        worker_id: str,
+        started_at: datetime,
+        finished_at: datetime,
+        started_timer: float,
+        response: dict[str, Any],
+    ) -> None:
+        existing = await self.attempts.list_for_send(row.id)
+        if any(
+            item.attempt_number == row.attempt_count and item.status == "succeeded"
+            for item in existing
+        ):
+            return
+        await self.queue.record_attempt(
+            row=row,
+            worker_id=worker_id,
+            started_at=started_at,
+            finished_at=finished_at,
+            status="succeeded",
+            telegram_error_code=None,
+            error_kind=None,
+            error_message=None,
+            retry_after_seconds=None,
+            latency_ms=latency_ms_since(started_timer),
+            response_payload=response,
+        )
+
+    async def _complete_queued_success(
+        self,
+        *,
+        row: SendHistory,
+        worker_id: str,
+        started_at: datetime,
+        started_timer: float,
+        response: dict[str, Any],
+    ) -> SendHistory:
+        await self._record_success_attempt_once(
+            row=row,
+            worker_id=worker_id,
+            started_at=started_at,
+            finished_at=utc_now(),
+            started_timer=started_timer,
+            response=response,
+        )
+        await self._persist_success_from_response(row, response)
+        await self._publish_event("send.succeeded", {"send_history_id": row.id})
+        await self._publish_terminal_callback("send.succeeded", row)
+        return row
+
+    async def _complete_queued_success_after_cancellation(
+        self,
+        *,
+        row: SendHistory,
+        worker_id: str,
+        started_at: datetime,
+        started_timer: float,
+        response: dict[str, Any],
+    ) -> None:
+        task = asyncio.current_task()
+        pending_cancellations = task.cancelling() if task is not None else 0
+        for _ in range(pending_cancellations):
+            task.uncancel()
+        await self._complete_queued_success(
+            row=row,
+            worker_id=worker_id,
+            started_at=started_at,
+            started_timer=started_timer,
+            response=response,
+        )
 
     async def _defer_worker_error(
         self,
@@ -542,21 +622,23 @@ class SendService:
                 exc=exc,
             )
 
-        finished_at = utc_now()
-        await self.queue.record_attempt(
-            row=row,
-            worker_id=worker_id,
-            started_at=started_at,
-            finished_at=finished_at,
-            status="succeeded",
-            telegram_error_code=None,
-            error_kind=None,
-            error_message=None,
-            retry_after_seconds=None,
-            latency_ms=latency_ms_since(started_timer),
-            response_payload=response,
-        )
-        return await self._mark_success_from_response(row, response)
+        try:
+            return await self._complete_queued_success(
+                row=row,
+                worker_id=worker_id,
+                started_at=started_at,
+                started_timer=started_timer,
+                response=response,
+            )
+        except asyncio.CancelledError:
+            await self._complete_queued_success_after_cancellation(
+                row=row,
+                worker_id=worker_id,
+                started_at=started_at,
+                started_timer=started_timer,
+                response=response,
+            )
+            raise
 
     async def retry_history(self, send_history_id: int) -> SendHistory:
         row = await self.history.get(send_history_id)

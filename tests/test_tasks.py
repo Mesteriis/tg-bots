@@ -52,6 +52,18 @@ class _FakeRedis:
         self.closed = True
 
 
+class _FakeEventBus:
+    instances: list["_FakeEventBus"] = []
+
+    def __init__(self, redis_url: str) -> None:
+        self.redis_url = redis_url
+        self.closed = False
+        self.instances.append(self)
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 class _RuntimeSettingsRepository:
     def __init__(self, session: object) -> None:
         self.session = session
@@ -71,6 +83,7 @@ async def test_due_send_history_uses_ready_for_lease_and_closes_redis(
     settings = Settings(REDIS_URL="redis://localhost:6379/15")
     engine = _FakeEngine()
     redis_client = _FakeRedis()
+    _FakeEventBus.instances = []
     calls: dict[str, Any] = {"worker_ids": [], "used_ready_for_lease": False}
     rows = [
         SendHistory(
@@ -124,6 +137,7 @@ async def test_due_send_history_uses_ready_for_lease_and_closes_redis(
     monkeypatch.setattr(tasks_module, "SendHistoryRepository", FakeSendHistoryRepository)
     monkeypatch.setattr(tasks_module, "SendService", FakeSendService)
     monkeypatch.setattr(tasks_module.redis, "from_url", lambda url: redis_client)
+    monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
 
     processed = await run_due_send_history(limit=7)
 
@@ -133,4 +147,6 @@ async def test_due_send_history_uses_ready_for_lease_and_closes_redis(
     assert calls["worker_ids"] == ["taskiq-due-send-history"]
     assert calls["rate_limiter"] is not None
     assert redis_client.closed is True
+    assert len(_FakeEventBus.instances) == 1
+    assert _FakeEventBus.instances[0].closed is True
     assert engine.disposed is True

@@ -857,6 +857,42 @@ async def test_cancelled_locked_event_records_interrupted_attempt(
     assert attempts[0].error_kind == "worker_cancelled"
 
 
+async def test_cancelled_after_telegram_success_persists_result_once(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    service = SendService(
+        db_session,
+        _bot_api_client({}),
+        Settings(reliability_enabled=True),
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+    original_record_attempt = service.queue.record_attempt
+    calls = 0
+
+    async def cancelling_record_attempt_once(**kwargs: Any) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise asyncio.CancelledError()
+        await original_record_attempt(**kwargs)
+
+    service.queue.record_attempt = cancelling_record_attempt_once
+
+    with pytest.raises(asyncio.CancelledError):
+        await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert row.status == "succeeded"
+    assert row.locked_by is None
+    assert row.telegram_message_id == 55
+    assert calls == 2
+    assert len(attempts) == 1
+    assert attempts[0].attempt_number == 1
+    assert attempts[0].status == "succeeded"
+
+
 async def test_send_service_publishes_terminal_callback(
     db_session: AsyncSession,
 ) -> None:
