@@ -18,6 +18,17 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.add_column("runtime_settings", sa.Column("reliability_enabled", sa.Boolean()))
+    op.add_column("runtime_settings", sa.Column("send_default_mode", sa.String(length=40)))
+    op.add_column("runtime_settings", sa.Column("send_global_rate_per_minute", sa.Integer()))
+    op.add_column("runtime_settings", sa.Column("send_bot_rate_per_minute", sa.Integer()))
+    op.add_column("runtime_settings", sa.Column("send_chat_rate_per_minute", sa.Integer()))
+    op.add_column("runtime_settings", sa.Column("send_destination_rate_per_minute", sa.Integer()))
+    op.add_column("runtime_settings", sa.Column("send_retry_base_delay_seconds", sa.Float()))
+    op.add_column("runtime_settings", sa.Column("send_retry_max_delay_seconds", sa.Float()))
+    op.add_column("runtime_settings", sa.Column("send_worker_lease_seconds", sa.Integer()))
+    op.add_column("runtime_settings", sa.Column("send_stale_lock_grace_seconds", sa.Integer()))
+    op.add_column("runtime_settings", sa.Column("send_dedupe_window_seconds", sa.Integer()))
     op.add_column(
         "send_history",
         sa.Column("priority", sa.Integer(), nullable=False, server_default="100"),
@@ -76,3 +87,14 @@ def downgrade() -> None:
     op.drop_column("send_history", "locked_by")
     op.drop_column("send_history", "locked_at")
     op.drop_column("send_history", "priority")
+    op.drop_column("runtime_settings", "send_dedupe_window_seconds")
+    op.drop_column("runtime_settings", "send_stale_lock_grace_seconds")
+    op.drop_column("runtime_settings", "send_worker_lease_seconds")
+    op.drop_column("runtime_settings", "send_retry_max_delay_seconds")
+    op.drop_column("runtime_settings", "send_retry_base_delay_seconds")
+    op.drop_column("runtime_settings", "send_destination_rate_per_minute")
+    op.drop_column("runtime_settings", "send_chat_rate_per_minute")
+    op.drop_column("runtime_settings", "send_bot_rate_per_minute")
+    op.drop_column("runtime_settings", "send_global_rate_per_minute")
+    op.drop_column("runtime_settings", "send_default_mode")
+    op.drop_column("runtime_settings", "reliability_enabled")

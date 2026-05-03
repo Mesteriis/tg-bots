@@ -1,7 +1,17 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from tg_bot_aggregator.mcp_catalog import MCP_TOOL_NAMES
@@ -55,6 +65,27 @@ class DiagnosticBotSettings(Base):
     bot: Mapped[Bot | None] = relationship(back_populates="diagnostic_settings")
 
 
+class DiagnosticUpdate(Base):
+    __tablename__ = "diagnostic_updates"
+    __table_args__ = (UniqueConstraint("update_id", name="uq_diagnostic_updates_update_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    update_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    update_kind: Mapped[str] = mapped_column(String(60), nullable=False)
+    chat_id: Mapped[str | None] = mapped_column(String(200))
+    chat_type: Mapped[str | None] = mapped_column(String(40))
+    chat_title: Mapped[str | None] = mapped_column(String(300))
+    chat_username: Mapped[str | None] = mapped_column(String(200))
+    message_id: Mapped[int | None] = mapped_column(Integer)
+    message_thread_id: Mapped[int | None] = mapped_column(Integer)
+    is_topic_message: Mapped[bool | None] = mapped_column(Boolean)
+    sender_id: Mapped[int | None] = mapped_column(Integer)
+    sender_username: Mapped[str | None] = mapped_column(String(200))
+    text_preview: Mapped[str | None] = mapped_column(Text)
+    raw_update_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class ApiToken(Base):
     __tablename__ = "api_tokens"
 
@@ -91,6 +122,68 @@ class McpSettings(Base):
     )
 
 
+class RuntimeSettings(Base):
+    __tablename__ = "runtime_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    telegram_bot_api_base_url: Mapped[str | None] = mapped_column(String(500))
+    shared_media_root: Mapped[str | None] = mapped_column(Text)
+    shared_media_require_mount: Mapped[bool | None] = mapped_column(Boolean)
+    max_local_file_bytes: Mapped[int | None] = mapped_column(Integer)
+    send_retry_max_attempts: Mapped[int | None] = mapped_column(Integer)
+    send_retry_delay_seconds: Mapped[float | None] = mapped_column(Float)
+    reliability_enabled: Mapped[bool | None] = mapped_column(Boolean)
+    send_default_mode: Mapped[str | None] = mapped_column(String(40))
+    send_global_rate_per_minute: Mapped[int | None] = mapped_column(Integer)
+    send_bot_rate_per_minute: Mapped[int | None] = mapped_column(Integer)
+    send_chat_rate_per_minute: Mapped[int | None] = mapped_column(Integer)
+    send_destination_rate_per_minute: Mapped[int | None] = mapped_column(Integer)
+    send_retry_base_delay_seconds: Mapped[float | None] = mapped_column(Float)
+    send_retry_max_delay_seconds: Mapped[float | None] = mapped_column(Float)
+    send_worker_lease_seconds: Mapped[int | None] = mapped_column(Integer)
+    send_stale_lock_grace_seconds: Mapped[int | None] = mapped_column(Integer)
+    send_dedupe_window_seconds: Mapped[int | None] = mapped_column(Integer)
+    protected_api_hosts_json: Mapped[list[str] | None] = mapped_column(JSON)
+    policy_enabled: Mapped[bool | None] = mapped_column(Boolean)
+    rate_limit_per_minute: Mapped[int | None] = mapped_column(Integer)
+    quiet_hours_start: Mapped[str | None] = mapped_column(String(5))
+    quiet_hours_end: Mapped[str | None] = mapped_column(String(5))
+    callback_enabled: Mapped[bool | None] = mapped_column(Boolean)
+    callback_url: Mapped[str | None] = mapped_column(Text)
+    backup_git_repo_url: Mapped[str | None] = mapped_column(Text)
+    backup_git_branch: Mapped[str | None] = mapped_column(String(200))
+    backup_git_path: Mapped[str | None] = mapped_column(Text)
+    backup_include_secrets: Mapped[bool | None] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class RuntimeAdvancedSettings(Base):
+    __tablename__ = "runtime_advanced_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    settings_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class BackupRun(Base):
+    __tablename__ = "backup_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    status: Mapped[str] = mapped_column(String(40), default="created", nullable=False)
+    items_exported: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    backup_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    git_commit: Mapped[str | None] = mapped_column(String(100))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Destination(Base):
     __tablename__ = "destinations"
     __table_args__ = (UniqueConstraint("bot_id", "alias", name="uq_destinations_bot_alias"),)
@@ -112,6 +205,24 @@ class Destination(Base):
     bot: Mapped[Bot] = relationship(back_populates="destinations")
 
 
+class DestinationHealth(Base):
+    __tablename__ = "destination_health"
+    __table_args__ = (
+        UniqueConstraint("destination_id", name="uq_destination_health_destination_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    destination_id: Mapped[int] = mapped_column(
+        ForeignKey("destinations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    last_member_count: Mapped[int | None] = mapped_column(Integer)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    raw_chat_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
 class MessageTemplate(Base):
     __tablename__ = "message_templates"
     __table_args__ = (UniqueConstraint("tag", name="uq_message_templates_tag"),)
@@ -122,6 +233,106 @@ class MessageTemplate(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     parse_mode: Mapped[str | None] = mapped_column(String(40))
     disable_web_page_preview: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class MessageTemplateVersion(Base):
+    __tablename__ = "message_template_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "template_id",
+            "version_number",
+            name="uq_message_template_versions_template_number",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("message_templates.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    parse_mode: Mapped[str | None] = mapped_column(String(40))
+    disable_web_page_preview: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class SendProfile(Base):
+    __tablename__ = "send_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), nullable=False)
+    send_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    destination_id: Mapped[int | None] = mapped_column(
+        ForeignKey("destinations.id", ondelete="SET NULL")
+    )
+    destination_alias: Mapped[str | None] = mapped_column(String(100))
+    chat_id: Mapped[str | None] = mapped_column(String(200))
+    message_thread_id: Mapped[int | None] = mapped_column(Integer)
+    template_tag: Mapped[str | None] = mapped_column(String(100))
+    text: Mapped[str | None] = mapped_column(Text)
+    media_type: Mapped[str] = mapped_column(String(40), default="none", nullable=False)
+    file_relative_path: Mapped[str | None] = mapped_column(Text)
+    caption: Mapped[str | None] = mapped_column(Text)
+    parse_mode: Mapped[str | None] = mapped_column(String(40))
+    disable_web_page_preview: Mapped[bool | None] = mapped_column(Boolean)
+    variables_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
+class SendBatch(Base):
+    __tablename__ = "send_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("bots.id", ondelete="CASCADE"), nullable=False)
+    send_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="draft", nullable=False)
+    template_tag: Mapped[str | None] = mapped_column(String(100))
+    text: Mapped[str | None] = mapped_column(Text)
+    media_type: Mapped[str] = mapped_column(String(40), default="none", nullable=False)
+    file_relative_path: Mapped[str | None] = mapped_column(Text)
+    caption: Mapped[str | None] = mapped_column(Text)
+    parse_mode: Mapped[str | None] = mapped_column(String(40))
+    disable_web_page_preview: Mapped[bool | None] = mapped_column(Boolean)
+    variables_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SendBatchItem(Base):
+    __tablename__ = "send_batch_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("send_batches.id", ondelete="CASCADE"), nullable=False
+    )
+    destination_id: Mapped[int | None] = mapped_column(
+        ForeignKey("destinations.id", ondelete="SET NULL")
+    )
+    chat_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    message_thread_id: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False)
+    send_history_id: Mapped[int | None] = mapped_column(
+        ForeignKey("send_history.id", ondelete="SET NULL")
+    )
+    error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now

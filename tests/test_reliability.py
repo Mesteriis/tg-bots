@@ -1,14 +1,21 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.models import Base, utc_now
+from tg_bot_aggregator.reliability import (
+    RetryDecision,
+    classify_telegram_error,
+    compute_retry_decision,
+)
 from tg_bot_aggregator.repositories import (
     BotRepository,
     SendAttemptRepository,
     SendHistoryRepository,
 )
+from tg_bot_aggregator.telegram_bot_api import TelegramBotApiError
 
 
 async def _create_leased_history(db_session: AsyncSession):
@@ -208,3 +215,56 @@ async def test_send_attempts_are_append_only(db_session: AsyncSession) -> None:
     assert rows[0].attempt_number == 1
     assert rows[0].status == "deferred"
     assert rows[0].error_kind == "telegram_rate_limit"
+
+
+def test_classify_telegram_rate_limit() -> None:
+    exc = TelegramBotApiError(
+        method="sendMessage",
+        error_code=429,
+        description="Too Many Requests",
+        payload={"parameters": {"retry_after": 17}},
+    )
+
+    assert classify_telegram_error(exc) == "telegram_rate_limit"
+
+
+def test_retry_after_uses_telegram_delay() -> None:
+    settings = Settings(
+        send_retry_max_attempts=3,
+        send_retry_base_delay_seconds=1.0,
+        send_retry_max_delay_seconds=60.0,
+    )
+    now = datetime(2026, 5, 3, 12, 0, tzinfo=UTC)
+    exc = TelegramBotApiError(
+        method="sendMessage",
+        error_code=429,
+        description="Too Many Requests",
+        payload={"parameters": {"retry_after": 17}},
+    )
+
+    decision = compute_retry_decision(settings=settings, error=exc, attempt_number=1, now=now)
+
+    assert decision == RetryDecision(
+        retry=True,
+        terminal_status="deferred",
+        error_kind="telegram_rate_limit",
+        retry_after_seconds=17,
+        next_retry_at=datetime(2026, 5, 3, 12, 0, 17, tzinfo=UTC),
+    )
+
+
+def test_exhausted_retry_budget_goes_dead_letter() -> None:
+    settings = Settings(send_retry_max_attempts=2)
+    now = datetime(2026, 5, 3, 12, 0, tzinfo=UTC)
+    exc = TelegramBotApiError(
+        method="sendMessage",
+        error_code=502,
+        description="Bad Gateway",
+        payload={"ok": False},
+    )
+
+    decision = compute_retry_decision(settings=settings, error=exc, attempt_number=2, now=now)
+
+    assert decision.retry is False
+    assert decision.terminal_status == "dead_letter"
+    assert decision.error_kind == "telegram_server"

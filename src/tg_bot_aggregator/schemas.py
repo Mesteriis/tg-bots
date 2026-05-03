@@ -47,6 +47,47 @@ class DiagnosticBotSettingsRead(BaseModel):
     updated_at: datetime | None
 
 
+class DiagnosticUpdateCreate(BaseModel):
+    update_id: int
+    update_kind: str = "message"
+    chat_id: str | None = None
+    chat_type: str | None = None
+    chat_title: str | None = None
+    chat_username: str | None = None
+    message_id: int | None = None
+    message_thread_id: int | None = None
+    is_topic_message: bool | None = None
+    sender_id: int | None = None
+    sender_username: str | None = None
+    text_preview: str | None = None
+    raw_update: dict[str, Any] | None = None
+
+
+class DiagnosticDestinationCreate(BaseModel):
+    bot_id: int
+    alias: str | None = None
+
+
+class DiagnosticUpdateRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    update_id: int
+    update_kind: str
+    chat_id: str | None
+    chat_type: str | None
+    chat_title: str | None
+    chat_username: str | None
+    message_id: int | None
+    message_thread_id: int | None
+    is_topic_message: bool | None
+    sender_id: int | None
+    sender_username: str | None
+    text_preview: str | None
+    raw_update_json: dict[str, Any] | None
+    created_at: datetime
+
+
 class ApiTokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     scopes: list[Literal["read", "send", "mcp_admin", "tg_compat"]] = Field(
@@ -92,10 +133,237 @@ class McpSettingsRead(BaseModel):
     tools_by_name: dict[str, McpToolRead]
 
 
+class McpTransportInfo(BaseModel):
+    name: str
+    path: str
+    enabled: bool
+
+
+class McpConnectionInfoRead(BaseModel):
+    streamable_http: McpTransportInfo
+    legacy_sse: McpTransportInfo
+    legacy_messages: McpTransportInfo
+    protected_hosts: list[str]
+    required_headers: list[str]
+    enabled_tools: list[str]
+    local_examples: dict[str, str]
+    protected_host_examples: dict[str, str]
+
+
 class McpSettingsUpdate(BaseModel):
     is_enabled: bool | None = None
     allow_legacy_sse: bool | None = None
     enabled_tools: list[str] | None = None
+
+
+class RuntimeSettingsUpdate(BaseModel):
+    app_host: str | None = None
+    app_port: int | None = Field(default=None, ge=1, le=65535)
+    database_url: str | None = None
+    redis_url: str | None = None
+    telegram_api_id: str | None = None
+    telegram_api_hash: str | None = None
+    telegram_bot_api_base_url: str | None = None
+    cors_allowed_origins: list[str] | None = None
+    mcp_allowed_origins: list[str] | None = None
+    shared_media_root: str | None = None
+    shared_media_require_mount: bool | None = None
+    max_local_file_bytes: int | None = Field(default=None, ge=1)
+    telethon_session_dir: str | None = None
+    diagnostic_poll_timeout_seconds: int | None = Field(default=None, ge=1)
+    diagnostic_retry_delay_seconds: float | None = Field(default=None, ge=0)
+    discovery_poll_timeout_seconds: int | None = Field(default=None, ge=1)
+    discovery_retry_delay_seconds: float | None = Field(default=None, ge=0)
+    send_retry_max_attempts: int | None = Field(default=None, ge=1)
+    send_retry_delay_seconds: float | None = Field(default=None, ge=0)
+    reliability_enabled: bool | None = None
+    send_default_mode: Literal["sync", "queued", "auto"] | None = None
+    send_global_rate_per_minute: int | None = Field(default=None, ge=1)
+    send_bot_rate_per_minute: int | None = Field(default=None, ge=1)
+    send_chat_rate_per_minute: int | None = Field(default=None, ge=1)
+    send_destination_rate_per_minute: int | None = Field(default=None, ge=1)
+    send_retry_base_delay_seconds: float | None = Field(default=None, ge=0)
+    send_retry_max_delay_seconds: float | None = Field(default=None, ge=0)
+    send_worker_lease_seconds: int | None = Field(default=None, ge=1)
+    send_stale_lock_grace_seconds: int | None = Field(default=None, ge=1)
+    send_dedupe_window_seconds: int | None = Field(default=None, ge=1)
+    protected_api_hosts: list[str] | None = None
+    policy_enabled: bool | None = None
+    rate_limit_per_minute: int | None = Field(default=None, ge=1)
+    quiet_hours_start: str | None = None
+    quiet_hours_end: str | None = None
+    callback_enabled: bool | None = None
+    callback_url: str | None = None
+    backup_git_repo_url: str | None = None
+    backup_git_branch: str | None = None
+    backup_git_path: str | None = None
+    backup_git_service: Literal["auto", "github", "gitea"] | None = None
+    backup_git_auth_method: Literal["none", "token"] | None = None
+    backup_git_api_base_url: str | None = None
+    backup_git_api_token: str | None = None
+    backup_include_secrets: bool | None = None
+    backup_schedule_enabled: bool | None = None
+    backup_schedule_interval_seconds: int | None = Field(default=None, ge=60)
+    backup_schedule_push_to_git: bool | None = None
+
+
+class RuntimeSettingsRead(BaseModel):
+    app_host: str
+    app_port: int
+    database_url: str
+    redis_url: str
+    telegram_api_id: str | None
+    telegram_api_hash: str | None
+    telegram_bot_api_base_url: str
+    cors_allowed_origins: list[str]
+    mcp_allowed_origins: list[str]
+    shared_media_root: str
+    shared_media_require_mount: bool
+    max_local_file_bytes: int
+    telethon_session_dir: str
+    diagnostic_poll_timeout_seconds: int
+    diagnostic_retry_delay_seconds: float
+    discovery_poll_timeout_seconds: int
+    discovery_retry_delay_seconds: float
+    send_retry_max_attempts: int
+    send_retry_delay_seconds: float
+    reliability_enabled: bool
+    send_default_mode: Literal["sync", "queued", "auto"]
+    send_global_rate_per_minute: int | None
+    send_bot_rate_per_minute: int | None
+    send_chat_rate_per_minute: int | None
+    send_destination_rate_per_minute: int | None
+    send_retry_base_delay_seconds: float
+    send_retry_max_delay_seconds: float
+    send_worker_lease_seconds: int
+    send_stale_lock_grace_seconds: int
+    send_dedupe_window_seconds: int | None
+    protected_api_hosts: list[str]
+    policy_enabled: bool
+    rate_limit_per_minute: int | None
+    quiet_hours_start: str | None
+    quiet_hours_end: str | None
+    callback_enabled: bool
+    callback_url: str | None
+    backup_git_repo_url: str | None
+    backup_git_branch: str
+    backup_git_path: str
+    backup_git_service: Literal["auto", "github", "gitea"]
+    backup_git_auth_method: Literal["none", "token"]
+    backup_git_api_base_url: str | None
+    backup_git_api_token: str | None
+    backup_include_secrets: bool
+    backup_schedule_enabled: bool
+    backup_schedule_interval_seconds: int
+    backup_schedule_push_to_git: bool
+
+
+class BackupRepositoryPrivacyRead(BaseModel):
+    service: str | None
+    auth_method: str | None
+    host: str | None
+    owner: str | None
+    repo: str | None
+    api_url: str | None
+    is_private: bool | None
+    verified: bool
+    message: str
+
+
+class BackupDiffSectionRead(BaseModel):
+    section: str
+    before_count: int
+    after_count: int
+    changed: bool
+    row_changes: int
+
+
+class BackupRowDiffRead(BaseModel):
+    section: str
+    key: str
+    action: Literal["added", "removed", "changed"]
+    before: dict[str, Any] | None
+    after: dict[str, Any] | None
+
+
+class BackupDiffRead(BaseModel):
+    base_run_id: int | None
+    changed_sections: int
+    sections: list[BackupDiffSectionRead]
+    sections_by_name: dict[str, BackupDiffSectionRead]
+    rows: list[BackupRowDiffRead]
+
+
+class BackupPreflightCheckRead(BaseModel):
+    name: str
+    status: Literal["ok", "warning", "error", "skipped"]
+    message: str
+
+
+class BackupPreflightRead(BaseModel):
+    ok: bool
+    include_secrets: bool
+    requested_include_secrets: bool
+    push_to_git: bool
+    repo: BackupRepositoryPrivacyRead
+    diff: BackupDiffRead
+    checks: list[BackupPreflightCheckRead]
+
+
+class BackupRunRequest(BaseModel):
+    include_secrets: bool | None = None
+    push_to_git: bool | None = None
+
+
+class BackupImportPreviewRequest(BaseModel):
+    snapshot: dict[str, Any]
+    sections: list[str] | None = None
+
+
+class BackupImportApplyRequest(BaseModel):
+    snapshot: dict[str, Any]
+    confirm: str
+    sections: list[str] | None = None
+
+
+class BackupRunRestorePreviewRequest(BaseModel):
+    sections: list[str] | None = None
+
+
+class BackupRunRestoreApplyRequest(BaseModel):
+    confirm: str
+    sections: list[str] | None = None
+
+
+class BackupImportPreviewRead(BaseModel):
+    ok: bool
+    schema_version: str | None
+    diff: BackupDiffRead
+    blocked_sections: list[str]
+    warnings: list[str]
+    selected_sections: list[str]
+    expanded_sections: list[str]
+
+
+class BackupImportApplyRead(BaseModel):
+    status: str
+    restored_rows: int
+    restored_sections: int
+    safety_backup_run_id: int
+    diff: BackupDiffRead
+    selected_sections: list[str]
+    expanded_sections: list[str]
+
+
+class BackupRunRead(BaseModel):
+    id: int
+    status: str
+    items_exported: int
+    snapshot: dict[str, Any] | None = None
+    git_commit: str | None = None
+    error_message: str | None = None
+    created_at: datetime
+    finished_at: datetime | None = None
 
 
 class DestinationCreate(BaseModel):
@@ -159,6 +427,97 @@ class TemplateRead(BaseModel):
     disable_web_page_preview: bool
 
 
+class TemplateVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    template_id: int
+    version_number: int
+    title: str
+    text: str
+    parse_mode: str | None
+    disable_web_page_preview: bool
+    created_at: datetime
+
+
+class TemplateValidateRequest(BaseModel):
+    text: str
+    variables: dict[str, Any] = Field(default_factory=dict)
+
+
+class TemplateValidateRead(BaseModel):
+    ok: bool
+    variables: list[str]
+    missing_variables: list[str]
+    rendered_text: str | None = None
+    error_message: str | None = None
+
+
+class SendProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    bot_id: int
+    send_kind: Literal["text", "template", "file"]
+    destination_id: int | None = None
+    destination_alias: str | None = None
+    chat_id: str | None = None
+    message_thread_id: int | None = None
+    template_tag: str | None = None
+    text: str | None = None
+    media_type: Literal["none", "document", "video"] = "none"
+    file_relative_path: str | None = None
+    caption: str | None = None
+    parse_mode: str | None = None
+    disable_web_page_preview: bool | None = None
+    variables: dict[str, Any] = Field(default_factory=dict)
+    is_active: bool = True
+
+
+class SendProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    bot_id: int | None = None
+    send_kind: Literal["text", "template", "file"] | None = None
+    destination_id: int | None = None
+    destination_alias: str | None = None
+    chat_id: str | None = None
+    message_thread_id: int | None = None
+    template_tag: str | None = None
+    text: str | None = None
+    media_type: Literal["none", "document", "video"] | None = None
+    file_relative_path: str | None = None
+    caption: str | None = None
+    parse_mode: str | None = None
+    disable_web_page_preview: bool | None = None
+    variables: dict[str, Any] | None = None
+    is_active: bool | None = None
+
+
+class SendProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str | None
+    bot_id: int
+    send_kind: str
+    destination_id: int | None
+    destination_alias: str | None
+    chat_id: str | None
+    message_thread_id: int | None
+    template_tag: str | None
+    text: str | None
+    media_type: str
+    file_relative_path: str | None
+    caption: str | None
+    parse_mode: str | None
+    disable_web_page_preview: bool | None
+    variables: dict[str, Any] = Field(default_factory=dict, validation_alias="variables_json")
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class SendTextRequest(BaseModel):
     bot_id: int
     text: str
@@ -170,6 +529,7 @@ class SendTextRequest(BaseModel):
     disable_web_page_preview: bool | None = None
     message_thread_id: int | None = None
     send_mode: Literal["sync", "queued"] = "sync"
+    send_at: datetime | None = None
 
 
 class SendTemplateRequest(BaseModel):
@@ -181,6 +541,7 @@ class SendTemplateRequest(BaseModel):
     message_thread_id: int | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
     send_mode: Literal["sync", "queued"] = "sync"
+    send_at: datetime | None = None
 
 
 class SendFileRequest(BaseModel):
@@ -196,6 +557,105 @@ class SendFileRequest(BaseModel):
     message_thread_id: int | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
     send_mode: Literal["sync", "queued"] = "sync"
+    send_at: datetime | None = None
+
+
+class SendPreviewRequest(BaseModel):
+    kind: Literal["text", "template", "file"]
+    bot_id: int
+    text: str | None = None
+    tag: str | None = None
+    destination_id: int | None = None
+    destination_alias: str | None = None
+    chat_id: str | None = None
+    message_thread_id: int | None = None
+    parse_mode: str | None = None
+    disable_web_page_preview: bool | None = None
+    media_type: Literal["document", "video"] | None = None
+    file_relative_path: str | None = None
+    caption: str | None = None
+    variables: dict[str, Any] = Field(default_factory=dict)
+
+
+class SendPreviewRead(BaseModel):
+    ok: bool = True
+    kind: str
+    method: str
+    bot_id: int
+    chat_id: str
+    message_thread_id: int | None = None
+    destination_id: int | None = None
+    tag: str | None = None
+    payload: dict[str, Any]
+
+
+class SendPreflightCheckRead(BaseModel):
+    name: str
+    status: Literal["ok", "warning", "error"]
+    message: str
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class SendPreflightRead(BaseModel):
+    ok: bool
+    checks: list[SendPreflightCheckRead]
+    preview: SendPreviewRead | None = None
+
+
+class SendBatchCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    bot_id: int
+    send_kind: Literal["text", "template", "file"]
+    destination_ids: list[int] = Field(default_factory=list)
+    chat_ids: list[str] = Field(default_factory=list)
+    template_tag: str | None = None
+    text: str | None = None
+    media_type: Literal["none", "document", "video"] = "none"
+    file_relative_path: str | None = None
+    caption: str | None = None
+    parse_mode: str | None = None
+    disable_web_page_preview: bool | None = None
+    variables: dict[str, Any] = Field(default_factory=dict)
+
+
+class SendBatchItemRead(BaseModel):
+    id: int
+    batch_id: int
+    destination_id: int | None
+    chat_id: str
+    message_thread_id: int | None
+    status: str
+    send_history_id: int | None
+    error_message: str | None
+
+
+class SendBatchRead(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    bot_id: int
+    send_kind: str
+    status: str
+    template_tag: str | None
+    text: str | None
+    media_type: str
+    file_relative_path: str | None
+    caption: str | None
+    parse_mode: str | None
+    disable_web_page_preview: bool | None
+    variables: dict[str, Any]
+    progress: dict[str, int]
+    items: list[SendBatchItemRead]
+    created_at: datetime
+    updated_at: datetime
+    queued_at: datetime | None
+    finished_at: datetime | None
+
+
+class SendBatchPreviewRead(BaseModel):
+    batch_id: int
+    previews: list[SendPreviewRead]
 
 
 class SendHistoryRead(BaseModel):
@@ -217,6 +677,7 @@ class SendHistoryRead(BaseModel):
     idempotency_key: str | None
     attempt_count: int
     queued_task_id: str | None
+    next_retry_at: datetime | None
     error_code: str | None
     error_message: str | None
     created_at: datetime
@@ -228,6 +689,20 @@ class EventEnvelope(BaseModel):
     schema_version: str = "v1"
     event_type: str
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+class MediaItemRead(BaseModel):
+    name: str
+    relative_path: str
+    kind: Literal["directory", "file"]
+    size_bytes: int | None
+    modified_at: datetime
+    media_type: str
+
+
+class MediaListingRead(BaseModel):
+    relative_path: str
+    items: list[MediaItemRead]
 
 
 class SendDryRunRead(BaseModel):
@@ -246,6 +721,18 @@ class DestinationCheckRead(BaseModel):
     chat: dict[str, Any] | None = None
     member_count: int | None = None
     warnings: list[str] = Field(default_factory=list)
+
+
+class DestinationHealthRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    destination_id: int
+    status: str
+    last_error: str | None
+    last_member_count: int | None
+    checked_at: datetime
+    raw_chat_json: dict[str, Any] | None
 
 
 class AuditEventRead(BaseModel):
