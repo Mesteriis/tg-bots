@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -7,6 +8,7 @@ from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.models import Base, utc_now
 from tg_bot_aggregator.reliability import (
     MemoryRateLimitStore,
+    RedisRateLimitStore,
     RetryDecision,
     SendRateLimiter,
     classify_telegram_error,
@@ -359,3 +361,71 @@ async def test_rate_limiter_reports_bucket_snapshots() -> None:
     assert by_key["send:chat:-1001"].used == 1
     assert by_key["send:destination:3"].limit == 4
     assert by_key["send:destination:3"].used == 1
+
+
+@pytest.mark.asyncio
+async def test_memory_rate_limiter_expires_fixed_window() -> None:
+    current_time = 100.0
+
+    def monotonic_time() -> float:
+        return current_time
+
+    store = MemoryRateLimitStore(clock=monotonic_time)
+    limiter = SendRateLimiter(
+        store=store,
+        global_limit_per_minute=None,
+        bot_limit_per_minute=1,
+        chat_limit_per_minute=None,
+        destination_limit_per_minute=None,
+    )
+
+    first = await limiter.check_and_increment(bot_id=1, chat_id="@ops", destination_id=None)
+    blocked = await limiter.check_and_increment(bot_id=1, chat_id="@ops", destination_id=None)
+    current_time = 161.0
+    after_window = await limiter.check_and_increment(bot_id=1, chat_id="@ops", destination_id=None)
+
+    assert first.allowed is True
+    assert blocked.allowed is False
+    assert blocked.retry_after_seconds == 60
+    assert after_window.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_memory_rate_limiter_admits_only_one_concurrent_sender() -> None:
+    store = MemoryRateLimitStore()
+    limiter = SendRateLimiter(
+        store=store,
+        global_limit_per_minute=None,
+        bot_limit_per_minute=1,
+        chat_limit_per_minute=None,
+        destination_limit_per_minute=None,
+    )
+
+    decisions = await asyncio.gather(
+        limiter.check_and_increment(bot_id=1, chat_id="@ops", destination_id=None),
+        limiter.check_and_increment(bot_id=1, chat_id="@ops", destination_id=None),
+    )
+
+    assert [decision.allowed for decision in decisions].count(True) == 1
+    assert [decision.allowed for decision in decisions].count(False) == 1
+
+
+@pytest.mark.asyncio
+async def test_redis_rate_limiter_atomic_script_returns_finite_ttl_for_persistent_block() -> None:
+    class FakeRedis:
+        def __init__(self) -> None:
+            self.eval_args = None
+
+        async def eval(self, *args):
+            self.eval_args = args
+            return [0, "send:bot:1", 60]
+
+    redis = FakeRedis()
+    store = RedisRateLimitStore(redis)
+
+    decision = await store.check_and_increment_window([("send:bot:1", 1)], 60)
+
+    assert decision.allowed is False
+    assert decision.bucket_key == "send:bot:1"
+    assert decision.retry_after_seconds == 60
+    assert redis.eval_args is not None
