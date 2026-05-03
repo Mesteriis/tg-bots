@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.config import Settings
+from tg_bot_aggregator.models import utc_now
 from tg_bot_aggregator.reliability import MemoryRateLimitStore, SendRateLimiter
 from tg_bot_aggregator.repositories import (
     BotRepository,
@@ -644,6 +645,13 @@ async def test_retry_history_requeues_dead_letter_blocked_and_failed(
             error_message="boom",
             last_error_kind="telegram_server",
             retry_after_seconds=30,
+            next_retry_at=utc_now(),
+            locked_by="worker-a",
+            response_payload_json={
+                "ok": False,
+                "error_code": 500,
+                "description": f"boom {status}",
+            },
             request_payload_json={"method": "sendMessage", "chat_id": "@ops", "text": status},
         )
         for status in ("failed", "dead_letter", "blocked")
@@ -659,6 +667,13 @@ async def test_retry_history_requeues_dead_letter_blocked_and_failed(
     assert all(row.error_message is None for row in retried)
     assert all(row.last_error_kind is None for row in retried)
     assert all(row.retry_after_seconds is None for row in retried)
+    assert all(row.next_retry_at is None for row in retried)
+    assert all(row.locked_by is None for row in retried)
+    assert [row.response_payload_json for row in retried] == [
+        {"ok": False, "error_code": 500, "description": "boom failed"},
+        {"ok": False, "error_code": 500, "description": "boom dead_letter"},
+        {"ok": False, "error_code": 500, "description": "boom blocked"},
+    ]
     assert events.events == [
         "send.retry_scheduled",
         "send.retry_scheduled",

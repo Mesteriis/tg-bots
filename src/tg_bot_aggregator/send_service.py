@@ -473,7 +473,6 @@ class SendService:
         row.error_code = None
         row.error_message = None
         row.last_error_kind = None
-        row.response_payload_json = None
         row.failed_at = None
         row.queued_task_id = None
         row.next_retry_at = None
