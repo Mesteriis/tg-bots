@@ -411,12 +411,12 @@ class SendService:
         await self.history.mark_sending(row, attempt)
         row.last_attempt_at = started_at
         await self.session.commit()
-        await self._publish_event(
-            "send.locked",
-            {"send_history_id": row.id, "worker_id": worker_id},
-        )
 
         try:
+            await self._publish_event(
+                "send.locked",
+                {"send_history_id": row.id, "worker_id": worker_id},
+            )
             if self.settings.reliability_enabled and self.rate_limiter is not None:
                 rate_decision = await self.rate_limiter.check_and_increment(
                     bot_id=row.bot_id,

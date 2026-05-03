@@ -48,6 +48,13 @@ class FailingEvents:
         raise RuntimeError("event bus is unavailable")
 
 
+class CancellingLockedEvents:
+    async def publish(self, event_type: str, data: dict[str, Any]) -> str:
+        if event_type == "send.locked":
+            raise asyncio.CancelledError()
+        return f"event:{event_type}"
+
+
 def _bot_api_client(
     seen: dict[str, Any],
     *,
@@ -812,6 +819,30 @@ async def test_cancelled_worker_records_interrupted_attempt_and_keeps_lease(
         db_session,
         CancellingBotApi(),
         Settings(reliability_enabled=True),
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    with pytest.raises(asyncio.CancelledError):
+        await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert row.status == "sending"
+    assert row.locked_by == "worker-a"
+    assert attempts[0].attempt_number == 1
+    assert attempts[0].status == "interrupted"
+    assert attempts[0].error_kind == "worker_cancelled"
+
+
+async def test_cancelled_locked_event_records_interrupted_attempt(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    service = SendService(
+        db_session,
+        _bot_api_client({}),
+        Settings(reliability_enabled=True),
+        CancellingLockedEvents(),
     )
     row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
 
