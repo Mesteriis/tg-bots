@@ -84,12 +84,14 @@ Repeated requests with the same key return the original send history row instead
 Dry-run endpoints validate bot, target, template variables, and shared file path without sending to Telegram or creating history:
 
 ```text
+POST /api/v1/send/preview
+POST /api/v1/send/preflight
 POST /api/v1/send/text/dry-run
 POST /api/v1/send/template/dry-run
 POST /api/v1/send/file/dry-run
 ```
 
-Requests can use `send_mode=queued` to enqueue through Taskiq/Redis. Transient Telegram errors (`429`, `5xx`, network failures) are retried according to `SEND_RETRY_MAX_ATTEMPTS` and `SEND_RETRY_DELAY_SECONDS`.
+`/send/preflight` returns structured checks for bot state, send policy, target resolution, template variables, and file path validation. Requests can use `send_mode=queued` to enqueue through Taskiq/Redis, or `send_at` with an ISO datetime to create a scheduled queued row. Transient Telegram errors (`429`, `5xx`, network failures) are retried according to `SEND_RETRY_MAX_ATTEMPTS` and `SEND_RETRY_DELAY_SECONDS`.
 
 Templates support simple placeholders:
 
@@ -102,11 +104,130 @@ Templates support simple placeholders:
 
 Values come from the request `variables` object plus the built-in date/time values. Missing variables fail validation.
 
+Template changes are versioned. Creation, update and rollback append immutable versions:
+
+```text
+GET /api/v1/templates/{template_id}/versions
+POST /api/v1/templates/{template_id}/rollback/{version_id}
+```
+
 Destinations can have an optional per-bot `alias`, which can be used as `destination_alias` in send and dry-run requests. Destination metadata can be refreshed with:
 
 ```text
 POST /api/v1/destinations/{destination_id}/check
+GET /api/v1/destinations/{destination_id}/health
 ```
+
+The health endpoint returns the latest check snapshot, including partial warnings such as missing rights for member counts.
+
+Reusable send profiles store a common bot/target/message combination for the dashboard:
+
+```text
+GET /api/v1/send-profiles
+POST /api/v1/send-profiles
+GET /api/v1/send-profiles/{profile_id}
+PATCH /api/v1/send-profiles/{profile_id}
+DELETE /api/v1/send-profiles/{profile_id}
+```
+
+Batch sends store one payload and many targets. Preview expands the payload per destination without creating history. Enqueue creates normal queued send history rows, so retry/cancel behavior stays shared with ordinary sends:
+
+```text
+GET /api/v1/send-batches
+POST /api/v1/send-batches
+GET /api/v1/send-batches/{batch_id}
+POST /api/v1/send-batches/{batch_id}/preview
+POST /api/v1/send-batches/{batch_id}/enqueue
+POST /api/v1/send-batches/{batch_id}/cancel
+```
+
+Failed or queued history rows can be controlled directly:
+
+```text
+GET /api/v1/send-history/dead-letter
+GET /api/v1/send-history/due
+POST /api/v1/send-history/{send_history_id}/retry
+POST /api/v1/send-history/{send_history_id}/cancel
+```
+
+If `CALLBACK_ENABLED=true` and `CALLBACK_URL` is configured, terminal send states emit a small JSON callback with `schema_version`, `event_type`, `send_history_id`, and final `status`. Callback failures do not change the Telegram send result.
+
+## Send Reliability
+
+The dashboard tab `Надежность` shows the live send flow graph:
+
+```text
+Batch / Manual -> Queue -> Policy gate -> Worker lease -> Bot bucket -> Chat bucket -> Telegram -> Result
+```
+
+Queued sends use worker leases so two workers do not process the same send history row concurrently. Retryable Telegram failures are deferred by setting `next_retry_at`; once the retry budget is exhausted, the row moves to `dead_letter`. Non-retryable operational problems move to `blocked`.
+
+Reliability REST endpoints:
+
+```text
+GET /api/v1/reliability/summary
+GET /api/v1/reliability/graph
+GET /api/v1/reliability/attempts
+GET /api/v1/reliability/stale-locks
+POST /api/v1/reliability/stale-locks/release
+POST /api/v1/reliability/send-history/bulk-retry
+POST /api/v1/reliability/send-history/bulk-cancel
+```
+
+Runtime settings include `RELIABILITY_ENABLED`, `SEND_DEFAULT_MODE`, global/bot/chat/destination rate limits, retry backoff, worker lease duration, stale lock grace, and the send dedupe window.
+
+MCP exposes the same reliability controls through `get_reliability_summary`, `get_reliability_graph`, `list_send_attempts`, `list_rate_limit_buckets`, `release_stale_send_locks`, `bulk_retry_sends`, and `bulk_cancel_sends`.
+
+## Runtime Operations and JSON Backup
+
+Open the `Операции` dashboard tab to change runtime settings without restarting FastAPI. Values are stored in SQLite and applied immediately to the current process:
+
+```text
+GET /api/v1/operations/settings
+PATCH /api/v1/operations/settings
+```
+
+Editable settings include Bot API URL, Telegram API ID/hash, Telethon session dir, shared media root, file limit, retry policy, simple send policy, callback URL, protected hosts, CORS/MCP origins, DB/Redis URLs, diagnostic/discovery polling timings, and JSON backup settings. DB URL, CORS middleware, and listen host/port are persisted for local configuration and backup, but the active process connection/listener still changes only after restart.
+
+The backup service exports the current configuration to JSON and can optionally commit/push it to a configured git repository:
+
+```text
+GET /api/v1/operations/backup/runs
+POST /api/v1/operations/backup/run
+```
+
+Secrets such as bot tokens, Redis/DB URLs, Telegram API hash, callback URL, git repo URL, and Git API token are excluded by default. Before each backup the service checks repository privacy through GitHub or Gitea:
+
+- GitHub: `GET https://api.github.com/repos/{owner}/{repo}`.
+- Gitea: `GET {gitea_api_base_url}/repos/{owner}/{repo}`, defaulting to `https://{git_host}/api/v1`.
+
+If the API confirms `private=true`, secrets are included automatically. If the repo is public, the API token is missing, the API cannot read the repo, or privacy is unknown, secrets stay excluded unless `backup_include_secrets=true` is explicitly enabled as a local manual override. Configure `backup_git_service` as `auto`, `github`, or `gitea`.
+
+Authentication is intentionally token-based, without OAuth:
+
+- `backup_git_auth_method=token` sends a GitHub PAT as `Authorization: Bearer ...`.
+- `backup_git_auth_method=token` sends a Gitea access token as `Authorization: token ...`.
+- `backup_git_auth_method=none` disables the Authorization header for public repositories.
+
+The Operations tab has a `Проверить доступ к repo` button that runs the same privacy check before backup.
+
+Additional backup operations:
+
+```text
+POST /api/v1/operations/backup/check-repo
+POST /api/v1/operations/backup/preflight
+POST /api/v1/operations/backup/diff
+POST /api/v1/operations/backup/import/preview
+POST /api/v1/operations/backup/import/apply
+POST /api/v1/operations/backup/runs/{run_id}/restore-preview
+POST /api/v1/operations/backup/runs/{run_id}/restore
+```
+
+Preflight reports repository access, privacy status, whether secrets will be included, whether git push is configured, and a section-level diff against the latest successful snapshot. Diff responses also include row-level changes with redacted secret values, so the dashboard can show exactly which saved rows will be added, removed, or changed. The dashboard shows a persistent warning when secret backups are manually enabled.
+
+Scheduled backup is configured from the same Operations tab through `backup_schedule_enabled`, `backup_schedule_interval_seconds`, and `backup_schedule_push_to_git`. The scheduler process checks whether a backup is due and then runs the same backup path as a manual run.
+
+Restore is intentionally explicit. The preferred dashboard flow is the restore wizard: choose a stored `backup_run`, select the sections to restore, run preview, inspect the row-level diff, then send `confirm=RESTORE`. Partial restore is supported through the `sections` request field; selecting `templates` also restores `template_versions` to keep template history consistent. The raw JSON import endpoints remain available for external snapshots. Every apply creates a safety backup run of the current state before replacing selected backed-up sections, records an audit event, and rejects snapshots missing required fields such as bot tokens. A backup created with secrets excluded can still be useful for review, but it is not accepted for restore when selected sections require missing secret columns.
 
 ## Shared Media
 
@@ -117,6 +238,17 @@ The app does not upload large file bodies. An external uploader writes files to 
 ```
 
 The app validates relative paths under `/shared/media` and sends files through a local Telegram Bot API server in local mode.
+If `SHARED_MEDIA_ROOT` is missing, not readable, or above-limit files exceed `MAX_LOCAL_FILE_BYTES`, file sends fail with a normal API error before any Telegram call. Set `SHARED_MEDIA_REQUIRE_MOUNT=true` when the deployment must reject a plain directory that is not an actual mounted share. The dashboard disables file sending when health reports shared media or local Bot API as unavailable.
+
+The dashboard and MCP expose a read-only media browser:
+
+```text
+GET /api/v1/media?path=<relative-directory>
+GET /api/v1/media/tree?path=<relative-directory>
+MCP tool: list_media
+```
+
+The browser never deletes, moves, uploads, copies, or proxies files. It only lists direct children under `SHARED_MEDIA_ROOT` and lets the send form reuse a relative path.
 
 ## Docker Compose
 
@@ -157,6 +289,13 @@ PATCH /api/v1/diagnostics/bot
 
 The dedicated `diagnostic-bot` compose service runs `python -m tg_bot_aggregator.diagnostics.bot`, reads the selected bot from the database, calls `getUpdates`, and replies to every received or forwarded message with a readable report. Forum topics are detected through `message_thread_id` and replies are sent back to the same topic. Important IDs are exposed as Telegram copy buttons where the client supports `copy_text`.
 
+Each diagnostic update is also stored as compact metadata and can be converted into a saved destination from the dashboard:
+
+```text
+GET /api/v1/diagnostics/updates
+POST /api/v1/diagnostics/updates/{update_id}/destination
+```
+
 Run one local polling iteration without starting the infinite loop:
 
 ```bash
@@ -190,6 +329,26 @@ GET /api/v1/audit
 ```
 
 Audit metadata is secret-redacted before storage.
+
+## MCP Workflow Tools
+
+The MCP server exposes the same workflow layer used by REST/UI:
+
+```text
+list_media
+list_send_profiles
+create_send_profile
+list_send_batches
+create_send_batch
+preview_send_batch
+enqueue_send_batch
+cancel_send_batch
+list_diagnostic_updates
+create_destination_from_diagnostic_update
+get_mcp_connection_info
+```
+
+MCP tools share the same path validation, token redaction, send history recording, and protected-host API token policy as REST.
 
 ## Validation
 
