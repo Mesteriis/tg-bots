@@ -129,6 +129,44 @@
         gap: 14px;
         align-items: start;
       }
+      .stack-layout {
+        display: grid;
+        gap: 14px;
+      }
+      .subtabs {
+        display: inline-flex;
+        width: fit-content;
+        max-width: 100%;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(33, 37, 43, 0.62);
+        flex-wrap: wrap;
+      }
+      .subtab {
+        border: 0;
+        border-radius: 6px;
+        padding: 7px 10px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition:
+          background 150ms ease,
+          color 150ms ease;
+      }
+      .subtab.active {
+        background: var(--accent);
+        color: #1c2128;
+      }
+      .subtab:hover:not(.active) {
+        background: rgba(171, 178, 191, 0.08);
+        color: var(--text-strong);
+      }
+      .subtab:disabled {
+        cursor: not-allowed;
+        opacity: 0.48;
+      }
       .settings-grid {
         grid-template-columns:
           minmax(300px, 0.85fr)
@@ -146,10 +184,24 @@
       .panel.compact {
         padding: 12px;
       }
+      .subpanel {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+        padding: 12px;
+        border: 1px solid rgba(171, 178, 191, 0.16);
+        border-radius: 6px;
+        background: rgba(33, 37, 43, 0.34);
+      }
       .panel-head {
         display: grid;
         gap: 4px;
         margin-bottom: 12px;
+      }
+      .panel-head.with-actions {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 12px;
       }
       .panel-title {
         margin: 0;
@@ -169,6 +221,15 @@
         margin-bottom: 10px;
         color: var(--muted);
         font-size: 12px;
+      }
+      .form-fieldset {
+        display: contents;
+        border: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .form-fieldset:disabled {
+        opacity: 0.62;
       }
       input,
       select,
@@ -229,6 +290,10 @@
         color: #1c2128;
         border-color: var(--accent);
       }
+      .btn.danger-btn {
+        border-color: rgba(224, 108, 117, 0.44);
+        color: #f1b3b8;
+      }
       .btn.icon-only {
         width: 34px;
         height: 34px;
@@ -255,6 +320,19 @@
       .token-scope-grid .checkbox-label {
         margin: 0;
         padding: 7px 8px;
+        border: 1px solid rgba(171, 178, 191, 0.16);
+        border-radius: 6px;
+        background: rgba(33, 37, 43, 0.42);
+      }
+      .restore-section-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .restore-section-grid .checkbox-label {
+        margin: 0;
+        padding: 8px;
         border: 1px solid rgba(171, 178, 191, 0.16);
         border-radius: 6px;
         background: rgba(33, 37, 43, 0.42);
@@ -296,6 +374,28 @@
       .tools-table td:nth-child(4) {
         width: 19%;
         white-space: nowrap;
+      }
+      .diff-table {
+        min-width: 860px;
+        table-layout: fixed;
+      }
+      .diff-table th:nth-child(1),
+      .diff-table td:nth-child(1),
+      .diff-table th:nth-child(2),
+      .diff-table td:nth-child(2) {
+        width: 13%;
+      }
+      .diff-table th:nth-child(3),
+      .diff-table td:nth-child(3) {
+        width: 20%;
+      }
+      .diff-json {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
       }
       .token-table {
         min-width: 360px;
@@ -342,6 +442,128 @@
         font-size: 12px;
         margin-top: 8px;
       }
+      .status-line {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 12px;
+        line-height: 1.45;
+        margin-top: 8px;
+        padding: 9px 10px;
+      }
+      .status-line.ok {
+        background: rgba(152, 195, 121, 0.08);
+        border-color: rgba(152, 195, 121, 0.32);
+      }
+      .status-line.danger {
+        background: rgba(224, 108, 117, 0.08);
+        border-color: rgba(224, 108, 117, 0.32);
+      }
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 10px;
+      }
+      .metric-tile {
+        display: grid;
+        gap: 6px;
+        min-height: 76px;
+        padding: 11px;
+        border: 1px solid rgba(171, 178, 191, 0.16);
+        border-radius: 6px;
+        background: rgba(33, 37, 43, 0.38);
+      }
+      .metric-label {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .metric-value {
+        margin: 0;
+        color: var(--text-strong);
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .reliability-graph-wrap {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+      .reliability-graph {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(7, 140px);
+        align-items: center;
+        gap: 26px;
+        min-width: 1136px;
+        padding: 18px 4px;
+      }
+      .reliability-node {
+        position: relative;
+        display: grid;
+        gap: 6px;
+        min-height: 96px;
+        padding: 12px;
+        border: 1px solid rgba(97, 175, 239, 0.28);
+        border-radius: 8px;
+        background:
+          linear-gradient(180deg, rgba(97, 175, 239, 0.1), transparent),
+          var(--panel-strong);
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+      }
+      .reliability-node.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(97, 175, 239, 0.12);
+      }
+      .reliability-node.danger {
+        border-color: rgba(224, 108, 117, 0.46);
+      }
+      .reliability-node.warning {
+        border-color: rgba(229, 192, 123, 0.52);
+      }
+      .reliability-node-title {
+        color: var(--text-strong);
+        font-size: 13px;
+        font-weight: 650;
+        overflow-wrap: anywhere;
+      }
+      .reliability-node-meta {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .reliability-edge {
+        position: absolute;
+        top: 50%;
+        left: calc(100% + 4px);
+        width: 24px;
+        height: 2px;
+        overflow: hidden;
+        background: rgba(97, 175, 239, 0.22);
+      }
+      .reliability-edge::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        animation: edgeFlow 1.25s linear infinite;
+      }
+      .reliability-legend {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .legend-chip {
+        padding: 5px 7px;
+        border: 1px solid rgba(171, 178, 191, 0.16);
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        background: rgba(33, 37, 43, 0.34);
+      }
       .guide-panel {
         display: grid;
         gap: 10px;
@@ -371,6 +593,114 @@
         font-size: 12px;
         line-height: 1.4;
       }
+      .health-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+        gap: 12px;
+      }
+      .health-card {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid rgba(171, 178, 191, 0.16);
+        border-radius: 8px;
+        background: rgba(33, 37, 43, 0.42);
+      }
+      .health-card-title {
+        margin: 0;
+        color: var(--text-strong);
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .health-value {
+        margin: 0;
+        color: var(--text);
+        font-size: 14px;
+        overflow-wrap: anywhere;
+      }
+      .badge {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        border-radius: 999px;
+        padding: 3px 8px;
+        color: #1c2128;
+        background: var(--warning);
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .badge.ok {
+        background: var(--ok);
+      }
+      .badge.danger {
+        background: var(--danger);
+      }
+      .full-span {
+        grid-column: 1 / -1;
+      }
+      .inline-code {
+        display: inline-block;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: rgba(33, 37, 43, 0.84);
+        color: var(--text-strong);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.92em;
+      }
+      .validation-result {
+        margin: 10px 0;
+        padding: 10px 0 0;
+        border-top: 1px solid rgba(171, 178, 191, 0.16);
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .validation-result p {
+        margin: 0 0 6px;
+      }
+      .validation-result pre {
+        margin: 8px 0 0;
+        padding: 10px;
+        border-radius: 6px;
+        background: var(--bg-deep);
+        color: var(--text-strong);
+      }
+      .validation-state {
+        color: var(--warning);
+        font-weight: 650;
+      }
+      .validation-result.is-ok .validation-state {
+        color: var(--ok);
+      }
+      .validation-result.is-error .validation-state {
+        color: var(--danger);
+      }
+      .media-picker {
+        margin: 8px 0;
+        padding-top: 10px;
+        border-top: 1px solid rgba(171, 178, 191, 0.16);
+      }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: rgba(33, 37, 43, 0.72);
+        backdrop-filter: blur(10px);
+        animation: panelIn 180ms ease both;
+      }
+      .modal-panel {
+        width: min(640px, 100%);
+        max-height: min(86vh, 760px);
+        overflow: auto;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+      }
       .error-banner {
         margin-bottom: 14px;
         padding: 10px 12px;
@@ -394,6 +724,14 @@
           transform: translateY(0);
         }
       }
+      @keyframes edgeFlow {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(100%);
+        }
+      }
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -412,6 +750,16 @@
         }
       }
       @media (max-width: 760px) {
+        .panel-head.with-actions {
+          grid-template-columns: 1fr;
+        }
+        .modal-panel .panel-head.with-actions {
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+        .modal-overlay {
+          align-items: start;
+          padding: 12px;
+        }
         main {
           grid-template-columns: 1fr;
         }
@@ -509,28 +857,18 @@
             </div>
           </div>
 
-          <div v-if="activeTab === 'destinations'" class="grid">
-            <form class="panel" @submit.prevent="createDestination">
-              <div class="panel-head">
-                <p class="panel-title">Новый адресат</p>
-                <p class="panel-description">Сохрани chat ID, алиас и thread ID форума, чтобы не вводить их вручную при отправке.</p>
-              </div>
-              <label>Бот<select v-model.number="forms.destination.bot_id"><option :value="null">выбери бота</option><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
-              <label>Тип<select v-model="forms.destination.kind"><option value="private">личный чат</option><option value="group">группа</option><option value="supergroup">супергруппа</option><option value="channel">канал</option><option value="forum_topic">тема форума</option></select></label>
-              <label>Chat ID<input v-model="forms.destination.chat_id" required /></label>
-              <label>Thread ID<input v-model.number="forms.destination.message_thread_id" type="number" /></label>
-              <label>Алиас<input v-model="forms.destination.alias" placeholder="ops_channel" /></label>
-              <label>Название<input v-model="forms.destination.title" /></label>
-              <button class="btn primary"><i data-lucide="plus"></i>Добавить адресата</button>
-            </form>
-            <div class="panel">
-              <div class="panel-head">
-                <p class="panel-title">Список адресатов</p>
-                <p class="panel-description">Проверь доступ бота к группе, каналу или теме форума перед регулярной отправкой.</p>
+          <div v-if="activeTab === 'destinations'" class="stack-layout">
+            <div class="panel full-span">
+              <div class="panel-head with-actions">
+                <div>
+                  <p class="panel-title">Список адресатов</p>
+                  <p class="panel-description">Проверь доступ бота к группе, каналу или теме форума перед регулярной отправкой.</p>
+                </div>
+                <button class="btn primary" @click="openDestinationModal"><i data-lucide="plus"></i>Добавить адресата</button>
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Название</th><th>Алиас</th><th>Тип</th><th>Chat</th><th>Thread</th><th></th></tr></thead>
+                  <thead><tr><th>Название</th><th>Алиас</th><th>Тип</th><th>Chat</th><th>Thread</th><th>Health</th><th></th></tr></thead>
                   <tbody>
                     <tr v-for="item in destinations" :key="item.id">
                       <td>{{ item.title || '-' }}</td>
@@ -538,6 +876,7 @@
                       <td>{{ kindLabel(item.kind) }}</td>
                       <td>{{ item.chat_id }}</td>
                       <td>{{ item.message_thread_id || '-' }}</td>
+                      <td>{{ destinationHealth[item.id]?.status ? statusLabel(destinationHealth[item.id].status) : 'не проверялся' }}</td>
                       <td><button class="btn icon-only" title="Проверить адресата" @click="checkDestination(item.id)"><i data-lucide="radar"></i></button></td>
                     </tr>
                   </tbody>
@@ -546,36 +885,209 @@
             </div>
           </div>
 
-          <div v-if="activeTab === 'templates'" class="grid">
-            <form class="panel" @submit.prevent="createTemplate">
-              <div class="panel-head">
-                <p class="panel-title">Новый шаблон</p>
-                <p class="panel-description">Шаблон отправляется по tag и может использовать parse mode Telegram для форматирования текста.</p>
+          <div
+            v-if="destinationModalOpen"
+            class="modal-overlay"
+            role="presentation"
+            @click.self="closeDestinationModal"
+          >
+            <form class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="destination-modal-title" @submit.prevent="createDestination">
+              <div class="panel-head with-actions">
+                <div>
+                  <p id="destination-modal-title" class="panel-title">Новый адресат</p>
+                  <p class="panel-description">Сохрани chat ID, алиас и thread ID форума, чтобы не вводить их вручную при отправке.</p>
+                </div>
+                <button class="btn icon-only" type="button" title="Закрыть" @click="closeDestinationModal"><i data-lucide="x"></i></button>
               </div>
-              <label>Tag<input v-model="forms.template.tag" required /></label>
-              <label>Название<input v-model="forms.template.title" required /></label>
-              <label>Текст<textarea v-model="forms.template.text" required></textarea></label>
-              <label>Parse mode
-                <select v-model="forms.template.parse_mode">
-                  <option v-for="mode in parseModeOptions" :key="mode.key" :value="mode.value">{{ mode.label }}</option>
-                </select>
-              </label>
-              <label class="checkbox-label"><input v-model="forms.template.disable_web_page_preview" type="checkbox" /> Отключить предпросмотр ссылок</label>
-              <button class="btn primary"><i data-lucide="plus"></i>Добавить шаблон</button>
+              <label>Бот<select v-model.number="forms.destination.bot_id"><option :value="null">выбери бота</option><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+              <label>Тип<select v-model="forms.destination.kind"><option value="private">личный чат</option><option value="group">группа</option><option value="supergroup">супергруппа</option><option value="channel">канал</option><option value="forum_topic">тема форума</option></select></label>
+              <label>Chat ID<input v-model="forms.destination.chat_id" required /></label>
+              <label>Thread ID<input v-model.number="forms.destination.message_thread_id" type="number" /></label>
+              <label>Алиас<input v-model="forms.destination.alias" placeholder="ops_channel" /></label>
+              <label>Название<input v-model="forms.destination.title" /></label>
+              <div class="actions">
+                <button class="btn primary"><i data-lucide="plus"></i>Добавить адресата</button>
+                <button class="btn" type="button" @click="closeDestinationModal">Отмена</button>
+              </div>
             </form>
-            <div class="panel">
+          </div>
+
+          <div v-if="activeTab === 'templates'" class="stack-layout">
+            <div class="subtabs" role="tablist" aria-label="Шаблоны">
+              <button
+                class="subtab"
+                :class="{ active: templateSubTab === 'saved' }"
+                role="tab"
+                :aria-selected="templateSubTab === 'saved'"
+                @click="templateSubTab = 'saved'"
+              >Сохраненные шаблоны</button>
+              <button
+                class="subtab"
+                :class="{ active: templateSubTab === 'create' }"
+                role="tab"
+                :aria-selected="templateSubTab === 'create'"
+                @click="templateSubTab = 'create'"
+              >Новый шаблон</button>
+            </div>
+            <div v-if="templateSubTab === 'saved'" class="panel full-span">
               <div class="panel-head">
                 <p class="panel-title">Сохраненные шаблоны</p>
                 <p class="panel-description">Используются в REST, MCP и отдельной отправке по шаблону.</p>
               </div>
               <div class="table-wrap">
-                <table><thead><tr><th>Tag</th><th>Название</th><th>Текст</th></tr></thead><tbody><tr v-for="item in templates" :key="item.id"><td>{{ item.tag }}</td><td>{{ item.title }}</td><td>{{ item.text }}</td></tr></tbody></table>
+                <table><thead><tr><th>Tag</th><th>Название</th><th>Текст</th><th></th></tr></thead><tbody><tr v-for="item in templates" :key="item.id"><td>{{ item.tag }}</td><td>{{ item.title }}</td><td>{{ item.text }}</td><td><button class="btn" type="button" @click="loadTemplateVersions(item.id)">Версии</button></td></tr></tbody></table>
               </div>
+            </div>
+            <div v-if="templateVersions.length" class="panel full-span">
+              <div class="panel-head">
+                <p class="panel-title">Версии шаблона</p>
+                <p class="panel-description">Каждое создание, изменение и rollback сохраняет отдельную версию. Можно вернуть старый текст без ручного копирования.</p>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Версия</th><th>Название</th><th>Текст</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="version in templateVersions" :key="version.id">
+                      <td>{{ version.version_number }}</td>
+                      <td>{{ version.title }}</td>
+                      <td>{{ version.text }}</td>
+                      <td><button class="btn" type="button" @click="rollbackTemplate(version)">Rollback</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div v-if="templateSubTab === 'create'" class="stack-layout">
+              <div class="panel guide-panel full-span">
+                <p class="guide-title">Как правильно писать шаблоны</p>
+                <p class="guide-text">Шаблон хранится под коротким tag и затем вызывается из REST, MCP или формы «Отправка по шаблону». Текст пишется обычным сообщением Telegram, а переменные вставляются через двойные фигурные скобки.</p>
+                <ul class="guide-list">
+                  <li>Плейсхолдеры: <code v-pre class="inline-code">{{name}}</code>, <code v-pre class="inline-code">{{order_id}}</code>, <code v-pre class="inline-code">{{env}}</code>. Имя начинается с буквы или подчеркивания.</li>
+                  <li>Встроенные значения не нужно передавать вручную: <code v-pre class="inline-code">{{date}}</code>, <code v-pre class="inline-code">{{time}}</code>, <code v-pre class="inline-code">{{datetime}}</code>.</li>
+                  <li>Если выбран HTML или MarkdownV2, Telegram-разметка остается на твоей ответственности. Кнопка ниже проверяет синтаксис переменных и пробный рендер.</li>
+                  <li>Для проверки результата добавь JSON с тестовыми переменными, например <code class="inline-code">{ "name": "api", "env": "prod" }</code>.</li>
+                </ul>
+              </div>
+              <form class="panel full-span" @submit.prevent="createTemplate">
+                <div class="panel-head">
+                  <p class="panel-title">Новый шаблон</p>
+                  <p class="panel-description">Создай tagged-текст, проверь переменные на пробном JSON и затем сохрани шаблон.</p>
+                </div>
+                <label>Tag<input v-model="forms.template.tag" required /></label>
+                <label>Название<input v-model="forms.template.title" required /></label>
+                <label>Текст<textarea v-model="forms.template.text" required></textarea></label>
+                <label>Проверочные переменные
+                  <textarea v-model="templateValidation.variablesJson" placeholder='{"name":"api","env":"prod"}'></textarea>
+                  <span class="field-hint">JSON-объект для пробного рендера. Встроенные date/time/datetime можно не указывать.</span>
+                </label>
+                <label>Parse mode
+                  <select v-model="forms.template.parse_mode">
+                    <option v-for="mode in parseModeOptions" :key="mode.key" :value="mode.value">{{ mode.label }}</option>
+                  </select>
+                </label>
+                <label class="checkbox-label"><input v-model="forms.template.disable_web_page_preview" type="checkbox" /> Отключить предпросмотр ссылок</label>
+                <div class="actions">
+                  <button class="btn" type="button" @click="validateTemplate"><i data-lucide="check-check"></i>Проверить шаблон</button>
+                  <button class="btn primary"><i data-lucide="plus"></i>Добавить шаблон</button>
+                </div>
+                <div
+                  v-if="templateValidation.result"
+                  class="validation-result"
+                  :class="{ 'is-ok': templateValidation.result.ok, 'is-error': !templateValidation.result.ok }"
+                >
+                  <p class="validation-state">{{ templateValidation.result.ok ? "Шаблон корректен" : "Шаблон требует правки" }}</p>
+                  <p>Переменные: {{ templateValidation.result.variables.length ? templateValidation.result.variables.join(", ") : "нет" }}</p>
+                  <p v-if="templateValidation.result.missing_variables.length">Не хватает значений: {{ templateValidation.result.missing_variables.join(", ") }}</p>
+                  <p v-if="templateValidation.result.error_message">{{ templateValidationError(templateValidation.result.error_message) }}</p>
+                  <pre v-if="templateValidation.result.rendered_text">{{ templateValidation.result.rendered_text }}</pre>
+                </div>
+              </form>
             </div>
           </div>
 
-          <div v-if="activeTab === 'send'" class="grid">
-            <form class="panel" @submit.prevent="sendText">
+          <div v-if="activeTab === 'send'" class="stack-layout">
+            <div class="subtabs" role="tablist" aria-label="Отправка">
+              <button
+                class="subtab"
+                :class="{ active: sendSubTab === 'text' }"
+                role="tab"
+                :aria-selected="sendSubTab === 'text'"
+                @click="sendSubTab = 'text'"
+              >Ручной текст</button>
+              <button
+                class="subtab"
+                :class="{ active: sendSubTab === 'template' }"
+                role="tab"
+                :aria-selected="sendSubTab === 'template'"
+                @click="sendSubTab = 'template'"
+              >По шаблону</button>
+              <button
+                class="subtab"
+                :class="{ active: sendSubTab === 'file' }"
+                role="tab"
+                :aria-selected="sendSubTab === 'file'"
+                :aria-disabled="!fileSendAvailable"
+                :disabled="!fileSendAvailable"
+                :title="fileSendUnavailableReason"
+                @click="fileSendAvailable && (sendSubTab = 'file')"
+              >Файл с шары</button>
+            </div>
+            <div v-if="!fileSendAvailable" class="hint full-span">Отправка файлов отключена: {{ fileSendUnavailableReason }}. Текст и шаблоны доступны.</div>
+            <div class="panel full-span">
+              <div class="panel-head">
+                <p class="panel-title">Профили отправки</p>
+                <p class="panel-description">Сохрани часто используемую комбинацию бота, адресата, шаблона или файла и применяй ее без повторного ввода.</p>
+              </div>
+              <label>Сохраненный профиль
+                <select v-model.number="selectedSendProfileId">
+                  <option :value="null">без профиля</option>
+                  <option v-for="profile in sendProfiles" :key="profile.id" :value="profile.id">{{ profile.name }} · {{ profileKindLabel(profile.send_kind) }}</option>
+                </select>
+              </label>
+              <label>Название нового профиля<input v-model="forms.profile.name" placeholder="Ежедневный отчет" /></label>
+              <div class="actions">
+                <button class="btn" type="button" @click="applySendProfile"><i data-lucide="wand-sparkles"></i>Применить профиль</button>
+                <button class="btn" type="button" :disabled="sendSubTab === 'file' && !fileSendAvailable" @click="createSendProfile"><i data-lucide="save"></i>Сохранить текущую вкладку</button>
+                <button class="btn" type="button" :disabled="sendSubTab === 'file' && !fileSendAvailable" @click="previewCurrentSend"><i data-lucide="scan-line"></i>Preview текущей отправки</button>
+                <button class="btn" type="button" :disabled="sendSubTab === 'file' && !fileSendAvailable" @click="preflightCurrentSend"><i data-lucide="shield-check"></i>Preflight</button>
+              </div>
+            </div>
+            <div class="panel full-span">
+              <div class="panel-head">
+                <p class="panel-title">Batch-отправка</p>
+                <p class="panel-description">Создает набор отправок по текущему payload и выбранным адресатам. Enqueue создает обычные записи истории в очереди.</p>
+              </div>
+              <label>Название batch<input v-model="forms.batch.name" placeholder="Релиз во все каналы" /></label>
+              <div class="token-scope-grid">
+                <label v-for="destination in destinations" :key="destination.id" class="checkbox-label">
+                  <input v-model="forms.batch.destination_ids" type="checkbox" :value="destination.id" />
+                  {{ destination.title || destination.alias || destination.chat_id }}
+                </label>
+              </div>
+              <div class="actions">
+                <button class="btn" type="button" :disabled="sendSubTab === 'file' && !fileSendAvailable" @click="createSendBatch"><i data-lucide="list-plus"></i>Создать batch</button>
+              </div>
+              <div class="table-wrap" v-if="sendBatches.length">
+                <table>
+                  <thead><tr><th>ID</th><th>Название</th><th>Тип</th><th>Статус</th><th>Progress</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="batch in sendBatches" :key="batch.id">
+                      <td>{{ batch.id }}</td>
+                      <td>{{ batch.name }}</td>
+                      <td>{{ profileKindLabel(batch.send_kind) }}</td>
+                      <td>{{ statusLabel(batch.status) }}</td>
+                      <td>{{ batchProgressLabel(batch.progress) }}</td>
+                      <td>
+                        <button class="btn icon-only" title="Preview batch" @click="previewSendBatch(batch.id)"><i data-lucide="scan-line"></i></button>
+                        <button class="btn icon-only" title="Enqueue batch" @click="enqueueSendBatch(batch.id)"><i data-lucide="play"></i></button>
+                        <button class="btn icon-only" title="Cancel batch" @click="cancelSendBatch(batch.id)"><i data-lucide="ban"></i></button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <form v-if="sendSubTab === 'text'" class="panel full-span" @submit.prevent="sendText">
               <div class="panel-head">
                 <p class="panel-title">Ручной текст</p>
                 <p class="panel-description">Для одноразового сообщения или проверки адресата. Tag здесь остается произвольной меткой истории.</p>
@@ -585,6 +1097,7 @@
               <label>Алиас адресата<input v-model="forms.send.destination_alias" placeholder="ops_channel" /></label>
               <label>Chat ID<input v-model="forms.send.chat_id" /></label>
               <label>Режим отправки<select v-model="forms.send.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
+              <label>Отложить до<input v-model="forms.send.send_at" type="datetime-local" /></label>
               <label>Parse mode
                 <select v-model="forms.send.parse_mode">
                   <option v-for="mode in parseModeOptions" :key="mode.key" :value="mode.value">{{ mode.label }}</option>
@@ -595,12 +1108,12 @@
               <label class="checkbox-label"><input v-model="forms.send.disable_web_page_preview" type="checkbox" /> Отключить предпросмотр ссылок</label>
               <div class="actions">
                 <button class="btn primary"><i data-lucide="send"></i>Отправить текст</button>
-                <button class="btn" type="button" @click="dryRunText"><i data-lucide="scan-line"></i>Проверить</button>
+                <button class="btn" type="button" @click="previewCurrentSend"><i data-lucide="scan-line"></i>Проверить</button>
+                <button class="btn" type="button" @click="preflightCurrentSend"><i data-lucide="shield-check"></i>Preflight</button>
                 <button class="btn" type="button" @click="copyCurl('text')"><i data-lucide="copy"></i>cURL</button>
               </div>
-              <pre v-if="sendDryRun">{{ JSON.stringify(sendDryRun, null, 2) }}</pre>
             </form>
-            <form class="panel" @submit.prevent="sendTemplate">
+            <form v-if="sendSubTab === 'template'" class="panel full-span" @submit.prevent="sendTemplate">
               <div class="panel-head">
                 <p class="panel-title">Отправка по шаблону</p>
                 <p class="panel-description">Выбери сохраненный tag из списка. Текст, parse mode и предпросмотр ссылок берутся из шаблона.</p>
@@ -610,6 +1123,7 @@
               <label>Алиас адресата<input v-model="forms.templateSend.destination_alias" placeholder="ops_channel" /></label>
               <label>Chat ID<input v-model="forms.templateSend.chat_id" /></label>
               <label>Режим отправки<select v-model="forms.templateSend.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
+              <label>Отложить до<input v-model="forms.templateSend.send_at" type="datetime-local" /></label>
               <label>Шаблон
                 <select v-model="forms.templateSend.tag" required>
                   <option value="">выбери шаблон</option>
@@ -618,34 +1132,70 @@
               </label>
               <div class="actions">
                 <button class="btn primary"><i data-lucide="send"></i>Отправить шаблон</button>
-                <button class="btn" type="button" @click="dryRunTemplate"><i data-lucide="scan-line"></i>Проверить</button>
+                <button class="btn" type="button" @click="previewCurrentSend"><i data-lucide="scan-line"></i>Проверить</button>
+                <button class="btn" type="button" @click="preflightCurrentSend"><i data-lucide="shield-check"></i>Preflight</button>
                 <button class="btn" type="button" @click="copyCurl('template')"><i data-lucide="copy"></i>cURL</button>
               </div>
             </form>
-            <form class="panel" @submit.prevent="sendFile">
+            <form v-if="sendSubTab === 'file'" class="panel full-span" @submit.prevent="sendFile">
               <div class="panel-head">
                 <p class="panel-title">Файл с общей шары</p>
                 <p class="panel-description">Передается относительный путь к уже загруженному файлу. FastAPI файл не копирует и не проксирует.</p>
               </div>
-              <label>Тип файла<select v-model="forms.file.media_type"><option value="video">видео</option><option value="document">документ</option></select></label>
-              <label>Бот<select v-model.number="forms.file.bot_id"><option :value="null">выбери бота</option><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
-              <label>Адресат<select v-model.number="forms.file.destination_id"><option :value="null">ручной chat ID</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
-              <label>Алиас адресата<input v-model="forms.file.destination_alias" placeholder="ops_channel" /></label>
-              <label>Chat ID<input v-model="forms.file.chat_id" /></label>
-              <label>Режим отправки<select v-model="forms.file.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
-              <label>Parse mode подписи
-                <select v-model="forms.file.parse_mode">
-                  <option v-for="mode in parseModeOptions" :key="mode.key" :value="mode.value">{{ mode.label }}</option>
-                </select>
-              </label>
-              <label>Путь на шаре<input v-model="forms.file.file_relative_path" placeholder="telegram-outbox/video.mp4" /></label>
-              <label>Подпись<textarea v-model="forms.file.caption"></textarea></label>
-              <div class="actions">
-                <button class="btn primary"><i data-lucide="file-video"></i>Отправить файл</button>
-                <button class="btn" type="button" @click="dryRunFile"><i data-lucide="scan-line"></i>Проверить</button>
-                <button class="btn" type="button" @click="copyCurl('file')"><i data-lucide="copy"></i>cURL</button>
-              </div>
+              <div v-if="!fileSendAvailable" class="hint">Отправка файлов отключена: {{ fileSendUnavailableReason }}</div>
+              <fieldset class="form-fieldset" :disabled="!fileSendAvailable">
+                <label>Тип файла<select v-model="forms.file.media_type"><option value="video">видео</option><option value="document">документ</option></select></label>
+                <label>Бот<select v-model.number="forms.file.bot_id"><option :value="null">выбери бота</option><option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option></select></label>
+                <label>Адресат<select v-model.number="forms.file.destination_id"><option :value="null">ручной chat ID</option><option v-for="item in destinations" :value="item.id">{{ item.title || item.chat_id }}</option></select></label>
+                <label>Алиас адресата<input v-model="forms.file.destination_alias" placeholder="ops_channel" /></label>
+                <label>Chat ID<input v-model="forms.file.chat_id" /></label>
+                <label>Режим отправки<select v-model="forms.file.send_mode"><option value="sync">сразу</option><option value="queued">в очередь</option></select></label>
+                <label>Отложить до<input v-model="forms.file.send_at" type="datetime-local" /></label>
+                <label>Parse mode подписи
+                  <select v-model="forms.file.parse_mode">
+                    <option v-for="mode in parseModeOptions" :key="mode.key" :value="mode.value">{{ mode.label }}</option>
+                  </select>
+                </label>
+                <label>Путь на шаре<input v-model="forms.file.file_relative_path" placeholder="telegram-outbox/video.mp4" /></label>
+                <div class="media-picker">
+                  <div class="panel-head">
+                    <p class="panel-title">Файлы shared media</p>
+                    <p class="panel-description">Read-only список файлов с общей шары. Выбор подставляет относительный путь без копирования файла.</p>
+                  </div>
+                  <label>Папка на шаре<input v-model="mediaPath" placeholder="telegram-outbox" /></label>
+                  <div class="actions">
+                    <button class="btn" type="button" :disabled="!fileSendAvailable" @click="loadMedia"><i data-lucide="folder-open"></i>Показать файлы</button>
+                  </div>
+                  <div class="table-wrap" v-if="mediaItems.length">
+                    <table>
+                      <thead><tr><th>Имя</th><th>Тип</th><th>Размер</th><th></th></tr></thead>
+                      <tbody>
+                        <tr v-for="item in mediaItems" :key="item.relative_path">
+                          <td>{{ item.relative_path }}</td>
+                          <td>{{ item.media_type }}</td>
+                          <td>{{ item.size_bytes || '-' }}</td>
+                          <td><button class="btn" type="button" :disabled="item.kind !== 'file'" @click="selectMediaFile(item)">Выбрать</button></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <label>Подпись<textarea v-model="forms.file.caption"></textarea></label>
+                <div class="actions">
+                  <button class="btn primary" :disabled="!fileSendAvailable"><i data-lucide="file-video"></i>Отправить файл</button>
+                  <button class="btn" type="button" :disabled="!fileSendAvailable" @click="previewCurrentSend"><i data-lucide="scan-line"></i>Проверить</button>
+                  <button class="btn" type="button" :disabled="!fileSendAvailable" @click="preflightCurrentSend"><i data-lucide="shield-check"></i>Preflight</button>
+                  <button class="btn" type="button" @click="copyCurl('file')"><i data-lucide="copy"></i>cURL</button>
+                </div>
+              </fieldset>
             </form>
+            <div v-if="sendDryRun" class="panel full-span">
+              <div class="panel-head">
+                <p class="panel-title">Результат проверки</p>
+                <p class="panel-description">Dry-run показывает итоговый payload и ошибки валидации до реальной отправки.</p>
+              </div>
+              <pre>{{ JSON.stringify(sendDryRun, null, 2) }}</pre>
+            </div>
           </div>
 
           <div v-if="activeTab === 'history'" class="panel">
@@ -654,7 +1204,134 @@
               <p class="panel-description">Последние попытки отправки с Telegram message ID, статусом и ошибками для диагностики.</p>
             </div>
             <div class="table-wrap">
-              <table><thead><tr><th>ID</th><th>Статус</th><th>Chat</th><th>Tag</th><th>Ошибка</th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td>{{ item.id }}</td><td>{{ statusLabel(item.status) }}</td><td>{{ item.chat_id }}</td><td>{{ item.tag || '-' }}</td><td>{{ item.error_message || '-' }}</td></tr></tbody></table>
+              <table><thead><tr><th>ID</th><th>Статус</th><th>Chat</th><th>Tag</th><th>Ошибка</th><th></th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td>{{ item.id }}</td><td>{{ statusLabel(item.status) }}</td><td>{{ item.chat_id }}</td><td>{{ item.tag || '-' }}</td><td>{{ item.error_message || '-' }}</td><td><button v-if="item.status === 'failed'" class="btn icon-only" title="Повторить" @click="retrySendHistory(item.id)"><i data-lucide="rotate-ccw"></i></button><button v-if="item.status === 'queued' || item.status === 'created'" class="btn icon-only" title="Отменить" @click="cancelSendHistory(item.id)"><i data-lucide="ban"></i></button></td></tr></tbody></table>
+            </div>
+            <div class="grid" style="margin-top: 14px;">
+              <div class="panel compact">
+                <div class="panel-head">
+                  <p class="panel-title">Dead-letter</p>
+                  <p class="panel-description">Failed-отправки, которые требуют ручного повтора или исправления адресата.</p>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>ID</th><th>Chat</th><th>Ошибка</th></tr></thead><tbody><tr v-for="item in deadLetter" :key="item.id"><td>{{ item.id }}</td><td>{{ item.chat_id }}</td><td>{{ item.error_message || '-' }}</td></tr></tbody></table></div>
+              </div>
+              <div class="panel compact">
+                <div class="panel-head">
+                  <p class="panel-title">Due queue</p>
+                  <p class="panel-description">Отложенные queued-записи, срок которых уже наступил.</p>
+                </div>
+                <div class="table-wrap"><table><thead><tr><th>ID</th><th>Chat</th><th>Due</th></tr></thead><tbody><tr v-for="item in dueHistory" :key="item.id"><td>{{ item.id }}</td><td>{{ item.chat_id }}</td><td>{{ item.next_retry_at || '-' }}</td></tr></tbody></table></div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="activeTab === 'reliability'" class="stack-layout">
+            <div class="panel">
+              <div class="panel-head with-actions">
+                <div>
+                  <p class="panel-title">Живой граф надежности отправки</p>
+                  <p class="panel-description">Путь сообщения через очередь, policy gate, worker lease, rate limit buckets, Telegram и итоговый результат.</p>
+                </div>
+                <button class="btn danger-btn" type="button" @click="releaseStaleLocks"><i data-lucide="unlock"></i>Освободить stale locks</button>
+              </div>
+              <div class="metric-grid">
+                <div class="metric-tile">
+                  <p class="metric-label">Деградация</p>
+                  <p class="metric-value" :class="{ danger: reliabilitySummary.degraded }">{{ reliabilitySummary.degraded ? 'да' : 'нет' }}</p>
+                </div>
+                <div class="metric-tile">
+                  <p class="metric-label">Stale locks</p>
+                  <p class="metric-value" :class="{ danger: reliabilitySummary.stale_locks > 0 }">{{ reliabilitySummary.stale_locks || 0 }}</p>
+                </div>
+                <div class="metric-tile" v-for="(count, status) in reliabilitySummary.status_counts" :key="status">
+                  <p class="metric-label">{{ statusLabel(status) }}</p>
+                  <p class="metric-value">{{ count }}</p>
+                </div>
+              </div>
+              <div class="reliability-graph-wrap">
+                <div class="reliability-graph">
+                  <button
+                    v-for="(node, index) in reliabilityNodes()"
+                    :key="node.id"
+                    type="button"
+                    class="reliability-node"
+                    :class="[node.status, { active: selectedReliabilityNode === node.id }]"
+                    @click="selectReliabilityNode(node.id)"
+                  >
+                    <span class="reliability-node-title">{{ node.label }}</span>
+                    <span class="reliability-node-meta">{{ statusLabel(node.status) }} · {{ node.count || 0 }}</span>
+                    <span
+                      v-if="reliabilityEdgeFromNode(node.id)"
+                      class="reliability-edge"
+                      :class="reliabilityEdgeFromNode(node.id).status || 'ok'"
+                      :title="`${reliabilityNode(reliabilityEdgeFromNode(node.id).from).label} → ${reliabilityNode(reliabilityEdgeFromNode(node.id).to).label}: ${reliabilityEdgeFromNode(node.id).count || 0}`"
+                    ></span>
+                  </button>
+                </div>
+              </div>
+              <div class="reliability-legend" aria-label="Базовые узлы графа надежности">
+                <span class="legend-chip" v-for="node in reliabilityFallbackNodes" :key="node.id">{{ node.label }}</span>
+              </div>
+            </div>
+
+            <div class="grid">
+              <div class="panel">
+                <div class="panel-head">
+                  <p class="panel-title">Детализация узла</p>
+                  <p class="panel-description">Выбранный этап графа и связанные попытки отправки.</p>
+                </div>
+                <table class="meta-table">
+                  <tbody>
+                    <tr><th>ID</th><td>{{ reliabilityNode(selectedReliabilityNode).id }}</td></tr>
+                    <tr><th>Название</th><td>{{ reliabilityNode(selectedReliabilityNode).label }}</td></tr>
+                    <tr><th>Статус</th><td>{{ statusLabel(reliabilityNode(selectedReliabilityNode).status) }}</td></tr>
+                    <tr><th>Счетчик</th><td>{{ reliabilityNode(selectedReliabilityNode).count || 0 }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="panel">
+                <div class="panel-head">
+                  <p class="panel-title">Связи графа</p>
+                  <p class="panel-description">Направление потока и текущие счетчики переходов.</p>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Откуда</th><th>Куда</th><th>Счетчик</th><th>Статус</th></tr></thead>
+                    <tbody>
+                      <tr v-for="edge in reliabilityEdges()" :key="`${edge.from}-${edge.to}`">
+                        <td>{{ reliabilityNode(edge.from).label }}</td>
+                        <td>{{ reliabilityNode(edge.to).label }}</td>
+                        <td>{{ edge.count || 0 }}</td>
+                        <td>{{ statusLabel(edge.status || 'ok') }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Попытки отправки</p>
+                <p class="panel-description">Последние попытки reliability worker: ошибка, retry_after и latency помогают отличить Telegram 429 от локальных блокировок.</p>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>ID</th><th>Send history ID</th><th>Attempt</th><th>Статус</th><th>Error kind</th><th>Error message</th><th>Retry after</th><th>Latency</th></tr></thead>
+                  <tbody>
+                    <tr v-for="attempt in reliabilityAttemptsForNode(selectedReliabilityNode)" :key="attempt.id">
+                      <td>{{ attempt.id }}</td>
+                      <td>{{ attempt.send_history_id }}</td>
+                      <td>{{ attempt.attempt_number }}</td>
+                      <td>{{ statusLabel(attempt.status) }}</td>
+                      <td>{{ attempt.error_kind || '-' }}</td>
+                      <td>{{ attempt.error_message || '-' }}</td>
+                      <td>{{ attempt.retry_after || attempt.retry_after_seconds || '-' }}</td>
+                      <td>{{ attempt.latency_ms != null ? `${attempt.latency_ms} ms` : '-' }}</td>
+                    </tr>
+                    <tr v-if="reliabilityAttemptsForNode(selectedReliabilityNode).length === 0"><td colspan="8">Нет попыток для выбранного узла.</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -754,6 +1431,35 @@
                     <tr><th>Включен</th><td>{{ boolLabel(diagnosticSettings.is_enabled) }}</td></tr>
                     <tr><th>Последний update</th><td>{{ diagnosticSettings.last_update_id || '-' }}</td></tr>
                     <tr><th>Последняя ошибка</th><td>{{ diagnosticSettings.last_error || '-' }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="panel full-span">
+              <div class="panel-head">
+                <p class="panel-title">Последние diagnostic updates</p>
+                <p class="panel-description">Сохраняет chat ID, message ID и thread ID из сообщений диагностическому боту. Из записи можно сразу создать адресата.</p>
+              </div>
+              <div class="actions">
+                <label>Бот для нового адресата
+                  <select v-model.number="forms.diagnosticDestination.bot_id">
+                    <option :value="null">выбери бота</option>
+                    <option v-for="bot in bots" :value="bot.id">{{ bot.name }}</option>
+                  </select>
+                </label>
+                <label>Алиас<input v-model="forms.diagnosticDestination.alias" placeholder="ops_topic" /></label>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Update</th><th>Chat</th><th>Thread</th><th>Text</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="update in diagnosticUpdates" :key="update.id">
+                      <td>{{ update.update_id }}</td>
+                      <td>{{ update.chat_title || update.chat_id || '-' }}</td>
+                      <td>{{ update.message_thread_id || '-' }}</td>
+                      <td>{{ update.text_preview || '-' }}</td>
+                      <td><button class="btn" type="button" @click="createDestinationFromDiagnosticUpdate(update.id)">Создать адресата</button></td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -863,6 +1569,24 @@
                 </table>
               </div>
             </div>
+            <div class="panel compact">
+              <div class="panel-head">
+                <p class="panel-title">Подключение MCP</p>
+                <p class="panel-description">Готовые пути и header для локальных клиентов и защищенных tg.* доменов.</p>
+              </div>
+              <div class="table-wrap">
+                <table class="meta-table">
+                  <tbody>
+                    <tr><th>Streamable HTTP</th><td>{{ mcpConnectionInfo?.streamable_http?.path || '/mcp/v1/' }}</td></tr>
+                    <tr><th>Legacy SSE</th><td>{{ mcpConnectionInfo?.legacy_sse?.path || '/mcp/v1/sse' }}</td></tr>
+                    <tr><th>Header</th><td>{{ mcpConnectionInfo?.required_headers?.join(', ') || 'X-API-Token' }}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="actions">
+                <button class="btn" type="button" @click="copyMcpConnection"><i data-lucide="copy"></i>Скопировать MCP connection</button>
+              </div>
+            </div>
           </div>
 
           <div v-if="activeTab === 'audit'" class="panel">
@@ -886,12 +1610,225 @@
             </div>
           </div>
 
+          <div v-if="activeTab === 'operations'" class="grid settings-grid">
+            <form class="panel" @submit.prevent="saveRuntimeSettings">
+              <div class="panel-head">
+                <p class="panel-title">Runtime-настройки без рестарта</p>
+                <p class="panel-description">Значения сохраняются в SQLite и применяются к текущему FastAPI-процессу сразу после сохранения.</p>
+              </div>
+              <label>Telegram Bot API URL<input v-model="operationsSettings.telegram_bot_api_base_url" /></label>
+              <label>Telegram API ID<input v-model="operationsSettings.telegram_api_id" autocomplete="off" /></label>
+              <label>Telegram API Hash<input v-model="operationsSettings.telegram_api_hash" autocomplete="off" type="password" /></label>
+              <label>Telethon session dir<input v-model="operationsSettings.telethon_session_dir" /></label>
+              <label>Shared media root<input v-model="operationsSettings.shared_media_root" /></label>
+              <label class="checkbox-label"><input v-model="operationsSettings.shared_media_require_mount" type="checkbox" /> Требовать реальный mountpoint</label>
+              <label>Максимальный размер локального файла<input v-model.number="operationsSettings.max_local_file_bytes" type="number" /></label>
+              <label>Попыток retry<input v-model.number="operationsSettings.send_retry_max_attempts" type="number" /></label>
+              <label>Пауза retry, сек<input v-model.number="operationsSettings.send_retry_delay_seconds" type="number" step="0.1" /></label>
+              <label class="checkbox-label"><input v-model="operationsSettings.policy_enabled" type="checkbox" /> Включить send policy</label>
+              <label>Лимит отправок в минуту на бота<input v-model.number="operationsSettings.rate_limit_per_minute" type="number" /></label>
+              <label>Quiet hours start<input v-model="operationsSettings.quiet_hours_start" placeholder="23:00" /></label>
+              <label>Quiet hours end<input v-model="operationsSettings.quiet_hours_end" placeholder="08:00" /></label>
+              <label class="checkbox-label"><input v-model="operationsSettings.callback_enabled" type="checkbox" /> Включить callback</label>
+              <label>Callback URL<input v-model="operationsSettings.callback_url" placeholder="https://example.local/send-status" /></label>
+              <button class="btn primary"><i data-lucide="save"></i>Применить без рестарта</button>
+            </form>
+            <div class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Локальные секреты и infra</p>
+                <p class="panel-description">Это локальная админка: можно хранить пароли и URL здесь. DB/CORS/listen параметры сохраняются в SQLite и backup, но реальный listener и текущий DB connection меняются только после перезапуска процесса.</p>
+              </div>
+              <label>App host<input v-model="operationsSettings.app_host" /></label>
+              <label>App port<input v-model.number="operationsSettings.app_port" type="number" /></label>
+              <label>Database URL<input v-model="operationsSettings.database_url" autocomplete="off" type="password" /></label>
+              <label>Redis URL<input v-model="operationsSettings.redis_url" autocomplete="off" type="password" /></label>
+              <label>CORS origins<input v-model="operationsText.cors_allowed_origins" placeholder="http://127.0.0.1:8000,http://localhost:8000" /></label>
+              <label>MCP allowed origins<input v-model="operationsText.mcp_allowed_origins" placeholder="http://127.0.0.1:8000,http://localhost:8000" /></label>
+              <label>Protected API hosts<input v-model="operationsText.protected_api_hosts" placeholder="tg.sh-inc.ru,tg.sh-inc.dev" /></label>
+              <label>Diagnostic poll timeout<input v-model.number="operationsSettings.diagnostic_poll_timeout_seconds" type="number" /></label>
+              <label>Diagnostic retry delay<input v-model.number="operationsSettings.diagnostic_retry_delay_seconds" type="number" step="0.1" /></label>
+              <label>Discovery poll timeout<input v-model.number="operationsSettings.discovery_poll_timeout_seconds" type="number" /></label>
+              <label>Discovery retry delay<input v-model.number="operationsSettings.discovery_retry_delay_seconds" type="number" step="0.1" /></label>
+              <button class="btn primary" type="button" @click="saveRuntimeSettings"><i data-lucide="save"></i>Сохранить локальные настройки</button>
+            </div>
+            <div class="panel full-span">
+              <div class="panel-head">
+                <p class="panel-title">JSON backup в git</p>
+                <p class="panel-description">Экспортирует конфигурацию и справочники в JSON. GitHub и Gitea проверяются через API перед сборкой snapshot.</p>
+              </div>
+              <label>Git repo URL<input v-model="operationsSettings.backup_git_repo_url" placeholder="ssh://git@host/repo.git" /></label>
+              <label>Git service
+                <select v-model="operationsSettings.backup_git_service">
+                  <option value="auto">auto</option>
+                  <option value="github">GitHub</option>
+                  <option value="gitea">Gitea</option>
+                </select>
+              </label>
+              <label>Авторизация API
+                <select v-model="operationsSettings.backup_git_auth_method">
+                  <option value="token">API token / PAT</option>
+                  <option value="none">без авторизации</option>
+                </select>
+              </label>
+              <label>Git API base URL<input v-model="operationsSettings.backup_git_api_base_url" placeholder="https://git.sh-inc.ru/api/v1" /></label>
+              <label v-if="operationsSettings.backup_git_auth_method !== 'none'">Git API token<input v-model="operationsSettings.backup_git_api_token" autocomplete="off" type="password" placeholder="GitHub PAT или Gitea access token" /></label>
+              <label>Branch<input v-model="operationsSettings.backup_git_branch" /></label>
+              <label>JSON path<input v-model="operationsSettings.backup_git_path" /></label>
+              <label class="checkbox-label"><input v-model="operationsSettings.backup_include_secrets" type="checkbox" /> Включать секреты в backup</label>
+              <label class="checkbox-label"><input v-model="operationsSettings.backup_schedule_enabled" type="checkbox" /> Плановый backup</label>
+              <label>Интервал backup, сек<input v-model.number="operationsSettings.backup_schedule_interval_seconds" type="number" min="60" /></label>
+              <label class="checkbox-label"><input v-model="operationsSettings.backup_schedule_push_to_git" type="checkbox" /> Плановый backup сразу push в git</label>
+              <div v-if="operationsSettings.backup_include_secrets" class="status-line danger">
+                Секреты уходят в git: bot tokens, DB/Redis URL, Telegram API hash и Git API token попадут в JSON backup.
+              </div>
+              <p class="hint">OAuth не нужен: GitHub использует PAT через Bearer header, Gitea использует access token через Authorization: token. Правило: секреты автоматически включаются, если GitHub/Gitea API подтвердил private repo.</p>
+              <div v-if="backupRepoCheck" class="status-line" :class="{ ok: backupRepoCheck.verified, danger: !backupRepoCheck.verified }">
+                {{ backupRepoCheckLabel }}
+              </div>
+              <div v-if="backupPreflight" class="status-line" :class="{ ok: backupPreflight.ok, danger: !backupPreflight.ok }">
+                Preflight: {{ backupPreflight.ok ? 'готово' : 'есть блокеры' }}; секреты: {{ backupPreflight.include_secrets ? 'включены' : 'исключены' }}; изменено секций: {{ backupPreflight.diff.changed_sections }}.
+              </div>
+              <div class="actions">
+                <button class="btn" type="button" @click="saveRuntimeSettings"><i data-lucide="save"></i>Сохранить backup-настройки</button>
+                <button class="btn" type="button" @click="checkBackupRepository"><i data-lucide="shield-check"></i>Проверить доступ к repo</button>
+                <button class="btn" type="button" @click="runBackupPreflight"><i data-lucide="list-checks"></i>Preflight</button>
+                <button class="btn" type="button" @click="loadBackupDiff"><i data-lucide="git-compare"></i>Diff</button>
+                <button class="btn primary" type="button" @click="runBackup(false)"><i data-lucide="database-backup"></i>JSON snapshot</button>
+                <button class="btn" type="button" @click="runBackup(true)"><i data-lucide="git-branch"></i>Snapshot + push</button>
+              </div>
+              <div v-if="backupDiff" class="table-wrap" style="margin-top: 12px;">
+                <table>
+                  <thead><tr><th>Секция</th><th>Было</th><th>Стало</th><th>Изменено</th></tr></thead>
+                  <tbody>
+                    <tr v-for="item in backupDiff.sections" :key="item.section">
+                      <td>{{ item.section }}</td>
+                      <td>{{ item.before_count }}</td>
+                      <td>{{ item.after_count }}</td>
+                      <td>{{ item.changed ? 'да' : 'нет' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="subpanel">
+                <div class="panel-head">
+                  <p class="panel-title">Restore wizard</p>
+                  <p class="panel-description">Выбери сохраненный backup_run, отметь секции для частичного restore и посмотри конкретные строки до применения. Ручная вставка JSON здесь не нужна.</p>
+                </div>
+                <label>Backup run
+                  <select v-model.number="restoreWizard.runId">
+                    <option :value="null">выбери snapshot</option>
+                    <option v-for="run in restorableBackupRuns" :key="run.id" :value="run.id">{{ restoreRunLabel(run) }}</option>
+                  </select>
+                </label>
+                <p class="field-hint">Частичный restore: если выбрать `templates`, версии шаблонов будут восстановлены вместе с ними, чтобы не ломать историю шаблона. Адресаты требуют существующих ботов с теми же ID; иначе preview заблокирует restore и предложит сначала восстановить bots.</p>
+                <div class="restore-section-grid">
+                  <label v-for="section in sectionOptions" :key="section.value" class="checkbox-label">
+                    <input v-model="restoreWizard.sections" type="checkbox" :value="section.value" />
+                    {{ section.label }}
+                  </label>
+                </div>
+                <label>Подтверждение<input v-model="restoreWizard.confirm" placeholder="RESTORE" /></label>
+                <div v-if="restoreWizard.preview" class="status-line" :class="{ ok: restoreWizard.preview.ok, danger: !restoreWizard.preview.ok }">
+                  Restore preview: {{ restoreWizard.preview.ok ? 'можно применить' : 'есть блокеры' }}; секции: {{ restoreWizard.preview.expanded_sections.join(', ') }}; изменено строк: {{ rowDiffRows.length }}; блокеры: {{ restoreWizard.preview.blocked_sections.join(', ') || '-' }}.
+                  <span v-if="restoreWizard.preview.warnings.length"> Причины: {{ restoreWizard.preview.warnings.join('; ') }}</span>
+                </div>
+                <div v-if="restoreWizard.lastApply" class="status-line ok">
+                  Safety backup #{{ restoreWizard.lastApply.safety_backup_run_id }} создан перед restore; восстановлено строк: {{ restoreWizard.lastApply.restored_rows }}.
+                </div>
+                <div class="actions">
+                  <button class="btn" type="button" @click="previewBackupRunRestore"><i data-lucide="scan-search"></i>Preview restore</button>
+                  <button class="btn danger-btn" type="button" @click="applyBackupRunRestore"><i data-lucide="rotate-ccw"></i>Apply RESTORE</button>
+                </div>
+                <div v-if="rowDiffRows.length" class="table-wrap">
+                  <table class="diff-table">
+                    <thead><tr><th>Секция</th><th>Действие</th><th>Ключ</th><th>Было</th><th>Станет</th></tr></thead>
+                    <tbody>
+                      <tr v-for="row in rowDiffRows" :key="`${row.section}:${row.key}:${row.action}`">
+                        <td>{{ row.section }}</td>
+                        <td>{{ diffActionLabel(row.action) }}</td>
+                        <td>{{ row.key }}</td>
+                        <td><pre class="diff-json">{{ shortJson(row.before) }}</pre></td>
+                        <td><pre class="diff-json">{{ shortJson(row.after) }}</pre></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p v-else class="field-hint">Визуальный diff появится после preview и покажет добавленные, удаленные и измененные строки.</p>
+              </div>
+              <div class="subpanel">
+                <p class="panel-title">Импорт backup JSON</p>
+                <p class="panel-description">Вставь JSON snapshot, сначала сделай preview, затем введи RESTORE для replace-all восстановления справочников и настроек. Safety backup текущего состояния создается автоматически перед применением.</p>
+                <label>Backup JSON<textarea v-model="backupImport.jsonText" rows="7" placeholder='{"schema_version":"v1",...}'></textarea></label>
+                <label>Подтверждение<input v-model="backupImport.confirm" placeholder="RESTORE" /></label>
+                <div v-if="backupImport.preview" class="status-line" :class="{ ok: backupImport.preview.ok, danger: !backupImport.preview.ok }">
+                  Import preview: {{ backupImport.preview.ok ? 'можно применить' : 'есть блокеры' }}; изменено секций: {{ backupImport.preview.diff.changed_sections }}; блокеры: {{ backupImport.preview.blocked_sections.join(', ') || '-' }}.
+                </div>
+                <div v-if="backupImport.lastApply" class="status-line ok">
+                  Safety backup #{{ backupImport.lastApply.safety_backup_run_id }} создан перед restore; восстановлено строк: {{ backupImport.lastApply.restored_rows }}.
+                </div>
+                <div class="actions">
+                  <button class="btn" type="button" @click="previewBackupImport"><i data-lucide="scan-search"></i>Preview import</button>
+                  <button class="btn danger-btn" type="button" @click="applyBackupImport"><i data-lucide="rotate-ccw"></i>Apply RESTORE</button>
+                </div>
+              </div>
+              <div class="table-wrap" style="margin-top: 12px;">
+                <table><thead><tr><th>ID</th><th>Статус</th><th>Секреты</th><th>Repo</th><th>Элементов</th><th>Commit</th><th>Ошибка</th></tr></thead><tbody><tr v-for="run in backupRuns" :key="run.id"><td>{{ run.id }}</td><td>{{ statusLabel(run.status) }}</td><td>{{ backupSecretsLabel(run.snapshot?.backup_policy) }}</td><td>{{ backupRepoLabel(run.snapshot?.backup_policy?.repo) }}</td><td>{{ run.items_exported }}</td><td>{{ run.git_commit || '-' }}</td><td>{{ run.error_message || '-' }}</td></tr></tbody></table>
+              </div>
+            </div>
+          </div>
+
           <div v-if="activeTab === 'health'" class="panel">
             <div class="panel-head">
-              <p class="panel-title">Runtime health</p>
-              <p class="panel-description">Снимок текущей конфигурации API, shared media root и режима Telegram Bot API.</p>
+              <p class="panel-title">Состояние сервиса</p>
+              <p class="panel-description">Читаемый снимок runtime-конфигурации, shared media root и режима Telegram Bot API.</p>
             </div>
-            <pre>{{ JSON.stringify(health, null, 2) }}</pre>
+            <div class="health-grid">
+              <div class="health-card">
+                <p class="health-card-title">Статус API</p>
+                <span class="badge" :class="{ ok: health.status === 'ok', danger: health.status !== 'ok' }">{{ statusLabel(health.status) }}</span>
+                <p class="health-value">Версия: {{ health.api_version || '-' }}</p>
+              </div>
+              <div class="health-card">
+                <p class="health-card-title">Telegram Bot API</p>
+                <span class="badge" :class="{ ok: health.local_bot_api, danger: !health.local_bot_api }">{{ health.local_bot_api ? 'локальный' : 'cloud' }}</span>
+                <p class="health-value">{{ health.bot_api_base_url || '-' }}</p>
+              </div>
+              <div class="health-card">
+                <p class="health-card-title">Shared media</p>
+                <span class="badge" :class="{ ok: health.shared_media_available, danger: health.shared_media_available === false }">{{ health.shared_media_available ? 'доступна' : 'недоступна' }}</span>
+                <p class="health-value">{{ health.shared_media_root || '-' }}</p>
+                <p class="health-value" v-if="health.shared_media_error">{{ health.shared_media_error }}</p>
+              </div>
+              <div class="health-card">
+                <p class="health-card-title">Mount check</p>
+                <span class="badge" :class="{ ok: health.shared_media_mounted, danger: health.shared_media_mount_required && !health.shared_media_mounted }">{{ health.shared_media_mount_required ? (health.shared_media_mounted ? 'mounted' : 'не mounted') : 'не требуется' }}</span>
+                <p class="health-value">Проверка mountpoint: {{ boolLabel(health.shared_media_mount_required) }}</p>
+              </div>
+              <div class="health-card">
+                <p class="health-card-title">Файлы</p>
+                <span class="badge" :class="{ ok: fileSendAvailable, danger: !fileSendAvailable }">{{ fileSendAvailable ? 'отправка включена' : 'отправка отключена' }}</span>
+                <p class="health-value">Лимит: {{ formatBytes(health.max_local_file_bytes) }}</p>
+              </div>
+              <div class="health-card">
+                <p class="health-card-title">Backup status</p>
+                <span class="badge" :class="{ ok: health.backup_last_status === 'succeeded', danger: health.backup_last_status === 'failed' }">{{ statusLabel(health.backup_last_status || 'не запускался') }}</span>
+                <p class="health-value">{{ health.backup_configured ? 'repo настроен' : 'repo не настроен' }}</p>
+                <p class="health-value" v-if="health.backup_last_error">{{ health.backup_last_error }}</p>
+              </div>
+            </div>
+            <div class="table-wrap" style="margin-top: 14px;">
+              <table class="meta-table">
+                <tbody>
+                  <tr><th>Bot API endpoint</th><td>{{ health.bot_api_base_url || '-' }}</td></tr>
+                  <tr><th>Shared media root</th><td>{{ health.shared_media_root || '-' }}</td></tr>
+                  <tr><th>Shared media error</th><td>{{ health.shared_media_error || '-' }}</td></tr>
+                  <tr><th>Max file size</th><td>{{ formatBytes(health.max_local_file_bytes) }}</td></tr>
+                  <tr><th>Backup repo</th><td>{{ health.backup_configured ? 'configured' : 'not configured' }}</td></tr>
+                  <tr><th>Backup auth</th><td>{{ health.backup_git_service || '-' }} / {{ health.backup_git_auth_method || '-' }}</td></tr>
+                  <tr><th>Last backup</th><td>{{ health.backup_last_run_id ? `#${health.backup_last_run_id} ${statusLabel(health.backup_last_status)}` : '-' }}</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       </main>
@@ -912,21 +1849,72 @@
               { id: "templates", label: "Шаблоны", icon: "file-text", description: "Переиспользуемые tagged-сообщения с настройками форматирования Telegram." },
               { id: "send", label: "Отправка", icon: "send", description: "Единый рабочий экран для ручного текста, отправки по шаблону и файлов из shared media." },
               { id: "history", label: "История", icon: "history", description: "Журнал попыток отправки, статусы, Telegram response и диагностические ошибки." },
+              { id: "reliability", label: "Надежность", icon: "activity", description: "Живой граф очередей, rate limit, worker locks и результата отправки." },
               { id: "mtproto", label: "MTProto", icon: "smartphone", description: "Вход пользовательской Telegram-сессией для аналитики каналов и чатов через Telethon." },
               { id: "analytics", label: "Аналитика", icon: "chart-no-axes-combined", description: "Цели аналитики и ручной запуск refresh задач через Taskiq и Redis." },
               { id: "diagnostics", label: "Диагностика", icon: "scan-search", description: "Отдельный polling-бот, который отвечает красивой карточкой с ID входящего или пересланного сообщения." },
               { id: "discovery", label: "Автопоиск", icon: "radar", description: "Автоматическое создание адресатов, когда управляемого бота добавляют в чат администратором." },
               { id: "mcp", label: "MCP", icon: "plug-zap", description: "Настройка MCP transport, tool discovery и постоянных API-токенов для защищенных tg.* доменов." },
               { id: "audit", label: "Аудит", icon: "list-checks", description: "Операционный журнал административных действий и изменений доступа." },
+              { id: "operations", label: "Операции", icon: "settings-2", description: "Runtime-настройки без рестарта, send policy, callbacks и JSON backup в git." },
               { id: "health", label: "Состояние", icon: "activity", description: "Быстрая проверка runtime-конфигурации, Bot API endpoint и shared media root." },
             ],
             apiToken: localStorage.getItem("tgApiToken") || "",
             createdApiToken: "",
-            bots: [], destinations: [], templates: [], history: [], analyticsTargets: [], health: {},
+            bots: [], destinations: [], templates: [], sendProfiles: [], sendBatches: [], history: [], deadLetter: [], dueHistory: [], analyticsTargets: [], health: {},
+            reliabilitySummary: { status_counts: {}, stale_locks: 0, degraded: false },
+            reliabilityGraph: { nodes: [], edges: [] },
+            reliabilityAttempts: [],
+            selectedReliabilityNode: "queue",
+            reliabilityFallbackNodes: [
+              { id: "queue", label: "Batch / Manual", status: "ok", count: 0 },
+              { id: "policy", label: "Policy gate", status: "ok", count: 0 },
+              { id: "lease", label: "Worker lease", status: "ok", count: 0 },
+              { id: "bot_bucket", label: "Bot bucket", status: "ok", count: 0 },
+              { id: "chat_bucket", label: "Chat bucket", status: "ok", count: 0 },
+              { id: "telegram", label: "Telegram", status: "ok", count: 0 },
+              { id: "result", label: "Result", status: "ok", count: 0 },
+            ],
             apiTokens: [],
             auditEvents: [],
+            backupRuns: [],
+            backupRepoCheck: null,
+            backupPreflight: null,
+            backupDiff: null,
+            backupImport: { jsonText: "", confirm: "", preview: null, lastApply: null },
+            restoreWizard: { runId: null, sections: ["templates"], confirm: "", preview: null, lastApply: null },
+            sectionOptions: [
+              { value: "bots", label: "Боты" },
+              { value: "destinations", label: "Адресаты" },
+              { value: "templates", label: "Шаблоны" },
+              { value: "send_profiles", label: "Профили отправки" },
+              { value: "mcp_settings", label: "MCP" },
+              { value: "discovery_settings", label: "Автопоиск" },
+              { value: "diagnostic_settings", label: "Диагностика" },
+              { value: "api_tokens", label: "API токены" },
+              { value: "runtime_settings", label: "Runtime" },
+              { value: "runtime_advanced_settings", label: "Infra/advanced" },
+            ],
             discoverySettings: [],
+            diagnosticUpdates: [],
+            destinationHealth: {},
+            mcpConnectionInfo: null,
+            operationsSettings: {},
+            operationsText: {
+              cors_allowed_origins: "",
+              mcp_allowed_origins: "",
+              protected_api_hosts: "",
+            },
+            mediaItems: [],
+            mediaPath: "",
+            selectedSendProfileId: null,
+            selectedTemplateId: null,
+            templateVersions: [],
+            destinationModalOpen: false,
             sendDryRun: null,
+            sendSubTab: "text",
+            templateSubTab: "saved",
+            templateValidation: { variablesJson: "{}", result: null },
             parseModeOptions: [
               { key: "none", value: null, label: "без форматирования" },
               { key: "html", value: "HTML", label: "HTML" },
@@ -941,9 +1929,12 @@
               bot: { name: "", token: "", description: "" },
               destination: { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, alias: "", title: "" },
               template: { tag: "", title: "", text: "", parse_mode: null, disable_web_page_preview: false },
-              send: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", tag: "", text: "", parse_mode: null, disable_web_page_preview: false, send_mode: "sync" },
-              templateSend: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", tag: "", send_mode: "sync" },
-              file: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", media_type: "video", file_relative_path: "", caption: "", parse_mode: null, send_mode: "sync" },
+              profile: { name: "" },
+              batch: { name: "", destination_ids: [] },
+              diagnosticDestination: { bot_id: null, alias: "" },
+              send: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", tag: "", text: "", parse_mode: null, disable_web_page_preview: false, send_mode: "sync", send_at: "" },
+              templateSend: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", tag: "", send_mode: "sync", send_at: "" },
+              file: { bot_id: null, destination_id: null, destination_alias: "", chat_id: "", media_type: "video", file_relative_path: "", caption: "", parse_mode: null, send_mode: "sync", send_at: "" },
               mtproto: { phone: "", code: "", password: "" },
               analytics: { peer_ref: "", title: "" },
             },
@@ -952,6 +1943,34 @@
         computed: {
           currentTab() { return this.tabs.find((tab) => tab.id === this.activeTab); },
           eventStateLabel() { return this.statusLabel(this.eventState); },
+          fileSendAvailable() {
+            return Boolean(this.health.local_bot_api && this.health.shared_media_available);
+          },
+          fileSendUnavailableReason() {
+            const reasons = [];
+            if (!this.health.local_bot_api) reasons.push("нужен локальный Telegram Bot API");
+            if (this.health.shared_media_available === false) {
+              reasons.push(this.health.shared_media_error || "shared media root недоступен");
+            }
+            if (this.health.shared_media_available == null && reasons.length === 0) {
+              reasons.push("состояние shared media еще не загружено");
+            }
+            return reasons.join("; ");
+          },
+          backupRepoCheckLabel() {
+            if (!this.backupRepoCheck) return "";
+            const privacy = this.backupRepoCheck.verified
+              ? (this.backupRepoCheck.is_private ? "private repo" : "public repo")
+              : "privacy unknown";
+            const auth = this.backupRepoCheck.auth_method === "token" ? "API token / PAT" : "без авторизации";
+            return `${this.backupRepoCheck.service || "repo"}: ${privacy}; auth: ${auth}; ${this.backupRepoCheck.message}`;
+          },
+          restorableBackupRuns() {
+            return this.backupRuns.filter((run) => run.snapshot && ["succeeded", "pre_restore"].includes(run.status));
+          },
+          rowDiffRows() {
+            return this.restoreWizard.preview?.diff?.rows || [];
+          },
           isProtectedHost() { return ["tg.sh-inc.ru", "tg.sh-inc.dev"].includes(window.location.hostname); }
         },
         async mounted() {
@@ -964,6 +1983,30 @@
         methods: {
           drawIcons() { nextTick(() => lucide.createIcons({ attrs: { width: 16, height: 16 } })); },
           boolLabel(value) { return value ? "да" : "нет"; },
+          formatBytes(value) {
+            if (!Number.isFinite(Number(value))) return "-";
+            const units = ["B", "KB", "MB", "GB"];
+            let size = Number(value);
+            let unit = 0;
+            while (size >= 1024 && unit < units.length - 1) {
+              size /= 1024;
+              unit += 1;
+            }
+            return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+          },
+          parseCsv(value) {
+            return String(value || "")
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean);
+          },
+          syncOperationsText() {
+            this.operationsText = {
+              cors_allowed_origins: (this.operationsSettings.cors_allowed_origins || []).join(", "),
+              mcp_allowed_origins: (this.operationsSettings.mcp_allowed_origins || []).join(", "),
+              protected_api_hosts: (this.operationsSettings.protected_api_hosts || []).join(", "),
+            };
+          },
           categoryLabel(value) {
             return {
               read: "чтение",
@@ -988,6 +2031,13 @@
               admin: "админ",
             }[value] || value;
           },
+          profileKindLabel(value) {
+            return {
+              text: "текст",
+              template: "шаблон",
+              file: "файл",
+            }[value] || value;
+          },
           scopeLabel(value) {
             return {
               read: "чтение",
@@ -1006,10 +2056,62 @@
               finished: "завершено",
               live: "онлайн",
               queued: "в очереди",
+              blocked: "заблокировано",
+              deferred: "отложено",
+              dead_letter: "dead-letter",
+              locked: "lock занят",
+              released: "освобождено",
+              retry_scheduled: "повтор запланирован",
+              warning: "внимание",
               revoked: "отозван",
               started: "запущено",
               succeeded: "успешно",
+              ok: "ok",
+              "не запускался": "не запускался",
             }[value] || value;
+          },
+          backupSecretsLabel(policy) {
+            if (!policy) return "-";
+            if (policy.include_secrets && policy.secret_reason === "private_repo") return "да, private repo";
+            if (policy.include_secrets && policy.secret_reason === "manual_setting") return "да, вручную";
+            return "нет";
+          },
+          backupRepoLabel(repo) {
+            if (!repo) return "-";
+            const service = repo.service || "unknown";
+            const privacy = repo.verified
+              ? (repo.is_private ? "private" : "public")
+              : "unknown";
+            return `${service}: ${privacy}`;
+          },
+          restoreRunLabel(run) {
+            const created = run.created_at ? new Date(run.created_at).toLocaleString("ru-RU") : "-";
+            return `#${run.id} · ${this.statusLabel(run.status)} · ${created} · ${run.items_exported} строк`;
+          },
+          diffActionLabel(action) {
+            return {
+              added: "добавится",
+              removed: "удалится",
+              changed: "изменится",
+            }[action] || action;
+          },
+          shortJson(value) {
+            if (value == null) return "-";
+            const raw = JSON.stringify(value, null, 2);
+            return raw.length > 640 ? `${raw.slice(0, 640)}...` : raw;
+          },
+          batchProgressLabel(progress) {
+            if (!progress) return "-";
+            return `всего ${progress.total || 0}, pending ${progress.pending || 0}, queued ${progress.queued || 0}, ok ${progress.succeeded || 0}, fail ${progress.failed || 0}`;
+          },
+          templateValidationError(message) {
+            if (message === "invalid template placeholder syntax; use {{name}}") {
+              return "Некорректный плейсхолдер. Используй формат {{name}}.";
+            }
+            if (message.startsWith("missing template variables:")) {
+              return "Не хватает проверочных переменных.";
+            }
+            return message;
           },
           async api(path, options = {}) {
             const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
@@ -1051,29 +2153,88 @@
             this.apiToken = "";
             localStorage.removeItem("tgApiToken");
           },
+          async refreshReliability() {
+            const [summary, graph, attempts] = await Promise.all([
+              this.api("/reliability/summary"),
+              this.api("/reliability/graph"),
+              this.api("/reliability/attempts"),
+            ]);
+            this.reliabilitySummary = summary;
+            this.reliabilityGraph = graph;
+            this.reliabilityAttempts = attempts;
+          },
           async refreshAll() {
-            const [health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings, mcpSettings, apiTokens, discoverySettings, auditEvents] = await Promise.all([
+            const [health, bots, destinations, templates, sendProfiles, sendBatches, history, deadLetter, dueHistory, analyticsTargets, diagnosticSettings, diagnosticUpdates, mcpSettings, mcpConnectionInfo, apiTokens, discoverySettings, auditEvents, operationsSettings, backupRuns, reliabilitySummary, reliabilityGraph, reliabilityAttempts] = await Promise.all([
               this.api("/health"),
               this.api("/bots"),
               this.api("/destinations"),
               this.api("/templates"),
+              this.api("/send-profiles"),
+              this.api("/send-batches"),
               this.api("/send-history"),
+              this.api("/send-history/dead-letter"),
+              this.api("/send-history/due"),
               this.api("/analytics/targets"),
               this.api("/diagnostics/bot"),
+              this.api("/diagnostics/updates"),
               this.api("/mcp/settings"),
+              this.api("/mcp/connection-info"),
               this.api("/auth/tokens"),
               this.api("/discovery/bots"),
               this.api("/audit"),
+              this.api("/operations/settings"),
+              this.api("/operations/backup/runs"),
+              this.api("/reliability/summary"),
+              this.api("/reliability/graph"),
+              this.api("/reliability/attempts"),
             ]);
-            Object.assign(this, { health, bots, destinations, templates, history, analyticsTargets, diagnosticSettings, mcpSettings, apiTokens, discoverySettings, auditEvents });
+            Object.assign(this, { health, bots, destinations, templates, sendProfiles, sendBatches, history, deadLetter, dueHistory, analyticsTargets, diagnosticSettings, diagnosticUpdates, mcpSettings, mcpConnectionInfo, apiTokens, discoverySettings, auditEvents, operationsSettings, backupRuns, reliabilitySummary, reliabilityGraph, reliabilityAttempts });
+            this.syncOperationsText();
+            if (this.sendSubTab === "file" && !this.fileSendAvailable) this.sendSubTab = "text";
+          },
+          selectReliabilityNode(id) {
+            this.selectedReliabilityNode = id;
+          },
+          async releaseStaleLocks() {
+            await this.api("/reliability/stale-locks/release", { method: "POST" });
+            await this.refreshAll();
+          },
+          reliabilityNode(id) {
+            return this.reliabilityGraph.nodes.find((node) => node.id === id)
+              || this.reliabilityFallbackNodes.find((node) => node.id === id)
+              || { id, label: id, status: "ok", count: 0 };
+          },
+          reliabilityNodes() {
+            return this.reliabilityGraph.nodes.length ? this.reliabilityGraph.nodes : this.reliabilityFallbackNodes;
+          },
+          reliabilityEdges() {
+            if (this.reliabilityGraph.edges.length) return this.reliabilityGraph.edges;
+            return this.reliabilityFallbackNodes.slice(0, -1).map((node, index) => ({
+              from: node.id,
+              to: this.reliabilityFallbackNodes[index + 1].id,
+              count: 0,
+              status: "ok",
+            }));
+          },
+          reliabilityEdgeFromNode(id) {
+            return this.reliabilityEdges().find((edge) => edge.from === id);
+          },
+          reliabilityAttemptsForNode(nodeId) {
+            return this.reliabilityAttempts.filter((attempt) => {
+              const stage = attempt.node_id || attempt.stage || attempt.bucket || attempt.status;
+              return !stage || stage === nodeId;
+            });
           },
           connectEvents() {
             const source = new EventSource("/api/v1/events");
             source.onopen = () => { this.eventState = "live"; };
             source.onerror = () => { this.eventState = "closed"; };
             source.onmessage = () => this.refreshAll();
-            ["send.created", "send.succeeded", "send.failed", "analytics.run.queued", "analytics.run.finished", "bot.checked"].forEach((name) => {
+            ["send.created", "send.succeeded", "send.failed", "send.deferred", "send.dead_letter", "send.blocked", "send.locked", "send.released", "send.retry_scheduled", "analytics.run.queued", "analytics.run.finished", "bot.checked"].forEach((name) => {
               source.addEventListener(name, () => this.refreshAll());
+            });
+            ["reliability.bucket.updated", "reliability.graph.updated"].forEach((name) => {
+              source.addEventListener(name, () => this.refreshReliability());
             });
           },
           async createBot() {
@@ -1089,15 +2250,208 @@
             }
           },
           async checkBot(id) { await this.api(`/bots/${id}/check`, { method: "POST" }); await this.refreshAll(); },
-          async createDestination() { await this.api("/destinations", { method: "POST", body: JSON.stringify(this.forms.destination) }); await this.refreshAll(); },
-          async checkDestination(id) { await this.api(`/destinations/${id}/check`, { method: "POST" }); await this.refreshAll(); },
-          async createTemplate() { await this.api("/templates", { method: "POST", body: JSON.stringify(this.forms.template) }); this.forms.template = { tag: "", title: "", text: "", parse_mode: null, disable_web_page_preview: false }; await this.refreshAll(); },
+          resetDestinationForm() { this.forms.destination = { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, alias: "", title: "" }; },
+          openDestinationModal() { this.destinationModalOpen = true; },
+          closeDestinationModal() { this.destinationModalOpen = false; },
+          async createDestination() {
+            await this.api("/destinations", { method: "POST", body: JSON.stringify(this.forms.destination) });
+            this.closeDestinationModal();
+            this.resetDestinationForm();
+            await this.refreshAll();
+          },
+          async checkDestination(id) {
+            await this.api(`/destinations/${id}/check`, { method: "POST" });
+            this.destinationHealth = { ...this.destinationHealth, [id]: await this.api(`/destinations/${id}/health`) };
+            await this.refreshAll();
+          },
+          async createTemplate() { await this.api("/templates", { method: "POST", body: JSON.stringify(this.forms.template) }); this.forms.template = { tag: "", title: "", text: "", parse_mode: null, disable_web_page_preview: false }; this.templateValidation.result = null; this.templateSubTab = "saved"; await this.refreshAll(); },
+          async loadTemplateVersions(template_id) {
+            this.selectedTemplateId = template_id;
+            this.templateVersions = await this.api(`/templates/${template_id}/versions`);
+          },
+          async rollbackTemplate(version) {
+            await this.api(`/templates/${version.template_id}/rollback/${version.id}`, { method: "POST" });
+            await this.loadTemplateVersions(version.template_id);
+            await this.refreshAll();
+          },
+          async validateTemplate() {
+            let variables = {};
+            try {
+              const rawVariables = this.templateValidation.variablesJson.trim();
+              variables = rawVariables ? JSON.parse(rawVariables) : {};
+              if (!variables || Array.isArray(variables) || typeof variables !== "object") {
+                throw new Error("Проверочные переменные должны быть JSON-объектом");
+              }
+            } catch (error) {
+              this.templateValidation.result = {
+                ok: false,
+                variables: [],
+                missing_variables: [],
+                rendered_text: null,
+                error_message: error instanceof Error ? error.message : "JSON переменных не читается",
+              };
+              return;
+            }
+            this.templateValidation.result = await this.api("/templates/validate", {
+              method: "POST",
+              body: JSON.stringify({ text: this.forms.template.text, variables }),
+            });
+          },
           async sendText() { await this.api("/send/text", { method: "POST", body: JSON.stringify(this.forms.send) }); await this.refreshAll(); },
           async sendTemplate() { await this.api("/send/template", { method: "POST", body: JSON.stringify(this.forms.templateSend) }); await this.refreshAll(); },
-          async sendFile() { await this.api("/send/file", { method: "POST", body: JSON.stringify(this.forms.file) }); await this.refreshAll(); },
+          ensureFileSendAvailable() {
+            if (this.fileSendAvailable) return true;
+            this.lastError = `Отправка файлов отключена: ${this.fileSendUnavailableReason}`;
+            return false;
+          },
+          async sendFile() {
+            if (!this.ensureFileSendAvailable()) return;
+            await this.api("/send/file", { method: "POST", body: JSON.stringify(this.forms.file) });
+            await this.refreshAll();
+          },
+          currentSendPayload() {
+            if (this.sendSubTab === "template") {
+              return { kind: "template", ...this.forms.templateSend };
+            }
+            if (this.sendSubTab === "file") {
+              return { kind: "file", ...this.forms.file };
+            }
+            return { kind: "text", ...this.forms.send };
+          },
+          currentProfilePayload() {
+            const payload = this.currentSendPayload();
+            const sendKind = payload.kind;
+            const base = {
+              name: this.forms.profile.name || `Профиль ${new Date().toLocaleString("ru-RU")}`,
+              bot_id: payload.bot_id,
+              send_kind: sendKind,
+              destination_id: payload.destination_id,
+              destination_alias: payload.destination_alias,
+              chat_id: payload.chat_id,
+              message_thread_id: payload.message_thread_id,
+              parse_mode: payload.parse_mode,
+              variables: payload.variables || {},
+              is_active: true,
+            };
+            if (sendKind === "template") {
+              return { ...base, template_tag: payload.tag, media_type: "none" };
+            }
+            if (sendKind === "file") {
+              return { ...base, media_type: payload.media_type, file_relative_path: payload.file_relative_path, caption: payload.caption };
+            }
+            return { ...base, text: payload.text, template_tag: payload.tag, media_type: "none", disable_web_page_preview: payload.disable_web_page_preview };
+          },
+          async createSendProfile() {
+            if (this.sendSubTab === "file" && !this.ensureFileSendAvailable()) return;
+            await this.api("/send-profiles", { method: "POST", body: JSON.stringify(this.currentProfilePayload()) });
+            this.forms.profile.name = "";
+            await this.refreshAll();
+          },
+          applySendProfile() {
+            const profile = this.sendProfiles.find((item) => item.id === this.selectedSendProfileId);
+            if (!profile) return;
+            if (profile.send_kind === "template") {
+              this.sendSubTab = "template";
+              Object.assign(this.forms.templateSend, {
+                bot_id: profile.bot_id,
+                destination_id: profile.destination_id,
+                destination_alias: profile.destination_alias || "",
+                chat_id: profile.chat_id || "",
+                tag: profile.template_tag || "",
+              });
+              return;
+            }
+            if (profile.send_kind === "file") {
+              if (!this.ensureFileSendAvailable()) return;
+              this.sendSubTab = "file";
+              Object.assign(this.forms.file, {
+                bot_id: profile.bot_id,
+                destination_id: profile.destination_id,
+                destination_alias: profile.destination_alias || "",
+                chat_id: profile.chat_id || "",
+                media_type: profile.media_type === "document" ? "document" : "video",
+                file_relative_path: profile.file_relative_path || "",
+                caption: profile.caption || "",
+                parse_mode: profile.parse_mode,
+              });
+              return;
+            }
+            this.sendSubTab = "text";
+            Object.assign(this.forms.send, {
+              bot_id: profile.bot_id,
+              destination_id: profile.destination_id,
+              destination_alias: profile.destination_alias || "",
+              chat_id: profile.chat_id || "",
+              tag: profile.template_tag || "",
+              text: profile.text || "",
+              parse_mode: profile.parse_mode,
+              disable_web_page_preview: profile.disable_web_page_preview,
+            });
+          },
+          async previewCurrentSend() {
+            if (this.sendSubTab === "file" && !this.ensureFileSendAvailable()) return;
+            const payload = this.currentSendPayload();
+            delete payload.send_mode;
+            this.sendDryRun = await this.api("/send/preview", { method: "POST", body: JSON.stringify(payload) });
+          },
+          async preflightCurrentSend() {
+            if (this.sendSubTab === "file" && !this.ensureFileSendAvailable()) return;
+            const payload = this.currentSendPayload();
+            delete payload.send_mode;
+            this.sendDryRun = await this.api("/send/preflight", { method: "POST", body: JSON.stringify(payload) });
+          },
+          async createSendBatch() {
+            if (this.sendSubTab === "file" && !this.ensureFileSendAvailable()) return;
+            const payload = this.currentSendPayload();
+            const body = {
+              ...payload,
+              name: this.forms.batch.name || `Batch ${new Date().toLocaleString("ru-RU")}`,
+              send_kind: payload.kind,
+              template_tag: payload.kind === "template" ? payload.tag : null,
+              destination_ids: this.forms.batch.destination_ids,
+              chat_ids: [],
+            };
+            delete body.kind;
+            delete body.send_mode;
+            delete body.destination_id;
+            delete body.destination_alias;
+            delete body.chat_id;
+            delete body.tag;
+            await this.api("/send-batches", { method: "POST", body: JSON.stringify(body) });
+            this.forms.batch = { name: "", destination_ids: [] };
+            await this.refreshAll();
+          },
+          async previewSendBatch(batch_id) {
+            this.sendDryRun = await this.api(`/send-batches/${batch_id}/preview`, { method: "POST" });
+          },
+          async enqueueSendBatch(batch_id) {
+            await this.api(`/send-batches/${batch_id}/enqueue`, { method: "POST" });
+            await this.refreshAll();
+          },
+          async cancelSendBatch(batch_id) {
+            await this.api(`/send-batches/${batch_id}/cancel`, { method: "POST" });
+            await this.refreshAll();
+          },
           async dryRunText() { this.sendDryRun = await this.api("/send/text/dry-run", { method: "POST", body: JSON.stringify(this.forms.send) }); },
           async dryRunTemplate() { this.sendDryRun = await this.api("/send/template/dry-run", { method: "POST", body: JSON.stringify(this.forms.templateSend) }); },
-          async dryRunFile() { this.sendDryRun = await this.api("/send/file/dry-run", { method: "POST", body: JSON.stringify(this.forms.file) }); },
+          async dryRunFile() {
+            if (!this.ensureFileSendAvailable()) return;
+            this.sendDryRun = await this.api("/send/file/dry-run", { method: "POST", body: JSON.stringify(this.forms.file) });
+          },
+          async loadMedia() {
+            if (!this.ensureFileSendAvailable()) return;
+            const params = new URLSearchParams({ path: this.mediaPath || "" });
+            const listing = await this.api(`/media?${params.toString()}`);
+            this.mediaPath = listing.relative_path;
+            this.mediaItems = listing.items;
+          },
+          selectMediaFile(item) {
+            if (item.kind !== "file") return;
+            this.forms.file.file_relative_path = item.relative_path;
+            if (item.media_type === "video" || item.media_type === "document") {
+              this.forms.file.media_type = item.media_type;
+            }
+          },
           copyCurl(kind) {
             const path = {
               file: "/api/v1/send/file",
@@ -1113,12 +2467,24 @@
             const command = `curl -X POST ${location.origin}${path} -H "Content-Type: application/json"${token} -d '${JSON.stringify(payload)}'`;
             navigator.clipboard?.writeText(command);
           },
+          copyMcpConnection() {
+            navigator.clipboard?.writeText(JSON.stringify(this.mcpConnectionInfo, null, 2));
+          },
           async startLogin() { await this.api("/mtproto/login/start", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone }) }); },
           async confirmCode() { await this.api("/mtproto/login/confirm-code", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone, code: this.forms.mtproto.code }) }); },
           async confirmPassword() { await this.api("/mtproto/login/confirm-password", { method: "POST", body: JSON.stringify({ password: this.forms.mtproto.password }) }); },
           async createAnalyticsTarget() { await this.api("/analytics/targets", { method: "POST", body: JSON.stringify(this.forms.analytics) }); this.forms.analytics = { peer_ref: "", title: "" }; await this.refreshAll(); },
           async refreshAnalytics(target_id) { await this.api("/analytics/refresh", { method: "POST", body: JSON.stringify({ target_id }) }); await this.refreshAll(); },
+          async retrySendHistory(send_history_id) { await this.api(`/send-history/${send_history_id}/retry`, { method: "POST" }); await this.refreshAll(); },
+          async cancelSendHistory(send_history_id) { await this.api(`/send-history/${send_history_id}/cancel`, { method: "POST" }); await this.refreshAll(); },
           async saveDiagnosticSettings() { await this.api("/diagnostics/bot", { method: "PATCH", body: JSON.stringify({ bot_id: this.diagnosticSettings.bot_id, is_enabled: this.diagnosticSettings.is_enabled }) }); await this.refreshAll(); },
+          async createDestinationFromDiagnosticUpdate(update_id) {
+            await this.api(`/diagnostics/updates/${update_id}/destination`, {
+              method: "POST",
+              body: JSON.stringify(this.forms.diagnosticDestination),
+            });
+            await this.refreshAll();
+          },
           async saveDiscoverySettings(bot_id, is_enabled) { await this.api(`/discovery/bots/${bot_id}`, { method: "PATCH", body: JSON.stringify({ is_enabled }) }); await this.refreshAll(); },
           discoveryFor(bot_id) { return this.discoverySettings.find((item) => item.bot_id === bot_id); },
           discoveryEnabled(bot_id) { return Boolean(this.discoveryFor(bot_id)?.is_enabled); },
@@ -1150,6 +2516,141 @@
             await this.refreshAll();
           },
           async revokeApiToken(token_id) { await this.api(`/auth/tokens/${token_id}`, { method: "DELETE" }); await this.refreshAll(); },
+          normalizedOperationsSettings() {
+            const payload = { ...this.operationsSettings };
+            payload.cors_allowed_origins = this.parseCsv(this.operationsText.cors_allowed_origins);
+            payload.mcp_allowed_origins = this.parseCsv(this.operationsText.mcp_allowed_origins);
+            payload.protected_api_hosts = this.parseCsv(this.operationsText.protected_api_hosts);
+            [
+              "rate_limit_per_minute",
+              "quiet_hours_start",
+              "quiet_hours_end",
+              "callback_url",
+              "backup_git_repo_url",
+              "backup_git_api_base_url",
+              "backup_git_api_token",
+            ].forEach((key) => {
+              if (payload[key] === "") payload[key] = null;
+            });
+            if (!payload.backup_git_service) payload.backup_git_service = "auto";
+            if (!payload.backup_git_auth_method) payload.backup_git_auth_method = "token";
+            return payload;
+          },
+          async saveRuntimeSettings() {
+            this.operationsSettings = await this.api("/operations/settings", {
+              method: "PATCH",
+              body: JSON.stringify(this.normalizedOperationsSettings()),
+            });
+            await this.refreshAll();
+          },
+          async checkBackupRepository() {
+            this.operationsSettings = await this.api("/operations/settings", {
+              method: "PATCH",
+              body: JSON.stringify(this.normalizedOperationsSettings()),
+            });
+            this.backupRepoCheck = await this.api("/operations/backup/check-repo", {
+              method: "POST",
+              body: JSON.stringify({}),
+            });
+            this.syncOperationsText();
+          },
+          async runBackupPreflight() {
+            this.operationsSettings = await this.api("/operations/settings", {
+              method: "PATCH",
+              body: JSON.stringify(this.normalizedOperationsSettings()),
+            });
+            this.backupPreflight = await this.api("/operations/backup/preflight", {
+              method: "POST",
+              body: JSON.stringify({
+                include_secrets: this.operationsSettings.backup_include_secrets,
+                push_to_git: false,
+              }),
+            });
+            this.backupDiff = this.backupPreflight.diff;
+            await this.refreshAll();
+          },
+          async loadBackupDiff() {
+            this.backupDiff = await this.api("/operations/backup/diff", {
+              method: "POST",
+              body: JSON.stringify({}),
+            });
+          },
+          parseBackupImportJson() {
+            const raw = this.backupImport.jsonText.trim();
+            if (!raw) throw new Error("Вставь backup JSON");
+            return JSON.parse(raw);
+          },
+          ensureRestoreWizardReady() {
+            if (!this.restoreWizard.runId) {
+              this.lastError = "Выбери backup run для restore";
+              return false;
+            }
+            if (!this.restoreWizard.sections.length) {
+              this.lastError = "Выбери хотя бы одну секцию для restore";
+              return false;
+            }
+            return true;
+          },
+          async previewBackupRunRestore() {
+            if (!this.ensureRestoreWizardReady()) return;
+            try {
+              this.restoreWizard.preview = await this.api(`/operations/backup/runs/${this.restoreWizard.runId}/restore-preview`, {
+                method: "POST",
+                body: JSON.stringify({ sections: this.restoreWizard.sections }),
+              });
+              this.backupDiff = this.restoreWizard.preview.diff;
+            } catch (error) {
+              this.lastError = error instanceof Error ? error.message : "Restore preview не выполнен";
+            }
+          },
+          async applyBackupRunRestore() {
+            if (!this.ensureRestoreWizardReady()) return;
+            try {
+              this.restoreWizard.lastApply = await this.api(`/operations/backup/runs/${this.restoreWizard.runId}/restore`, {
+                method: "POST",
+                body: JSON.stringify({ sections: this.restoreWizard.sections, confirm: this.restoreWizard.confirm }),
+              });
+              this.restoreWizard.confirm = "";
+              await this.refreshAll();
+            } catch (error) {
+              this.lastError = error instanceof Error ? error.message : "Restore не выполнен";
+            }
+          },
+          async previewBackupImport() {
+            try {
+              const snapshot = this.parseBackupImportJson();
+              this.backupImport.preview = await this.api("/operations/backup/import/preview", {
+                method: "POST",
+                body: JSON.stringify({ snapshot }),
+              });
+              this.backupDiff = this.backupImport.preview.diff;
+            } catch (error) {
+              this.lastError = error instanceof Error ? error.message : "Backup JSON не читается";
+            }
+          },
+          async applyBackupImport() {
+            try {
+              const snapshot = this.parseBackupImportJson();
+              this.backupImport.lastApply = await this.api("/operations/backup/import/apply", {
+                method: "POST",
+                body: JSON.stringify({ snapshot, confirm: this.backupImport.confirm }),
+              });
+              this.backupImport.confirm = "";
+              await this.refreshAll();
+            } catch (error) {
+              this.lastError = error instanceof Error ? error.message : "Restore не выполнен";
+            }
+          },
+          async runBackup(push_to_git) {
+            const run = await this.api("/operations/backup/run", {
+              method: "POST",
+              body: JSON.stringify({
+                include_secrets: this.operationsSettings.backup_include_secrets,
+                push_to_git,
+              }),
+            });
+            this.backupRuns = [run, ...this.backupRuns.filter((item) => item.id !== run.id)];
+          },
         },
       }).mount("#app");
     </script>
