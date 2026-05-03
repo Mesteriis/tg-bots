@@ -4,9 +4,29 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.events import MemoryEventBus
+from tg_bot_aggregator.mcp_catalog import MCP_TOOL_DEFINITIONS
 from tg_bot_aggregator.mcp_server import create_mcp_asgi_app, create_mcp_server
 from tg_bot_aggregator.models import Base
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
+
+
+def test_mcp_catalog_contains_reliability_tools() -> None:
+    tools = {tool.name: tool for tool in MCP_TOOL_DEFINITIONS}
+
+    expected = {
+        "get_reliability_summary": ("read", "read"),
+        "get_reliability_graph": ("read", "read"),
+        "list_send_attempts": ("read", "read"),
+        "list_rate_limit_buckets": ("read", "read"),
+        "release_stale_send_locks": ("task", "write"),
+        "bulk_retry_sends": ("send", "write"),
+        "bulk_cancel_sends": ("send", "write"),
+    }
+
+    for name, (category, risk) in expected.items():
+        assert name in tools
+        assert tools[name].category == category
+        assert tools[name].risk == risk
 
 
 async def test_mcp_server_exposes_expected_tools() -> None:
@@ -43,6 +63,24 @@ async def test_mcp_server_exposes_expected_tools() -> None:
         "get_discovery_settings",
         "update_discovery_settings",
         "check_destination",
+        "get_mcp_connection_info",
+        "list_media",
+        "list_send_profiles",
+        "create_send_profile",
+        "list_send_batches",
+        "create_send_batch",
+        "preview_send_batch",
+        "enqueue_send_batch",
+        "cancel_send_batch",
+        "list_diagnostic_updates",
+        "create_destination_from_diagnostic_update",
+        "get_reliability_summary",
+        "get_reliability_graph",
+        "list_send_attempts",
+        "list_rate_limit_buckets",
+        "release_stale_send_locks",
+        "bulk_retry_sends",
+        "bulk_cancel_sends",
     }.issubset(names)
     await engine.dispose()
 

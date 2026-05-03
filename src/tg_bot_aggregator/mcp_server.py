@@ -1,7 +1,12 @@
+import inspect
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from typing import Any
 
+import redis.asyncio as redis
 from mcp.server.fastmcp import FastMCP
+from redis.exceptions import RedisError
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.applications import Starlette
 
@@ -13,6 +18,14 @@ from tg_bot_aggregator.api_tokens import (
 )
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.events import MemoryEventBus
+from tg_bot_aggregator.media_browser import MediaBrowser
+from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
+from tg_bot_aggregator.reliability import (
+    RateBucketSnapshot,
+    RedisRateLimitStore,
+    ReliabilityReadService,
+    SendRateLimiter,
+)
 from tg_bot_aggregator.repositories import (
     AnalyticsRepository,
     ApiTokenRepository,
@@ -20,12 +33,18 @@ from tg_bot_aggregator.repositories import (
     BotDiscoverySettingsRepository,
     BotRepository,
     DestinationRepository,
+    DiagnosticUpdateRepository,
     McpSettingsRepository,
+    NotFoundError,
+    SendAttemptRepository,
+    SendBatchRepository,
     SendHistoryRepository,
+    SendProfileRepository,
     TemplateRepository,
 )
-from tg_bot_aggregator.send_service import SendService
+from tg_bot_aggregator.send_service import SendService, SendServiceError
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
+from tg_bot_aggregator.workflow_service import WorkflowService
 
 SessionFactoryProvider = Callable[[], async_sessionmaker[AsyncSession]]
 
@@ -41,6 +60,106 @@ async def ensure_mcp_tool_enabled(
             raise PermissionError("MCP protocol is disabled")
         if tool_name not in set(settings.enabled_tools_json or []):
             raise PermissionError(f"MCP tool '{tool_name}' is disabled")
+
+
+async def _close_redis_client(redis_client: object | None) -> None:
+    if redis_client is None:
+        return
+
+    close = getattr(redis_client, "aclose", None)
+    if close is None:
+        close = getattr(redis_client, "close", None)
+    if close is None:
+        return
+
+    result = close()
+    if inspect.isawaitable(result):
+        await result
+
+
+async def _count_recent_sends(
+    session: AsyncSession,
+    since: datetime,
+    *conditions: object,
+) -> int:
+    statement = (
+        select(func.count())
+        .select_from(SendAttempt)
+        .join(SendHistory, SendAttempt.send_history_id == SendHistory.id)
+        .where(
+            SendAttempt.started_at >= since,
+            or_(
+                SendAttempt.error_kind.is_(None),
+                SendAttempt.error_kind.not_in(
+                    ("rate_limit", "worker_error", "worker_cancelled")
+                ),
+            ),
+            *conditions,
+        )
+    )
+    return int((await session.execute(statement)).scalar_one())
+
+
+async def _sqlite_rate_bucket_snapshots(
+    *,
+    session: AsyncSession,
+    settings: Settings,
+    bot_id: int,
+    chat_id: str,
+    destination_id: int | None,
+) -> list[RateBucketSnapshot]:
+    since = utc_now() - timedelta(seconds=60)
+    snapshots: list[RateBucketSnapshot] = []
+    if settings.send_global_rate_per_minute is not None:
+        snapshots.append(
+            RateBucketSnapshot(
+                bucket_key="send:global",
+                limit=settings.send_global_rate_per_minute,
+                used=await _count_recent_sends(session, since),
+                retry_after_seconds=None,
+            )
+        )
+    if settings.send_bot_rate_per_minute is not None:
+        snapshots.append(
+            RateBucketSnapshot(
+                bucket_key=f"send:bot:{bot_id}",
+                limit=settings.send_bot_rate_per_minute,
+                used=await _count_recent_sends(session, since, SendHistory.bot_id == bot_id),
+                retry_after_seconds=None,
+            )
+        )
+    if settings.send_chat_rate_per_minute is not None:
+        snapshots.append(
+            RateBucketSnapshot(
+                bucket_key=f"send:chat:{chat_id}",
+                limit=settings.send_chat_rate_per_minute,
+                used=await _count_recent_sends(session, since, SendHistory.chat_id == chat_id),
+                retry_after_seconds=None,
+            )
+        )
+    if settings.send_destination_rate_per_minute is not None and destination_id is not None:
+        snapshots.append(
+            RateBucketSnapshot(
+                bucket_key=f"send:destination:{destination_id}",
+                limit=settings.send_destination_rate_per_minute,
+                used=await _count_recent_sends(
+                    session,
+                    since,
+                    SendHistory.destination_id == destination_id,
+                ),
+                retry_after_seconds=None,
+            )
+        )
+    return snapshots
+
+
+def _serialize_rate_bucket_snapshot(item: RateBucketSnapshot) -> dict[str, Any]:
+    return {
+        "bucket_key": item.bucket_key,
+        "limit": item.limit,
+        "used": item.used,
+        "retry_after_seconds": item.retry_after_seconds,
+    }
 
 
 def create_mcp_server(
@@ -203,6 +322,359 @@ def create_mcp_server(
                 }
                 for item in rows
             ]
+
+    @mcp.tool()
+    async def get_reliability_summary() -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "get_reliability_summary")
+        async with get_session_factory()() as session:
+            return await ReliabilityReadService(session).summary()
+
+    @mcp.tool()
+    async def get_reliability_graph() -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "get_reliability_graph")
+        async with get_session_factory()() as session:
+            return await ReliabilityReadService(session).graph()
+
+    @mcp.tool()
+    async def list_send_attempts(limit: int = 100) -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_send_attempts")
+        async with get_session_factory()() as session:
+            attempts = await SendAttemptRepository(session).list(limit=limit)
+            return [
+                {
+                    "id": item.id,
+                    "send_history_id": item.send_history_id,
+                    "attempt_number": item.attempt_number,
+                    "worker_id": item.worker_id,
+                    "started_at": item.started_at.isoformat(),
+                    "finished_at": item.finished_at.isoformat()
+                    if item.finished_at is not None
+                    else None,
+                    "status": item.status,
+                    "telegram_error_code": item.telegram_error_code,
+                    "error_kind": item.error_kind,
+                    "error_message": item.error_message,
+                    "retry_after_seconds": item.retry_after_seconds,
+                    "latency_ms": item.latency_ms,
+                    "response_payload_json": item.response_payload_json,
+                }
+                for item in attempts
+            ]
+
+    @mcp.tool()
+    async def list_rate_limit_buckets(
+        bot_id: int = 0,
+        chat_id: str = "*",
+        destination_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_rate_limit_buckets")
+        async with get_session_factory()() as session:
+            redis_client: object | None = None
+            try:
+                redis_client = redis.from_url(settings.redis_url)
+                limiter = SendRateLimiter(
+                    store=RedisRateLimitStore(redis_client),
+                    global_limit_per_minute=settings.send_global_rate_per_minute,
+                    bot_limit_per_minute=settings.send_bot_rate_per_minute,
+                    chat_limit_per_minute=settings.send_chat_rate_per_minute,
+                    destination_limit_per_minute=settings.send_destination_rate_per_minute,
+                )
+                snapshots = await limiter.snapshots(
+                    bot_id=bot_id,
+                    chat_id=chat_id,
+                    destination_id=destination_id,
+                )
+            except RedisError:
+                snapshots = await _sqlite_rate_bucket_snapshots(
+                    session=session,
+                    settings=settings,
+                    bot_id=bot_id,
+                    chat_id=chat_id,
+                    destination_id=destination_id,
+                )
+            finally:
+                await _close_redis_client(redis_client)
+        return [_serialize_rate_bucket_snapshot(item) for item in snapshots]
+
+    @mcp.tool()
+    async def release_stale_send_locks() -> dict[str, int]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "release_stale_send_locks")
+        async with get_session_factory()() as session:
+            released = await SendHistoryRepository(session).release_stale_locks(utc_now())
+            await session.commit()
+            await event_bus.publish("send.released", {"released": released})
+            return {"released": released}
+
+    @mcp.tool()
+    async def bulk_retry_sends(send_history_ids: list[int]) -> dict[str, int]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "bulk_retry_sends")
+        changed = 0
+        skipped = 0
+        async with get_session_factory()() as session:
+            service = SendService(session, bot_api_client, settings, event_bus)
+            for send_history_id in send_history_ids:
+                try:
+                    await service.retry_history(send_history_id)
+                except (NotFoundError, ValueError, SendServiceError):
+                    skipped += 1
+                else:
+                    changed += 1
+        return {"changed": changed, "skipped": skipped}
+
+    @mcp.tool()
+    async def bulk_cancel_sends(send_history_ids: list[int]) -> dict[str, int]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "bulk_cancel_sends")
+        changed = 0
+        skipped = 0
+        async with get_session_factory()() as session:
+            service = SendService(session, bot_api_client, settings, event_bus)
+            for send_history_id in send_history_ids:
+                try:
+                    await service.cancel_history(send_history_id)
+                except (NotFoundError, ValueError, SendServiceError):
+                    skipped += 1
+                else:
+                    changed += 1
+        return {"changed": changed, "skipped": skipped}
+
+    @mcp.tool()
+    async def list_media(path: str = "") -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_media")
+        listing = MediaBrowser(
+            settings.shared_media_root,
+            require_mount=settings.shared_media_require_mount,
+        ).list_directory(path)
+        return {
+            "relative_path": listing.relative_path,
+            "items": [
+                {
+                    "name": item.name,
+                    "relative_path": item.relative_path,
+                    "kind": item.kind,
+                    "size_bytes": item.size_bytes,
+                    "modified_at": item.modified_at.isoformat(),
+                    "media_type": item.media_type,
+                }
+                for item in listing.items
+            ],
+        }
+
+    @mcp.tool()
+    async def list_send_profiles() -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_send_profiles")
+        async with get_session_factory()() as session:
+            rows = await SendProfileRepository(session).list()
+            return [
+                {
+                    "id": row.id,
+                    "name": row.name,
+                    "bot_id": row.bot_id,
+                    "send_kind": row.send_kind,
+                    "destination_id": row.destination_id,
+                    "destination_alias": row.destination_alias,
+                    "template_tag": row.template_tag,
+                    "media_type": row.media_type,
+                    "is_active": row.is_active,
+                }
+                for row in rows
+            ]
+
+    @mcp.tool()
+    async def create_send_profile(
+        name: str,
+        bot_id: int,
+        send_kind: str,
+        destination_id: int | None = None,
+        destination_alias: str | None = None,
+        chat_id: str | None = None,
+        template_tag: str | None = None,
+        text: str | None = None,
+        media_type: str = "none",
+        file_relative_path: str | None = None,
+        caption: str | None = None,
+    ) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "create_send_profile")
+        async with get_session_factory()() as session:
+            row = await SendProfileRepository(session).create(
+                name=name,
+                bot_id=bot_id,
+                send_kind=send_kind,
+                destination_id=destination_id,
+                destination_alias=destination_alias,
+                chat_id=chat_id,
+                template_tag=template_tag,
+                text=text,
+                media_type=media_type,
+                file_relative_path=file_relative_path,
+                caption=caption,
+                variables_json={},
+                is_active=True,
+            )
+            await session.commit()
+            return {"id": row.id, "name": row.name, "send_kind": row.send_kind}
+
+    @mcp.tool()
+    async def list_send_batches() -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_send_batches")
+        async with get_session_factory()() as session:
+            repo = SendBatchRepository(session)
+            rows = await repo.list_batches()
+            return [
+                {
+                    "id": row.id,
+                    "name": row.name,
+                    "bot_id": row.bot_id,
+                    "send_kind": row.send_kind,
+                    "status": row.status,
+                    "items_count": len(await repo.list_items(row.id)),
+                }
+                for row in rows
+            ]
+
+    @mcp.tool()
+    async def create_send_batch(
+        name: str,
+        bot_id: int,
+        send_kind: str,
+        destination_ids: list[int],
+        text: str | None = None,
+        template_tag: str | None = None,
+    ) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "create_send_batch")
+        async with get_session_factory()() as session:
+            repo = SendBatchRepository(session)
+            batch = await repo.create_batch(
+                name=name,
+                bot_id=bot_id,
+                send_kind=send_kind,
+                text=text,
+                template_tag=template_tag,
+                variables_json={},
+            )
+            destinations = DestinationRepository(session)
+            for destination_id in destination_ids:
+                destination = await destinations.get(destination_id)
+                if destination is None:
+                    raise ValueError(f"destination {destination_id} not found")
+                await repo.add_item(
+                    batch.id,
+                    destination_id=destination.id,
+                    chat_id=destination.chat_id,
+                    message_thread_id=destination.message_thread_id,
+                )
+            await session.commit()
+            return {"id": batch.id, "status": batch.status}
+
+    @mcp.tool()
+    async def preview_send_batch(batch_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "preview_send_batch")
+        async with get_session_factory()() as session:
+            service = WorkflowService(SendService(session, bot_api_client, settings, event_bus))
+            return await service.preview_batch(batch_id)
+
+    @mcp.tool()
+    async def enqueue_send_batch(batch_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "enqueue_send_batch")
+        async with get_session_factory()() as session:
+            service = WorkflowService(SendService(session, bot_api_client, settings, event_bus))
+            batch = await service.enqueue_batch(batch_id)
+            return {"id": batch.id, "status": batch.status}
+
+    @mcp.tool()
+    async def cancel_send_batch(batch_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "cancel_send_batch")
+        async with get_session_factory()() as session:
+            service = WorkflowService(SendService(session, bot_api_client, settings, event_bus))
+            batch = await service.cancel_batch(batch_id)
+            return {"id": batch.id, "status": batch.status}
+
+    @mcp.tool()
+    async def list_diagnostic_updates(limit: int = 20) -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_diagnostic_updates")
+        async with get_session_factory()() as session:
+            rows = await DiagnosticUpdateRepository(session).list(limit=limit)
+            return [
+                {
+                    "id": row.id,
+                    "update_id": row.update_id,
+                    "chat_id": row.chat_id,
+                    "chat_type": row.chat_type,
+                    "chat_title": row.chat_title,
+                    "message_thread_id": row.message_thread_id,
+                }
+                for row in rows
+            ]
+
+    @mcp.tool()
+    async def create_destination_from_diagnostic_update(
+        update_id: int,
+        bot_id: int,
+        alias: str | None = None,
+    ) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(
+            get_session_factory(), "create_destination_from_diagnostic_update"
+        )
+        async with get_session_factory()() as session:
+            update = await DiagnosticUpdateRepository(session).get(update_id)
+            if update is None or update.chat_id is None:
+                raise ValueError(f"diagnostic update {update_id} not found")
+            kind = (
+                "forum_topic"
+                if update.message_thread_id is not None
+                else update.chat_type or "group"
+            )
+            destination = await DestinationRepository(session).upsert_by_chat(
+                bot_id=bot_id,
+                chat_id=update.chat_id,
+                message_thread_id=update.message_thread_id,
+                kind=kind,
+                alias=alias,
+                title=update.chat_title,
+                username=update.chat_username,
+                is_active=True,
+            )
+            await session.commit()
+            return {"id": destination.id, "chat_id": destination.chat_id}
+
+    @mcp.tool()
+    async def get_mcp_connection_info() -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "get_mcp_connection_info")
+        async with get_session_factory()() as session:
+            mcp_settings = await McpSettingsRepository(session).get_or_create()
+            await session.commit()
+            first_protected_host = (
+                settings.protected_api_hosts[0] if settings.protected_api_hosts else ""
+            )
+            return {
+                "streamable_http": {
+                    "path": f"{settings.mcp_v1_prefix}/",
+                    "enabled": mcp_settings.is_enabled,
+                },
+                "legacy_sse": {
+                    "path": f"{settings.mcp_v1_prefix}/sse",
+                    "enabled": mcp_settings.is_enabled and mcp_settings.allow_legacy_sse,
+                },
+                "legacy_messages": {
+                    "path": f"{settings.mcp_v1_prefix}/messages/",
+                    "enabled": mcp_settings.is_enabled and mcp_settings.allow_legacy_sse,
+                },
+                "protected_hosts": settings.protected_api_hosts,
+                "required_headers": ["X-API-Token"],
+                "enabled_tools": list(mcp_settings.enabled_tools_json or []),
+                "local_examples": {
+                    "streamable_http": (
+                        f"http://127.0.0.1:{settings.app_port}{settings.mcp_v1_prefix}/"
+                    ),
+                },
+                "protected_host_examples": {
+                    "streamable_http": (
+                        f"https://{first_protected_host}{settings.mcp_v1_prefix}/"
+                        if first_protected_host
+                        else ""
+                    ),
+                    "header": "X-API-Token: <token>",
+                },
+            }
 
     @mcp.tool()
     async def dry_run_send(
