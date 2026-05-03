@@ -363,6 +363,9 @@ class SendHistoryRepository:
         row.telegram_message_id = telegram_message_id
         row.response_payload_json = response
         row.sent_at = utc_now()
+        row.locked_at = None
+        row.locked_by = None
+        row.lock_expires_at = None
         await self.session.flush()
         return row
 
@@ -390,6 +393,25 @@ class SendHistoryRepository:
         row.error_message = error_message
         row.response_payload_json = response
         row.failed_at = utc_now()
+        row.locked_at = None
+        row.locked_by = None
+        row.lock_expires_at = None
+        await self.session.flush()
+        return row
+
+    async def mark_cancelled(
+        self,
+        row: SendHistory,
+        error_message: str = "cancelled by user",
+    ) -> SendHistory:
+        row.status = "cancelled"
+        row.error_code = "cancelled"
+        row.error_message = error_message
+        row.queued_task_id = None
+        row.next_retry_at = None
+        row.locked_at = None
+        row.locked_by = None
+        row.lock_expires_at = None
         await self.session.flush()
         return row
 
