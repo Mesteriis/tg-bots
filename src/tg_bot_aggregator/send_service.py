@@ -1,22 +1,31 @@
-import asyncio
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from time import monotonic
 from typing import Any, Protocol
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.models import Destination, SendHistory
+from tg_bot_aggregator.models import Destination, SendHistory, utc_now
+from tg_bot_aggregator.reliability import (
+    SendQueueService,
+    SendRateLimiter,
+    compute_retry_decision,
+    latency_ms_since,
+)
 from tg_bot_aggregator.repositories import (
     BotRepository,
     DestinationRepository,
     NotFoundError,
+    SendAttemptRepository,
     SendHistoryRepository,
     TemplateRepository,
 )
 from tg_bot_aggregator.security import redact_secrets
-from tg_bot_aggregator.shared_paths import validate_shared_file
+from tg_bot_aggregator.shared_paths import SharedFile, SharedPathError, validate_shared_file
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
 from tg_bot_aggregator.template_renderer import render_template_text
 
@@ -26,9 +35,20 @@ class EventPublisher(Protocol):
         ...
 
 
+class CallbackPublisher(Protocol):
+    async def publish(self, url: str, payload: dict[str, Any]) -> None:
+        ...
+
+
 class NullEventPublisher:
     async def publish(self, event_type: str, data: dict[str, Any]) -> str:
         return f"local:{event_type}"
+
+
+class HttpCallbackPublisher:
+    async def publish(self, url: str, payload: dict[str, Any]) -> None:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+            await client.post(url, json=payload)
 
 
 class SendServiceError(ValueError):
@@ -53,21 +73,50 @@ class SendService:
         bot_api: TelegramBotApiClient,
         settings: Settings,
         events: EventPublisher | None = None,
+        callback_publisher: CallbackPublisher | None = None,
+        *,
+        rate_limiter: SendRateLimiter | None = None,
     ) -> None:
         self.session = session
         self.bot_api = bot_api
         self.settings = settings
         self.events = events or NullEventPublisher()
+        self.callback_publisher = callback_publisher or HttpCallbackPublisher()
+        self.rate_limiter = rate_limiter
         self.bots = BotRepository(session)
         self.destinations = DestinationRepository(session)
         self.templates = TemplateRepository(session)
         self.history = SendHistoryRepository(session)
+        self.attempts = SendAttemptRepository(session)
+        self.queue = SendQueueService(self.history, self.attempts)
+
+    def _validate_shared_file(self, file_relative_path: str) -> SharedFile:
+        try:
+            return validate_shared_file(
+                self.settings.shared_media_root,
+                file_relative_path,
+                self.settings.max_local_file_bytes,
+                require_mount=self.settings.shared_media_require_mount,
+            )
+        except SharedPathError as exc:
+            raise SendServiceError(str(exc)) from exc
 
     async def _bot_token(self, bot_id: int) -> str:
         bot = await self.bots.get(bot_id)
         if bot is None or not bot.is_active:
             raise NotFoundError(f"bot {bot_id} not found")
         return bot.token
+
+    async def check_send_policy(self, bot_id: int) -> list[str]:
+        if not self.settings.policy_enabled:
+            return []
+        errors: list[str] = []
+        if self.settings.rate_limit_per_minute is not None:
+            since = utc_now() - timedelta(minutes=1)
+            count = await self.history.count_for_bot_since(bot_id, since)
+            if count >= self.settings.rate_limit_per_minute:
+                errors.append("rate limit exceeded for bot")
+        return errors
 
     async def _target(
         self,
@@ -143,6 +192,29 @@ class SendService:
     def _clean_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in payload.items() if value is not None}
 
+    def _is_future_send(self, send_at: datetime | None) -> bool:
+        if send_at is None:
+            return False
+        resolved = send_at if send_at.tzinfo is not None else send_at.replace(tzinfo=UTC)
+        return resolved > utc_now()
+
+    async def _publish_terminal_callback(self, event_type: str, row: SendHistory) -> None:
+        if not self.settings.callback_enabled or not self.settings.callback_url:
+            return
+        payload = {
+            "schema_version": "v1",
+            "event_type": event_type,
+            "send_history_id": row.id,
+            "status": row.status,
+        }
+        try:
+            await self.callback_publisher.publish(self.settings.callback_url, payload)
+        except httpx.HTTPError as exc:
+            await self.events.publish(
+                "send.callback.failed",
+                {"send_history_id": row.id, "error": str(exc)},
+            )
+
     async def _create_or_reuse_history(
         self,
         *,
@@ -156,6 +228,7 @@ class SendService:
         send_mode: str,
         idempotency_key: str | None,
         request_payload: dict[str, Any],
+        next_retry_at: datetime | None = None,
     ) -> tuple[SendHistory, bool]:
         fingerprint = self._fingerprint(request_payload)
         existing = await self._idempotent_existing(idempotency_key, fingerprint)
@@ -176,6 +249,7 @@ class SendService:
             send_mode=send_mode,
             idempotency_key=idempotency_key,
             idempotency_fingerprint=fingerprint if idempotency_key else None,
+            next_retry_at=next_retry_at,
             request_payload_json=redact_secrets(request_payload),
         )
         await self.session.commit()
@@ -215,6 +289,7 @@ class SendService:
         await self.history.mark_succeeded(row, message_id, redact_secrets(response))
         await self.session.commit()
         await self.events.publish("send.succeeded", {"send_history_id": row.id})
+        await self._publish_terminal_callback("send.succeeded", row)
         return row
 
     async def _send_existing_row(self, token: str, row: SendHistory) -> SendHistory:
@@ -224,50 +299,203 @@ class SendService:
             await self.history.mark_failed(row, str(exc.error_code), exc.description, exc.payload)
             await self.session.commit()
             await self.events.publish("send.failed", {"send_history_id": row.id})
+            await self._publish_terminal_callback("send.failed", row)
             return row
         return await self._mark_success_from_response(row, response)
 
-    async def process_queued_send(self, send_history_id: int) -> SendHistory:
+    async def process_queued_send(
+        self,
+        send_history_id: int,
+        worker_id: str = "worker",
+    ) -> SendHistory:
         row = await self.history.get(send_history_id)
         if row is None:
             raise NotFoundError(f"send history {send_history_id} not found")
-        if row.status == "succeeded":
+        if row.status in {"succeeded", "cancelled", "dead_letter", "blocked"}:
             return row
+        if self._is_future_send(row.next_retry_at):
+            return row
+        leased = await self.queue.acquire_lease(
+            row,
+            worker_id=worker_id,
+            lease_seconds=self.settings.send_worker_lease_seconds,
+        )
+        if leased is None:
+            return row
+        row = leased
         token = await self._bot_token(row.bot_id)
-        max_attempts = max(1, self.settings.send_retry_max_attempts)
-        delay = max(0.0, self.settings.send_retry_delay_seconds)
-        last_error: TelegramBotApiError | None = None
+        attempt = row.attempt_count + 1
+        started_at = utc_now()
+        started_timer = monotonic()
+        await self.history.mark_sending(row, attempt)
+        row.last_attempt_at = started_at
+        await self.session.commit()
+        await self.events.publish(
+            "send.locked",
+            {"send_history_id": row.id, "worker_id": worker_id},
+        )
 
-        for attempt in range(row.attempt_count + 1, max_attempts + 1):
-            await self.history.mark_sending(row, attempt)
-            await self.session.commit()
-            try:
-                response = await self._execute_row_once(token, row)
-            except TelegramBotApiError as exc:
-                last_error = exc
-                if attempt < max_attempts and self._is_retryable(exc):
-                    await asyncio.sleep(delay)
-                    continue
-                await self.history.mark_failed(
+        if self.settings.reliability_enabled and self.rate_limiter is not None:
+            rate_decision = await self.rate_limiter.check_and_increment(
+                bot_id=row.bot_id,
+                chat_id=row.chat_id,
+                destination_id=row.destination_id,
+            )
+            if not rate_decision.allowed:
+                retry_after_seconds = rate_decision.retry_after_seconds or 60
+                finished_at = utc_now()
+                await self.queue.record_attempt(
+                    row=row,
+                    worker_id=worker_id,
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    status="deferred",
+                    telegram_error_code=None,
+                    error_kind="rate_limit",
+                    error_message=rate_decision.message or "rate limit exceeded",
+                    retry_after_seconds=retry_after_seconds,
+                    latency_ms=latency_ms_since(started_timer),
+                    response_payload={"bucket_key": rate_decision.bucket_key},
+                )
+                await self.history.mark_deferred(
                     row,
-                    str(exc.error_code),
-                    exc.description,
-                    exc.payload,
+                    error_code="rate_limit",
+                    error_message=rate_decision.message or "rate limit exceeded",
+                    error_kind="rate_limit",
+                    next_retry_at=finished_at + timedelta(seconds=retry_after_seconds),
+                    retry_after_seconds=retry_after_seconds,
+                    response=None,
                 )
                 await self.session.commit()
-                await self.events.publish("send.failed", {"send_history_id": row.id})
+                await self.events.publish(
+                    "send.deferred",
+                    {
+                        "send_history_id": row.id,
+                        "next_retry_at": row.next_retry_at.isoformat()
+                        if row.next_retry_at is not None
+                        else None,
+                    },
+                )
                 return row
-            return await self._mark_success_from_response(row, response)
 
-        if last_error is not None:
-            await self.history.mark_failed(
+        try:
+            response = await self._execute_row_once(token, row)
+        except TelegramBotApiError as exc:
+            decision = compute_retry_decision(
+                settings=self.settings,
+                error=exc,
+                attempt_number=attempt,
+                now=utc_now(),
+            )
+            finished_at = utc_now()
+            await self.queue.record_attempt(
+                row=row,
+                worker_id=worker_id,
+                started_at=started_at,
+                finished_at=finished_at,
+                status=decision.terminal_status,
+                telegram_error_code=str(exc.error_code) if exc.error_code is not None else None,
+                error_kind=decision.error_kind,
+                error_message=exc.description,
+                retry_after_seconds=decision.retry_after_seconds,
+                latency_ms=latency_ms_since(started_timer),
+                response_payload=exc.payload,
+            )
+            if decision.retry and decision.next_retry_at is not None:
+                await self.history.mark_deferred(
+                    row,
+                    str(exc.error_code) if exc.error_code is not None else None,
+                    exc.description,
+                    decision.error_kind,
+                    decision.next_retry_at,
+                    decision.retry_after_seconds,
+                    redact_secrets(exc.payload),
+                )
+                await self.session.commit()
+                await self.events.publish(
+                    "send.deferred",
+                    {
+                        "send_history_id": row.id,
+                        "next_retry_at": row.next_retry_at.isoformat()
+                        if row.next_retry_at is not None
+                        else None,
+                    },
+                )
+                return row
+            if decision.terminal_status == "blocked":
+                await self.history.mark_blocked(
+                    row,
+                    str(exc.error_code) if exc.error_code is not None else None,
+                    exc.description,
+                    decision.error_kind,
+                )
+                await self.session.commit()
+                await self.events.publish("send.blocked", {"send_history_id": row.id})
+                await self._publish_terminal_callback("send.blocked", row)
+                return row
+            await self.history.mark_dead_letter(
                 row,
-                str(last_error.error_code),
-                last_error.description,
-                last_error.payload,
+                str(exc.error_code) if exc.error_code is not None else None,
+                exc.description,
+                decision.error_kind,
+                redact_secrets(exc.payload),
             )
             await self.session.commit()
-            await self.events.publish("send.failed", {"send_history_id": row.id})
+            await self.events.publish("send.dead_letter", {"send_history_id": row.id})
+            await self._publish_terminal_callback("send.dead_letter", row)
+            return row
+
+        finished_at = utc_now()
+        await self.queue.record_attempt(
+            row=row,
+            worker_id=worker_id,
+            started_at=started_at,
+            finished_at=finished_at,
+            status="succeeded",
+            telegram_error_code=None,
+            error_kind=None,
+            error_message=None,
+            retry_after_seconds=None,
+            latency_ms=latency_ms_since(started_timer),
+            response_payload=response,
+        )
+        return await self._mark_success_from_response(row, response)
+
+    async def retry_history(self, send_history_id: int) -> SendHistory:
+        row = await self.history.get(send_history_id)
+        if row is None:
+            raise NotFoundError(f"send history {send_history_id} not found")
+        if row.status not in {"failed", "dead_letter", "blocked"}:
+            raise SendServiceError(
+                "only failed, dead-letter, or blocked send history rows can be retried"
+            )
+        row.status = "queued"
+        row.error_code = None
+        row.error_message = None
+        row.last_error_kind = None
+        row.response_payload_json = None
+        row.failed_at = None
+        row.queued_task_id = None
+        row.next_retry_at = None
+        row.retry_after_seconds = None
+        row.locked_at = None
+        row.locked_by = None
+        row.lock_expires_at = None
+        await self.session.commit()
+        await self.events.publish("send.retry_scheduled", {"send_history_id": row.id})
+        return row
+
+    async def cancel_history(self, send_history_id: int) -> SendHistory:
+        row = await self.history.get(send_history_id)
+        if row is None:
+            raise NotFoundError(f"send history {send_history_id} not found")
+        if row.status not in {"created", "queued", "deferred"}:
+            raise SendServiceError(
+                "only created, queued, or deferred send history rows can be cancelled"
+            )
+        await self.history.mark_cancelled(row)
+        await self.session.commit()
+        await self.events.publish("send.cancelled", {"send_history_id": row.id})
         return row
 
     async def _queue_or_send(
@@ -284,9 +512,14 @@ class SendService:
         request_payload: dict[str, Any],
         file_relative_path: str | None = None,
         file_size_bytes: int | None = None,
+        send_at: datetime | None = None,
     ) -> SendHistory:
         if send_mode not in {"sync", "queued"}:
             raise SendServiceError("send_mode must be sync or queued")
+        effective_send_mode = "queued" if self._is_future_send(send_at) else send_mode
+        policy_errors = await self.check_send_policy(bot_id)
+        if policy_errors:
+            raise SendServiceError("; ".join(policy_errors))
         row, reused = await self._create_or_reuse_history(
             bot_id=bot_id,
             target=target,
@@ -295,11 +528,12 @@ class SendService:
             media_type=media_type,
             file_relative_path=file_relative_path,
             file_size_bytes=file_size_bytes,
-            send_mode=send_mode,
+            send_mode=effective_send_mode,
             idempotency_key=idempotency_key,
             request_payload=request_payload,
+            next_retry_at=send_at if effective_send_mode == "queued" else None,
         )
-        if reused or send_mode == "queued":
+        if reused or effective_send_mode == "queued":
             return row
         return await self._send_existing_row(token, row)
 
@@ -396,11 +630,7 @@ class SendService:
             message_thread_id,
         )
         rendered_caption = render_template_text(caption, variables) if caption else caption
-        shared_file = validate_shared_file(
-            self.settings.shared_media_root,
-            file_relative_path,
-            self.settings.max_local_file_bytes,
-        )
+        shared_file = self._validate_shared_file(file_relative_path)
         field_name = "document" if media_type == "document" else "video"
         method = "sendDocument" if media_type == "document" else "sendVideo"
         payload = self._clean_payload(
@@ -434,6 +664,7 @@ class SendService:
         disable_web_page_preview: bool | None = None,
         message_thread_id: int | None = None,
         send_mode: str = "sync",
+        send_at: datetime | None = None,
         idempotency_key: str | None = None,
     ) -> SendHistory:
         token = await self._bot_token(bot_id)
@@ -462,6 +693,7 @@ class SendService:
             send_mode=send_mode,
             idempotency_key=idempotency_key,
             request_payload=request_payload,
+            send_at=send_at,
         )
 
     async def send_template(
@@ -474,6 +706,7 @@ class SendService:
         message_thread_id: int | None = None,
         variables: dict[str, Any] | None = None,
         send_mode: str = "sync",
+        send_at: datetime | None = None,
         idempotency_key: str | None = None,
     ) -> SendHistory:
         template = await self.templates.get_by_tag(tag)
@@ -491,6 +724,7 @@ class SendService:
             disable_web_page_preview=template.disable_web_page_preview,
             message_thread_id=message_thread_id,
             send_mode=send_mode,
+            send_at=send_at,
             idempotency_key=idempotency_key,
         )
 
@@ -508,6 +742,7 @@ class SendService:
         message_thread_id: int | None = None,
         variables: dict[str, Any] | None = None,
         send_mode: str = "sync",
+        send_at: datetime | None = None,
         idempotency_key: str | None = None,
     ) -> SendHistory:
         if not self.settings.is_local_bot_api:
@@ -524,11 +759,7 @@ class SendService:
             message_thread_id,
         )
         rendered_caption = render_template_text(caption, variables) if caption else caption
-        shared_file = validate_shared_file(
-            self.settings.shared_media_root,
-            file_relative_path,
-            self.settings.max_local_file_bytes,
-        )
+        shared_file = self._validate_shared_file(file_relative_path)
         field_name = "document" if media_type == "document" else "video"
         method = "sendDocument" if media_type == "document" else "sendVideo"
         request_payload = {
@@ -551,6 +782,7 @@ class SendService:
             send_mode=send_mode,
             idempotency_key=idempotency_key,
             request_payload=request_payload,
+            send_at=send_at,
         )
 
     async def send_media_reference(
@@ -565,6 +797,7 @@ class SendService:
         parse_mode: str | None = None,
         message_thread_id: int | None = None,
         send_mode: str = "sync",
+        send_at: datetime | None = None,
         idempotency_key: str | None = None,
     ) -> SendHistory:
         if media_type not in {"document", "video"}:
@@ -598,4 +831,5 @@ class SendService:
             send_mode=send_mode,
             idempotency_key=idempotency_key,
             request_payload=request_payload,
+            send_at=send_at,
         )

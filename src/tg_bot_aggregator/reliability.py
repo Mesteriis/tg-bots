@@ -4,9 +4,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import ceil
-from typing import Protocol
+from typing import Any, Protocol
 
 from tg_bot_aggregator.config import Settings
+from tg_bot_aggregator.models import SendHistory, utc_now
+from tg_bot_aggregator.repositories import SendAttemptRepository, SendHistoryRepository
+from tg_bot_aggregator.security import redact_secrets
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiError
 
 
@@ -387,3 +390,56 @@ def compute_retry_decision(
         retry_after_seconds=delay,
         next_retry_at=now + timedelta(seconds=delay),
     )
+
+
+def latency_ms_since(start: float) -> int:
+    return int((time.monotonic() - start) * 1000)
+
+
+class SendQueueService:
+    def __init__(self, history: SendHistoryRepository, attempts: SendAttemptRepository) -> None:
+        self.history = history
+        self.attempts = attempts
+
+    async def acquire_lease(
+        self,
+        row: SendHistory,
+        worker_id: str,
+        lease_seconds: int,
+    ) -> SendHistory | None:
+        return await self.history.acquire_due_lease(
+            row_id=row.id,
+            worker_id=worker_id,
+            now=utc_now(),
+            lease_seconds=lease_seconds,
+        )
+
+    async def record_attempt(
+        self,
+        *,
+        row: SendHistory,
+        worker_id: str,
+        started_at: datetime,
+        finished_at: datetime,
+        status: str,
+        telegram_error_code: str | None,
+        error_kind: str | None,
+        error_message: str | None,
+        retry_after_seconds: int | None,
+        latency_ms: int | None,
+        response_payload: dict[str, Any] | None,
+    ) -> None:
+        await self.attempts.create(
+            send_history_id=row.id,
+            attempt_number=row.attempt_count,
+            worker_id=worker_id,
+            started_at=started_at,
+            finished_at=finished_at,
+            status=status,
+            telegram_error_code=telegram_error_code,
+            error_kind=error_kind,
+            error_message=error_message,
+            retry_after_seconds=retry_after_seconds,
+            latency_ms=latency_ms,
+            response_payload_json=redact_secrets(response_payload),
+        )

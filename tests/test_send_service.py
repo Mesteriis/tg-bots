@@ -6,9 +6,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.config import Settings
+from tg_bot_aggregator.reliability import MemoryRateLimitStore, SendRateLimiter
 from tg_bot_aggregator.repositories import (
     BotRepository,
     DestinationRepository,
+    SendAttemptRepository,
+    SendBatchRepository,
     SendHistoryRepository,
     TemplateRepository,
 )
@@ -17,7 +20,8 @@ from tg_bot_aggregator.send_service import (
     SendService,
     SendServiceError,
 )
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
+from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
+from tg_bot_aggregator.workflow_service import WorkflowService
 
 
 class CapturingEvents:
@@ -29,8 +33,22 @@ class CapturingEvents:
         return f"event:{len(self.events)}"
 
 
-def _bot_api_client(seen: dict[str, Any]) -> TelegramBotApiClient:
+class CapturingCallbacks:
+    def __init__(self) -> None:
+        self.payloads: list[dict[str, Any]] = []
+
+    async def publish(self, url: str, payload: dict[str, Any]) -> None:
+        self.payloads.append({"url": url, "payload": payload})
+
+
+def _bot_api_client(
+    seen: dict[str, Any],
+    *,
+    error: TelegramBotApiError | None = None,
+) -> TelegramBotApiClient:
     async def handler(request: httpx.Request) -> httpx.Response:
+        if error is not None:
+            raise error
         seen["url"] = str(request.url)
         seen["json"] = request.read().decode()
         return httpx.Response(200, json={"ok": True, "result": {"message_id": 55}})
@@ -102,6 +120,39 @@ async def test_send_file_sends_file_uri(db_session: AsyncSession, tmp_path: Path
     assert row.file_size_bytes == 5
     assert "file://" in seen["json"]
     assert seen["url"].endswith("/sendVideo")
+
+
+async def test_send_file_rejects_unavailable_shared_media_root_before_telegram_call(
+    db_session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    seen: dict[str, Any] = {}
+    settings = Settings(SHARED_MEDIA_ROOT=str(tmp_path / "missing-media"))
+    service = SendService(db_session, _bot_api_client(seen), settings)
+
+    with pytest.raises(SendServiceError, match="shared media root is not available"):
+        await service.send_file(bot.id, "video", "a.mp4", chat_id="@ops")
+
+    assert seen == {}
+
+
+async def test_send_file_can_require_shared_media_root_to_be_mounted(
+    db_session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    (tmp_path / "a.mp4").write_bytes(b"video")
+    seen: dict[str, Any] = {}
+    settings = Settings(SHARED_MEDIA_ROOT=str(tmp_path), SHARED_MEDIA_REQUIRE_MOUNT=True)
+    service = SendService(db_session, _bot_api_client(seen), settings)
+
+    with pytest.raises(SendServiceError, match="shared media root is not mounted"):
+        await service.send_file(bot.id, "video", "a.mp4", chat_id="@ops")
+
+    assert seen == {}
 
 
 async def test_failed_telegram_response_is_persisted(db_session: AsyncSession) -> None:
@@ -220,6 +271,209 @@ async def test_dry_run_text_validates_without_history_or_telegram_call(
     assert await SendHistoryRepository(db_session).list() == []
 
 
+async def test_workflow_preview_send_delegates_without_history_or_telegram_call(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    destination = await DestinationRepository(db_session).create(
+        bot_id=bot.id,
+        kind="channel",
+        chat_id="@ops",
+        alias="ops_channel",
+    )
+    await TemplateRepository(db_session).create(
+        tag="deploy",
+        title="Deploy",
+        text="Deploy {{service}}",
+    )
+    await db_session.commit()
+    seen: dict[str, Any] = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["count"] += 1
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 1}})
+
+    workflow = WorkflowService(
+        SendService(
+            db_session,
+            TelegramBotApiClient(
+                "http://telegram-bot-api:8081",
+                httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+            ),
+            Settings(),
+        )
+    )
+
+    preview = await workflow.preview_send(
+        kind="template",
+        bot_id=bot.id,
+        destination_id=destination.id,
+        tag="deploy",
+        variables={"service": "api"},
+    )
+
+    assert preview["kind"] == "template"
+    assert preview["method"] == "sendMessage"
+    assert preview["payload"]["text"] == "Deploy api"
+    assert preview["destination_id"] == destination.id
+    assert seen["count"] == 0
+    assert await SendHistoryRepository(db_session).list() == []
+
+
+async def test_retry_failed_history_row_resends_existing_payload(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+
+    async def failing_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"ok": False, "error_code": 500, "description": "boom"})
+
+    first_service = SendService(
+        db_session,
+        TelegramBotApiClient(
+            "http://telegram-bot-api:8081",
+            httpx.AsyncClient(transport=httpx.MockTransport(failing_handler)),
+        ),
+        Settings(),
+    )
+    failed = await first_service.send_text(bot.id, "hello", chat_id="@ops")
+    seen: dict[str, Any] = {"count": 0}
+
+    async def success_handler(request: httpx.Request) -> httpx.Response:
+        seen["count"] += 1
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 77}})
+
+    retry_service = SendService(
+        db_session,
+        TelegramBotApiClient(
+            "http://telegram-bot-api:8081",
+            httpx.AsyncClient(transport=httpx.MockTransport(success_handler)),
+        ),
+        Settings(),
+    )
+
+    retried = await retry_service.retry_history(failed.id)
+
+    assert failed.status == "queued"
+    assert retried.id == failed.id
+    assert retried.status == "queued"
+    assert retried.error_code is None
+    assert retried.error_message is None
+    assert seen["count"] == 0
+
+
+async def test_cancelled_queued_history_row_is_not_processed(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    seen: dict[str, Any] = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["count"] += 1
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 1}})
+
+    service = SendService(
+        db_session,
+        TelegramBotApiClient(
+            "http://telegram-bot-api:8081",
+            httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        ),
+        Settings(),
+    )
+    queued = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    cancelled = await service.cancel_history(queued.id)
+    processed = await service.process_queued_send(queued.id)
+
+    assert cancelled.status == "cancelled"
+    assert processed.status == "cancelled"
+    assert seen["count"] == 0
+
+
+async def test_workflow_batch_preview_and_enqueue_create_history_rows(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    first = await DestinationRepository(db_session).create(
+        bot_id=bot.id,
+        kind="channel",
+        chat_id="@one",
+    )
+    second = await DestinationRepository(db_session).create(
+        bot_id=bot.id,
+        kind="channel",
+        chat_id="@two",
+    )
+    batches = SendBatchRepository(db_session)
+    batch = await batches.create_batch(
+        name="Release",
+        bot_id=bot.id,
+        send_kind="text",
+        text="hello",
+    )
+    await batches.add_item(batch.id, destination_id=first.id, chat_id="@one")
+    await batches.add_item(batch.id, destination_id=second.id, chat_id="@two")
+    await db_session.commit()
+    seen: dict[str, Any] = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["count"] += 1
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": seen["count"]}})
+
+    workflow = WorkflowService(
+        SendService(
+            db_session,
+            TelegramBotApiClient(
+                "http://telegram-bot-api:8081",
+                httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+            ),
+            Settings(),
+        )
+    )
+
+    preview = await workflow.preview_batch(batch.id)
+    enqueued = await workflow.enqueue_batch(batch.id)
+
+    items = await batches.list_items(batch.id)
+    history = await SendHistoryRepository(db_session).list()
+
+    assert [item["payload"]["chat_id"] for item in preview["previews"]] == ["@one", "@two"]
+    assert enqueued.status == "queued"
+    assert [item.status for item in items] == ["queued", "queued"]
+    assert len(history) == 2
+    assert {row.status for row in history} == {"queued"}
+    assert seen["count"] == 0
+
+
+async def test_workflow_batch_cancel_only_pending_or_queued_items(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    batches = SendBatchRepository(db_session)
+    batch = await batches.create_batch(
+        name="Release",
+        bot_id=bot.id,
+        send_kind="text",
+        text="hello",
+    )
+    first = await batches.add_item(batch.id, chat_id="@one")
+    second = await batches.add_item(batch.id, chat_id="@two")
+    await batches.mark_item_status(second, "succeeded", send_history_id=100)
+    await db_session.commit()
+    workflow = WorkflowService(SendService(db_session, _bot_api_client({}), Settings()))
+
+    cancelled = await workflow.cancel_batch(batch.id)
+    items = await batches.list_items(batch.id)
+
+    assert cancelled.status == "cancelled"
+    assert [(item.id, item.status) for item in items] == [
+        (first.id, "cancelled"),
+        (second.id, "succeeded"),
+    ]
+
+
 async def test_queued_send_is_processed_with_transient_retry(
     db_session: AsyncSession,
 ) -> None:
@@ -247,8 +501,254 @@ async def test_queued_send_is_processed_with_transient_retry(
 
     queued = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
     assert queued.status == "queued"
-    processed = await service.process_queued_send(queued.id)
+    first_pass = await service.process_queued_send(queued.id, worker_id="worker-a")
 
-    assert processed.status == "succeeded"
-    assert processed.telegram_message_id == 77
-    assert processed.attempt_count == 2
+    assert first_pass.status == "deferred"
+    assert first_pass.telegram_message_id is None
+    assert first_pass.attempt_count == 1
+    assert seen["count"] == 1
+
+    first_pass.next_retry_at = None
+    await db_session.commit()
+    second_pass = await service.process_queued_send(queued.id, worker_id="worker-a")
+
+    assert second_pass.status == "succeeded"
+    assert second_pass.telegram_message_id == 77
+    assert second_pass.attempt_count == 2
+    assert seen["count"] == 2
+
+
+async def test_queued_send_rate_limit_error_is_deferred_with_attempt(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    client = _bot_api_client(
+        {},
+        error=TelegramBotApiError(
+            method="sendMessage",
+            error_code=429,
+            description="Too Many Requests",
+            payload={"ok": False, "parameters": {"retry_after": 9}, "token": "123:token"},
+        ),
+    )
+    service = SendService(
+        db_session,
+        client,
+        Settings(reliability_enabled=True, send_retry_max_attempts=3),
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    processed = await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert processed.status == "deferred"
+    assert processed.retry_after_seconds == 9
+    assert processed.next_retry_at is not None
+    assert processed.locked_by is None
+    assert attempts[0].attempt_number == 1
+    assert attempts[0].worker_id == "worker-a"
+    assert attempts[0].status == "deferred"
+    assert attempts[0].error_kind == "telegram_rate_limit"
+    assert attempts[0].response_payload_json == {
+        "ok": False,
+        "parameters": {"retry_after": 9},
+        "token": "[REDACTED]",
+    }
+
+
+async def test_exhausted_retry_budget_moves_to_dead_letter(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    client = _bot_api_client(
+        {},
+        error=TelegramBotApiError(
+            method="sendMessage",
+            error_code=502,
+            description="Bad Gateway",
+            payload={"ok": False},
+        ),
+    )
+    service = SendService(
+        db_session,
+        client,
+        Settings(reliability_enabled=True, send_retry_max_attempts=1),
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    processed = await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert processed.status == "dead_letter"
+    assert processed.last_error_kind == "telegram_server"
+    assert processed.locked_by is None
+    assert attempts[0].status == "dead_letter"
+    assert attempts[0].error_kind == "telegram_server"
+
+
+async def test_non_retryable_client_error_moves_to_blocked_with_callback(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    callbacks = CapturingCallbacks()
+    events = CapturingEvents()
+    client = _bot_api_client(
+        {},
+        error=TelegramBotApiError(
+            method="sendMessage",
+            error_code=400,
+            description="Bad Request",
+            payload={"ok": False},
+        ),
+    )
+    service = SendService(
+        db_session,
+        client,
+        Settings(
+            reliability_enabled=True,
+            callback_enabled=True,
+            callback_url="http://callbacks.local/send",
+        ),
+        events,
+        callbacks,
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    processed = await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert processed.status == "blocked"
+    assert processed.last_error_kind == "telegram_client"
+    assert attempts[0].status == "blocked"
+    assert "send.blocked" in events.events
+    assert callbacks.payloads[0]["payload"]["event_type"] == "send.blocked"
+
+
+async def test_retry_history_requeues_dead_letter_blocked_and_failed(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    history = SendHistoryRepository(db_session)
+    rows = [
+        await history.create(
+            bot_id=bot.id,
+            chat_id=f"@ops_{status}",
+            media_type="none",
+            status=status,
+            send_mode="queued",
+            attempt_count=2,
+            error_code="500",
+            error_message="boom",
+            last_error_kind="telegram_server",
+            retry_after_seconds=30,
+            request_payload_json={"method": "sendMessage", "chat_id": "@ops", "text": status},
+        )
+        for status in ("failed", "dead_letter", "blocked")
+    ]
+    await db_session.commit()
+    events = CapturingEvents()
+    service = SendService(db_session, _bot_api_client({}), Settings(), events)
+
+    retried = [await service.retry_history(row.id) for row in rows]
+
+    assert [row.status for row in retried] == ["queued", "queued", "queued"]
+    assert all(row.error_code is None for row in retried)
+    assert all(row.error_message is None for row in retried)
+    assert all(row.last_error_kind is None for row in retried)
+    assert all(row.retry_after_seconds is None for row in retried)
+    assert events.events == [
+        "send.retry_scheduled",
+        "send.retry_scheduled",
+        "send.retry_scheduled",
+    ]
+
+
+async def test_deferred_history_row_can_be_cancelled(db_session: AsyncSession) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    history = SendHistoryRepository(db_session)
+    row = await history.create(
+        bot_id=bot.id,
+        chat_id="@ops",
+        media_type="none",
+        status="deferred",
+        send_mode="queued",
+        request_payload_json={"method": "sendMessage", "chat_id": "@ops", "text": "hello"},
+    )
+    await db_session.commit()
+    service = SendService(db_session, _bot_api_client({}), Settings())
+
+    cancelled = await service.cancel_history(row.id)
+
+    assert cancelled.status == "cancelled"
+
+
+async def test_rate_limiter_defers_before_telegram_call_with_attempt(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    seen: dict[str, Any] = {"count": 0}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["count"] += 1
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 77}})
+
+    rate_limiter = SendRateLimiter(
+        store=MemoryRateLimitStore(),
+        global_limit_per_minute=0,
+        bot_limit_per_minute=None,
+        chat_limit_per_minute=None,
+        destination_limit_per_minute=None,
+    )
+    service = SendService(
+        db_session,
+        TelegramBotApiClient(
+            "http://telegram-bot-api:8081",
+            httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        ),
+        Settings(reliability_enabled=True),
+        rate_limiter=rate_limiter,
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    processed = await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert processed.status == "deferred"
+    assert processed.last_error_kind == "rate_limit"
+    assert processed.locked_by is None
+    assert attempts[0].status == "deferred"
+    assert attempts[0].error_kind == "rate_limit"
+    assert seen["count"] == 0
+
+
+async def test_send_service_publishes_terminal_callback(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    callbacks = CapturingCallbacks()
+    service = SendService(
+        db_session,
+        _bot_api_client({}),
+        Settings(CALLBACK_ENABLED=True, CALLBACK_URL="http://callbacks.local/send"),
+        callback_publisher=callbacks,
+    )
+
+    row = await service.send_text(bot.id, "hello", chat_id="@ops")
+
+    assert row.status == "succeeded"
+    assert callbacks.payloads == [
+        {
+            "url": "http://callbacks.local/send",
+            "payload": {
+                "schema_version": "v1",
+                "event_type": "send.succeeded",
+                "send_history_id": row.id,
+                "status": "succeeded",
+            },
+        }
+    ]
