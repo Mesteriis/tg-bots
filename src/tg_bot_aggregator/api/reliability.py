@@ -96,8 +96,8 @@ async def _close_redis_client(redis_client: object | None) -> None:
 async def list_buckets(
     request: Request,
     response: Response,
-    bot_id: int,
-    chat_id: str,
+    bot_id: int = 0,
+    chat_id: str = "*",
     destination_id: int | None = None,
 ) -> list[RateBucketSnapshot]:
     redis_client: object | None = None
@@ -183,7 +183,12 @@ async def bulk_retry_sends(
     skipped = 0
     for send_history_id in payload.send_history_ids:
         try:
+            existing = await SendHistoryRepository(session).get(send_history_id)
+            previous_next_retry_at = existing.next_retry_at if existing is not None else None
             row = await service.retry_history(send_history_id)
+            if previous_next_retry_at is not None:
+                row.next_retry_at = previous_next_retry_at
+                await session.commit()
             await _enqueue_if_ready(row, request, session)
         except (ValueError, SendServiceError, NotFoundError):
             skipped += 1
