@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from math import ceil
 
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiError
@@ -40,9 +41,11 @@ def classify_telegram_error(error: TelegramBotApiError) -> str:
 
 def _bounded_backoff(settings: Settings, attempt_number: int) -> int:
     base = max(0.0, settings.send_retry_base_delay_seconds)
+    if base == 0:
+        return 0
     cap = max(base, settings.send_retry_max_delay_seconds)
     delay = base * (2 ** max(0, attempt_number - 1))
-    return int(min(cap, delay))
+    return ceil(min(cap, delay))
 
 
 def compute_retry_decision(

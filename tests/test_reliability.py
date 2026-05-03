@@ -268,3 +268,45 @@ def test_exhausted_retry_budget_goes_dead_letter() -> None:
     assert decision.retry is False
     assert decision.terminal_status == "dead_letter"
     assert decision.error_kind == "telegram_server"
+
+
+def test_fractional_base_backoff_schedules_positive_delay() -> None:
+    settings = Settings(
+        send_retry_max_attempts=3,
+        send_retry_base_delay_seconds=0.5,
+        send_retry_max_delay_seconds=60.0,
+    )
+    now = datetime(2026, 5, 3, 12, 0, tzinfo=UTC)
+    exc = TelegramBotApiError(
+        method="sendMessage",
+        error_code=502,
+        description="Bad Gateway",
+        payload={"ok": False},
+    )
+
+    decision = compute_retry_decision(settings=settings, error=exc, attempt_number=1, now=now)
+
+    assert decision.retry is True
+    assert decision.retry_after_seconds == 1
+    assert decision.next_retry_at == datetime(2026, 5, 3, 12, 0, 1, tzinfo=UTC)
+
+
+def test_exponential_backoff_is_capped_by_max_delay() -> None:
+    settings = Settings(
+        send_retry_max_attempts=5,
+        send_retry_base_delay_seconds=3.0,
+        send_retry_max_delay_seconds=5.0,
+    )
+    now = datetime(2026, 5, 3, 12, 0, tzinfo=UTC)
+    exc = TelegramBotApiError(
+        method="sendMessage",
+        error_code=502,
+        description="Bad Gateway",
+        payload={"ok": False},
+    )
+
+    decision = compute_retry_decision(settings=settings, error=exc, attempt_number=3, now=now)
+
+    assert decision.retry is True
+    assert decision.retry_after_seconds == 5
+    assert decision.next_retry_at == datetime(2026, 5, 3, 12, 0, 5, tzinfo=UTC)
