@@ -36,9 +36,17 @@ class _FakeEngine:
         self.disposed = True
 
 
+class _FakeSession:
+    def __init__(self) -> None:
+        self.committed = False
+
+    async def commit(self) -> None:
+        self.committed = True
+
+
 class _FakeSessionContext:
     async def __aenter__(self) -> object:
-        return object()
+        return _FakeSession()
 
     async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
         return None
@@ -100,6 +108,11 @@ async def test_due_send_history_uses_ready_for_lease_and_closes_redis(
         def __init__(self, session: object) -> None:
             self.session = session
 
+        async def release_stale_locks(self, now: object) -> int:
+            calls["released_stale_locks"] = True
+            calls["stale_cutoff"] = now
+            return 1
+
         async def list_ready_for_lease(self, now: object, limit: int = 100) -> list[SendHistory]:
             calls["used_ready_for_lease"] = True
             calls["limit"] = limit
@@ -142,6 +155,8 @@ async def test_due_send_history_uses_ready_for_lease_and_closes_redis(
     processed = await run_due_send_history(limit=7)
 
     assert processed == [11]
+    assert calls["released_stale_locks"] is True
+    assert calls["stale_cutoff"] is not None
     assert calls["used_ready_for_lease"] is True
     assert calls["limit"] == 7
     assert calls["worker_ids"] == ["taskiq-due-send-history"]

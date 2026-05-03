@@ -149,8 +149,13 @@ async def run_due_send_history(limit: int = 100) -> list[int]:
                 events,
                 rate_limiter=rate_limiter,
             )
-            due_rows = await SendHistoryRepository(session).list_ready_for_lease(
-                utc_now(),
+            history = SendHistoryRepository(session)
+            now = utc_now()
+            stale_cutoff = now - timedelta(seconds=settings.send_stale_lock_grace_seconds)
+            await history.release_stale_locks(stale_cutoff)
+            await session.commit()
+            due_rows = await history.list_ready_for_lease(
+                now,
                 limit=limit,
             )
             processed: list[int] = []
