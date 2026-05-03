@@ -281,6 +281,48 @@ async def test_buckets_fall_back_to_memory_store_on_redis_error(
 
 
 @pytest.mark.asyncio
+async def test_buckets_degraded_fallback_uses_recent_sqlite_counts(
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async with session_factory() as session:
+        bot = await BotRepository(session).create(name="ops", token="123:abc")
+        await SendHistoryRepository(session).create(
+            bot_id=bot.id,
+            destination_id=9,
+            chat_id="@ops",
+            media_type="none",
+            status="succeeded",
+        )
+        await SendHistoryRepository(session).create(
+            bot_id=bot.id,
+            destination_id=9,
+            chat_id="@ops",
+            media_type="none",
+            status="queued",
+        )
+        await session.commit()
+
+    redis_client = _FakeRedisClient(fail=True)
+    monkeypatch.setattr("redis.asyncio.from_url", lambda *_args, **_kwargs: redis_client)
+
+    async with await _client(session_factory) as client:
+        response = await client.get(
+            "/api/v1/reliability/buckets",
+            params={"bot_id": bot.id, "chat_id": "@ops", "destination_id": 9},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["X-Reliability-Degraded"] == "true"
+    by_key = {row["bucket_key"]: row for row in response.json()}
+    assert by_key["send:global"]["used"] == 2
+    assert by_key[f"send:bot:{bot.id}"]["used"] == 2
+    assert by_key["send:chat:@ops"]["used"] == 2
+    assert by_key["send:destination:9"]["used"] == 2
+    assert redis_client.closed is True
+
+
+@pytest.mark.asyncio
 async def test_bulk_retry_preserves_future_retry_without_enqueueing(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -322,6 +364,41 @@ async def test_bulk_retry_preserves_future_retry_without_enqueueing(
         assert retried.queued_task_id is None
         assert retried.next_retry_at is not None
         assert retried.next_retry_at.replace(tzinfo=None) == future_retry_at.replace(tzinfo=None)
+
+
+@pytest.mark.asyncio
+async def test_single_retry_endpoint_retries_and_enqueues_ready_row(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        bot = await BotRepository(session).create(name="ops", token="123:abc")
+        row = await SendHistoryRepository(session).create(
+            bot_id=bot.id,
+            chat_id="@ops",
+            media_type="none",
+            status="dead_letter",
+        )
+        await session.commit()
+
+    enqueued: list[int] = []
+
+    async def enqueue_send_history(send_history_id: int) -> str:
+        enqueued.append(send_history_id)
+        return f"task-{send_history_id}"
+
+    async with await _client(
+        session_factory,
+        enqueue_send_history=enqueue_send_history,
+    ) as client:
+        response = await client.post(
+            f"/api/v1/reliability/send-history/{row.id}/retry",
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "queued"
+    assert payload["queued_task_id"] == f"task-{row.id}"
+    assert enqueued == [row.id]
 
 
 @pytest.mark.asyncio

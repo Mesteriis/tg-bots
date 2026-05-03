@@ -1,15 +1,16 @@
 import inspect
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from redis.exceptions import RedisError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import create_send_service, get_session
+from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.models import SendHistory, utc_now
 from tg_bot_aggregator.reliability import (
-    MemoryRateLimitStore,
     RateBucketSnapshot,
     RateLimitStore,
     RedisRateLimitStore,
@@ -28,6 +29,7 @@ from tg_bot_aggregator.schemas import (
     ReliabilityGraphRead,
     ReliabilitySummaryRead,
     SendAttemptRead,
+    SendHistoryRead,
 )
 from tg_bot_aggregator.send_service import SendServiceError
 
@@ -92,10 +94,76 @@ async def _close_redis_client(redis_client: object | None) -> None:
         await result
 
 
+async def _count_recent_sends(
+    session: AsyncSession,
+    since: datetime,
+    *conditions: object,
+) -> int:
+    statement = select(func.count()).select_from(SendHistory).where(
+        SendHistory.created_at >= since,
+        *conditions,
+    )
+    return int((await session.execute(statement)).scalar_one())
+
+
+async def _sqlite_rate_bucket_snapshots(
+    *,
+    session: AsyncSession,
+    settings: Settings,
+    bot_id: int,
+    chat_id: str,
+    destination_id: int | None,
+) -> list[RateBucketSnapshot]:
+    since = utc_now() - timedelta(seconds=60)
+    snapshots: list[RateBucketSnapshot] = []
+    if settings.send_global_rate_per_minute is not None:
+        snapshots.append(
+            RateBucketSnapshot(
+                bucket_key="send:global",
+                limit=settings.send_global_rate_per_minute,
+                used=await _count_recent_sends(session, since),
+                retry_after_seconds=None,
+            )
+        )
+    if settings.send_bot_rate_per_minute is not None:
+        snapshots.append(
+            RateBucketSnapshot(
+                bucket_key=f"send:bot:{bot_id}",
+                limit=settings.send_bot_rate_per_minute,
+                used=await _count_recent_sends(session, since, SendHistory.bot_id == bot_id),
+                retry_after_seconds=None,
+            )
+        )
+    if settings.send_chat_rate_per_minute is not None:
+        snapshots.append(
+            RateBucketSnapshot(
+                bucket_key=f"send:chat:{chat_id}",
+                limit=settings.send_chat_rate_per_minute,
+                used=await _count_recent_sends(session, since, SendHistory.chat_id == chat_id),
+                retry_after_seconds=None,
+            )
+        )
+    if settings.send_destination_rate_per_minute is not None and destination_id is not None:
+        snapshots.append(
+            RateBucketSnapshot(
+                bucket_key=f"send:destination:{destination_id}",
+                limit=settings.send_destination_rate_per_minute,
+                used=await _count_recent_sends(
+                    session,
+                    since,
+                    SendHistory.destination_id == destination_id,
+                ),
+                retry_after_seconds=None,
+            )
+        )
+    return snapshots
+
+
 @router.get("/buckets", response_model=list[RateBucketRead])
 async def list_buckets(
     request: Request,
     response: Response,
+    session: AsyncSession = Depends(get_session),
     bot_id: int = 0,
     chat_id: str = "*",
     destination_id: int | None = None,
@@ -113,9 +181,9 @@ async def list_buckets(
         )
     except RedisError:
         response.headers["X-Reliability-Degraded"] = "true"
-        return await _rate_bucket_snapshots(
-            request=request,
-            store=MemoryRateLimitStore(),
+        return await _sqlite_rate_bucket_snapshots(
+            session=session,
+            settings=request.app.state.settings,
             bot_id=bot_id,
             chat_id=chat_id,
             destination_id=destination_id,
@@ -172,24 +240,44 @@ async def _enqueue_if_ready(
         await session.commit()
 
 
+async def _retry_send_history(
+    send_history_id: int,
+    request: Request,
+    session: AsyncSession,
+) -> SendHistory:
+    existing = await SendHistoryRepository(session).get(send_history_id)
+    previous_next_retry_at = existing.next_retry_at if existing is not None else None
+    row = await create_send_service(session, request).retry_history(send_history_id)
+    if previous_next_retry_at is not None:
+        row.next_retry_at = previous_next_retry_at
+        await session.commit()
+    await _enqueue_if_ready(row, request, session)
+    return row
+
+
+@router.post("/send-history/{send_history_id}/retry", response_model=SendHistoryRead)
+async def retry_send_history(
+    send_history_id: int,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> object:
+    try:
+        return await _retry_send_history(send_history_id, request, session)
+    except (ValueError, SendServiceError, NotFoundError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/send-history/bulk-retry", response_model=BulkSendHistoryResult)
 async def bulk_retry_sends(
     payload: BulkSendHistoryRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> BulkSendHistoryResult:
-    service = create_send_service(session, request)
     changed = 0
     skipped = 0
     for send_history_id in payload.send_history_ids:
         try:
-            existing = await SendHistoryRepository(session).get(send_history_id)
-            previous_next_retry_at = existing.next_retry_at if existing is not None else None
-            row = await service.retry_history(send_history_id)
-            if previous_next_retry_at is not None:
-                row.next_retry_at = previous_next_retry_at
-                await session.commit()
-            await _enqueue_if_ready(row, request, session)
+            await _retry_send_history(send_history_id, request, session)
         except (ValueError, SendServiceError, NotFoundError):
             skipped += 1
         else:
