@@ -352,6 +352,10 @@ async def test_rate_limiter_reports_bucket_snapshots() -> None:
 
     by_key = {item.bucket_key: item for item in snapshots}
     assert by_key["send:global"].limit == 10
+    assert by_key["send:global"].used == 1
+    assert by_key["send:bot:7"].limit == 2
     assert by_key["send:bot:7"].used == 1
+    assert by_key["send:chat:-1001"].limit == 5
     assert by_key["send:chat:-1001"].used == 1
+    assert by_key["send:destination:3"].limit == 4
     assert by_key["send:destination:3"].used == 1
