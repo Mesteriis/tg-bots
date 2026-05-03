@@ -1,7 +1,9 @@
+import asyncio
 import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from math import ceil
 from time import monotonic
 from typing import Any, Protocol
 
@@ -24,7 +26,7 @@ from tg_bot_aggregator.repositories import (
     SendHistoryRepository,
     TemplateRepository,
 )
-from tg_bot_aggregator.security import redact_secrets
+from tg_bot_aggregator.security import redact_secrets, redact_text
 from tg_bot_aggregator.shared_paths import SharedFile, SharedPathError, validate_shared_file
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
 from tg_bot_aggregator.template_renderer import render_template_text
@@ -198,6 +200,12 @@ class SendService:
         resolved = send_at if send_at.tzinfo is not None else send_at.replace(tzinfo=UTC)
         return resolved > utc_now()
 
+    async def _publish_event(self, event_type: str, data: dict[str, Any]) -> None:
+        try:
+            await self.events.publish(event_type, data)
+        except Exception:
+            return
+
     async def _publish_terminal_callback(self, event_type: str, row: SendHistory) -> None:
         if not self.settings.callback_enabled or not self.settings.callback_url:
             return
@@ -209,8 +217,8 @@ class SendService:
         }
         try:
             await self.callback_publisher.publish(self.settings.callback_url, payload)
-        except httpx.HTTPError as exc:
-            await self.events.publish(
+        except Exception as exc:
+            await self._publish_event(
                 "send.callback.failed",
                 {"send_history_id": row.id, "error": str(exc)},
             )
@@ -253,7 +261,7 @@ class SendService:
             request_payload_json=redact_secrets(request_payload),
         )
         await self.session.commit()
-        await self.events.publish(
+        await self._publish_event(
             "send.queued" if send_mode == "queued" else "send.created",
             {"send_history_id": row.id},
         )
@@ -288,7 +296,7 @@ class SendService:
         )
         await self.history.mark_succeeded(row, message_id, redact_secrets(response))
         await self.session.commit()
-        await self.events.publish("send.succeeded", {"send_history_id": row.id})
+        await self._publish_event("send.succeeded", {"send_history_id": row.id})
         await self._publish_terminal_callback("send.succeeded", row)
         return row
 
@@ -298,10 +306,83 @@ class SendService:
         except TelegramBotApiError as exc:
             await self.history.mark_failed(row, str(exc.error_code), exc.description, exc.payload)
             await self.session.commit()
-            await self.events.publish("send.failed", {"send_history_id": row.id})
+            await self._publish_event("send.failed", {"send_history_id": row.id})
             await self._publish_terminal_callback("send.failed", row)
             return row
         return await self._mark_success_from_response(row, response)
+
+    def _worker_retry_after_seconds(self) -> int:
+        return max(1, ceil(max(0.0, self.settings.send_retry_base_delay_seconds)))
+
+    async def _record_interrupted_attempt(
+        self,
+        *,
+        row: SendHistory,
+        worker_id: str,
+        started_at: datetime,
+        started_timer: float,
+    ) -> None:
+        await self.queue.record_attempt(
+            row=row,
+            worker_id=worker_id,
+            started_at=started_at,
+            finished_at=utc_now(),
+            status="interrupted",
+            telegram_error_code=None,
+            error_kind="worker_cancelled",
+            error_message="send worker was cancelled",
+            retry_after_seconds=None,
+            latency_ms=latency_ms_since(started_timer),
+            response_payload=None,
+        )
+        await self.session.commit()
+
+    async def _defer_worker_error(
+        self,
+        *,
+        row: SendHistory,
+        worker_id: str,
+        started_at: datetime,
+        started_timer: float,
+        exc: Exception,
+    ) -> SendHistory:
+        finished_at = utc_now()
+        retry_after_seconds = self._worker_retry_after_seconds()
+        message = redact_text(str(exc)) or exc.__class__.__name__
+        response_payload = {"exception_type": exc.__class__.__name__}
+        await self.queue.record_attempt(
+            row=row,
+            worker_id=worker_id,
+            started_at=started_at,
+            finished_at=finished_at,
+            status="deferred",
+            telegram_error_code=None,
+            error_kind="worker_error",
+            error_message=message,
+            retry_after_seconds=retry_after_seconds,
+            latency_ms=latency_ms_since(started_timer),
+            response_payload=response_payload,
+        )
+        await self.history.mark_deferred(
+            row,
+            error_code=exc.__class__.__name__,
+            error_message=message,
+            error_kind="worker_error",
+            next_retry_at=finished_at + timedelta(seconds=retry_after_seconds),
+            retry_after_seconds=retry_after_seconds,
+            response=response_payload,
+        )
+        await self.session.commit()
+        await self._publish_event(
+            "send.deferred",
+            {
+                "send_history_id": row.id,
+                "next_retry_at": row.next_retry_at.isoformat()
+                if row.next_retry_at is not None
+                else None,
+            },
+        )
+        return row
 
     async def process_queued_send(
         self,
@@ -330,55 +411,55 @@ class SendService:
         await self.history.mark_sending(row, attempt)
         row.last_attempt_at = started_at
         await self.session.commit()
-        await self.events.publish(
+        await self._publish_event(
             "send.locked",
             {"send_history_id": row.id, "worker_id": worker_id},
         )
 
-        if self.settings.reliability_enabled and self.rate_limiter is not None:
-            rate_decision = await self.rate_limiter.check_and_increment(
-                bot_id=row.bot_id,
-                chat_id=row.chat_id,
-                destination_id=row.destination_id,
-            )
-            if not rate_decision.allowed:
-                retry_after_seconds = rate_decision.retry_after_seconds or 60
-                finished_at = utc_now()
-                await self.queue.record_attempt(
-                    row=row,
-                    worker_id=worker_id,
-                    started_at=started_at,
-                    finished_at=finished_at,
-                    status="deferred",
-                    telegram_error_code=None,
-                    error_kind="rate_limit",
-                    error_message=rate_decision.message or "rate limit exceeded",
-                    retry_after_seconds=retry_after_seconds,
-                    latency_ms=latency_ms_since(started_timer),
-                    response_payload={"bucket_key": rate_decision.bucket_key},
-                )
-                await self.history.mark_deferred(
-                    row,
-                    error_code="rate_limit",
-                    error_message=rate_decision.message or "rate limit exceeded",
-                    error_kind="rate_limit",
-                    next_retry_at=finished_at + timedelta(seconds=retry_after_seconds),
-                    retry_after_seconds=retry_after_seconds,
-                    response=None,
-                )
-                await self.session.commit()
-                await self.events.publish(
-                    "send.deferred",
-                    {
-                        "send_history_id": row.id,
-                        "next_retry_at": row.next_retry_at.isoformat()
-                        if row.next_retry_at is not None
-                        else None,
-                    },
-                )
-                return row
-
         try:
+            if self.settings.reliability_enabled and self.rate_limiter is not None:
+                rate_decision = await self.rate_limiter.check_and_increment(
+                    bot_id=row.bot_id,
+                    chat_id=row.chat_id,
+                    destination_id=row.destination_id,
+                )
+                if not rate_decision.allowed:
+                    retry_after_seconds = rate_decision.retry_after_seconds or 60
+                    finished_at = utc_now()
+                    await self.queue.record_attempt(
+                        row=row,
+                        worker_id=worker_id,
+                        started_at=started_at,
+                        finished_at=finished_at,
+                        status="deferred",
+                        telegram_error_code=None,
+                        error_kind="rate_limit",
+                        error_message=rate_decision.message or "rate limit exceeded",
+                        retry_after_seconds=retry_after_seconds,
+                        latency_ms=latency_ms_since(started_timer),
+                        response_payload={"bucket_key": rate_decision.bucket_key},
+                    )
+                    await self.history.mark_deferred(
+                        row,
+                        error_code="rate_limit",
+                        error_message=rate_decision.message or "rate limit exceeded",
+                        error_kind="rate_limit",
+                        next_retry_at=finished_at + timedelta(seconds=retry_after_seconds),
+                        retry_after_seconds=retry_after_seconds,
+                        response=None,
+                    )
+                    await self.session.commit()
+                    await self._publish_event(
+                        "send.deferred",
+                        {
+                            "send_history_id": row.id,
+                            "next_retry_at": row.next_retry_at.isoformat()
+                            if row.next_retry_at is not None
+                            else None,
+                        },
+                    )
+                    return row
+
             response = await self._execute_row_once(token, row)
         except TelegramBotApiError as exc:
             decision = compute_retry_decision(
@@ -412,7 +493,7 @@ class SendService:
                     redact_secrets(exc.payload),
                 )
                 await self.session.commit()
-                await self.events.publish(
+                await self._publish_event(
                     "send.deferred",
                     {
                         "send_history_id": row.id,
@@ -430,7 +511,7 @@ class SendService:
                     decision.error_kind,
                 )
                 await self.session.commit()
-                await self.events.publish("send.blocked", {"send_history_id": row.id})
+                await self._publish_event("send.blocked", {"send_history_id": row.id})
                 await self._publish_terminal_callback("send.blocked", row)
                 return row
             await self.history.mark_dead_letter(
@@ -441,9 +522,25 @@ class SendService:
                 redact_secrets(exc.payload),
             )
             await self.session.commit()
-            await self.events.publish("send.dead_letter", {"send_history_id": row.id})
+            await self._publish_event("send.dead_letter", {"send_history_id": row.id})
             await self._publish_terminal_callback("send.dead_letter", row)
             return row
+        except asyncio.CancelledError:
+            await self._record_interrupted_attempt(
+                row=row,
+                worker_id=worker_id,
+                started_at=started_at,
+                started_timer=started_timer,
+            )
+            raise
+        except Exception as exc:
+            return await self._defer_worker_error(
+                row=row,
+                worker_id=worker_id,
+                started_at=started_at,
+                started_timer=started_timer,
+                exc=exc,
+            )
 
         finished_at = utc_now()
         await self.queue.record_attempt(
@@ -481,7 +578,7 @@ class SendService:
         row.locked_by = None
         row.lock_expires_at = None
         await self.session.commit()
-        await self.events.publish("send.retry_scheduled", {"send_history_id": row.id})
+        await self._publish_event("send.retry_scheduled", {"send_history_id": row.id})
         return row
 
     async def cancel_history(self, send_history_id: int) -> SendHistory:
@@ -494,7 +591,7 @@ class SendService:
             )
         await self.history.mark_cancelled(row)
         await self.session.commit()
-        await self.events.publish("send.cancelled", {"send_history_id": row.id})
+        await self._publish_event("send.cancelled", {"send_history_id": row.id})
         return row
 
     async def _queue_or_send(

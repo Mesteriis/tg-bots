@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,11 @@ class CapturingCallbacks:
 
     async def publish(self, url: str, payload: dict[str, Any]) -> None:
         self.payloads.append({"url": url, "payload": payload})
+
+
+class FailingEvents:
+    async def publish(self, event_type: str, data: dict[str, Any]) -> str:
+        raise RuntimeError("event bus is unavailable")
 
 
 def _bot_api_client(
@@ -738,6 +744,86 @@ async def test_rate_limiter_defers_before_telegram_call_with_attempt(
     assert attempts[0].status == "deferred"
     assert attempts[0].error_kind == "rate_limit"
     assert seen["count"] == 0
+
+
+async def test_queued_send_event_publish_failure_does_not_break_attempt_integrity(
+    db_session: AsyncSession,
+) -> None:
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    service = SendService(
+        db_session,
+        _bot_api_client({}),
+        Settings(reliability_enabled=True),
+        FailingEvents(),
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    processed = await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert processed.status == "succeeded"
+    assert processed.locked_by is None
+    assert attempts[0].attempt_number == 1
+    assert attempts[0].status == "succeeded"
+
+
+async def test_unexpected_worker_error_is_deferred_with_attempt(
+    db_session: AsyncSession,
+) -> None:
+    token = "1234567890:FAKE_UNIT_TEST_BOT_TOKEN_DO_NOT_USE"
+
+    class ExplodingBotApi:
+        async def send_message(self, **kwargs: Any) -> dict[str, Any]:
+            raise RuntimeError(f"worker failed for {token}")
+
+    bot = await BotRepository(db_session).create(name="ops", token=token)
+    await db_session.commit()
+    service = SendService(
+        db_session,
+        ExplodingBotApi(),
+        Settings(reliability_enabled=True, send_retry_base_delay_seconds=2),
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    processed = await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert processed.status == "deferred"
+    assert processed.last_error_kind == "worker_error"
+    assert processed.retry_after_seconds == 2
+    assert processed.locked_by is None
+    assert attempts[0].attempt_number == 1
+    assert attempts[0].status == "deferred"
+    assert attempts[0].error_kind == "worker_error"
+    assert attempts[0].error_message == "worker failed for [REDACTED]"
+
+
+async def test_cancelled_worker_records_interrupted_attempt_and_keeps_lease(
+    db_session: AsyncSession,
+) -> None:
+    class CancellingBotApi:
+        async def send_message(self, **kwargs: Any) -> dict[str, Any]:
+            raise asyncio.CancelledError()
+
+    bot = await BotRepository(db_session).create(name="ops", token="123:token")
+    await db_session.commit()
+    service = SendService(
+        db_session,
+        CancellingBotApi(),
+        Settings(reliability_enabled=True),
+    )
+    row = await service.send_text(bot.id, "hello", chat_id="@ops", send_mode="queued")
+
+    with pytest.raises(asyncio.CancelledError):
+        await service.process_queued_send(row.id, worker_id="worker-a")
+    attempts = await SendAttemptRepository(db_session).list_for_send(row.id)
+
+    assert row.status == "sending"
+    assert row.locked_by == "worker-a"
+    assert attempts[0].attempt_number == 1
+    assert attempts[0].status == "interrupted"
+    assert attempts[0].error_kind == "worker_cancelled"
 
 
 async def test_send_service_publishes_terminal_callback(
