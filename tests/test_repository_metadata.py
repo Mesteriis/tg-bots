@@ -20,6 +20,10 @@ def test_oss_repository_files_exist() -> None:
         "SECURITY.md",
         "CODE_OF_CONDUCT.md",
         "CHANGELOG.md",
+        ".dockerignore",
+        ".python-version",
+        "MANIFEST.in",
+        "uv.lock",
         ".gitea/ISSUE_TEMPLATE/bug_report.md",
         ".gitea/ISSUE_TEMPLATE/feature_request.md",
     ]
@@ -38,6 +42,14 @@ def test_rnet_deploy_workflow_uses_pve_deploy_and_nginx_update() -> None:
     assert "pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml" in workflow
     assert "deploy/nginx/update-nginx-ui.sh" in workflow
     assert "curl -fsS \"http://${APP_IP}:8000/api/v1/health\"" in workflow
+
+
+def test_package_metadata_points_to_public_portfolio_mirror() -> None:
+    metadata = (ROOT / "pyproject.toml").read_text()
+
+    assert 'Homepage = "https://github.com/Mesteriis/tg-bots"' in metadata
+    assert 'Repository = "https://github.com/Mesteriis/tg-bots"' in metadata
+    assert '"Internal Deploy Repository" = "https://git.sh-inc.ru/avm/tg-bots"' in metadata
 
 
 def test_deploy_scripts_are_present_and_do_not_commit_telegram_secrets() -> None:

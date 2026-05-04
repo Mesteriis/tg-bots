@@ -6,6 +6,18 @@ Local async FastAPI service for managing Telegram bot tokens, sending tagged tex
 
 This repository is distributed under the MIT License. Contributions are welcome through focused issues and pull requests. Do not include bot tokens, API tokens, `.env` files, SQLite databases, or Telethon session files in public reports or commits.
 
+Public portfolio mirror:
+
+```text
+git@github.com:Mesteriis/tg-bots.git
+```
+
+Internal deployment repository:
+
+```text
+https://git.sh-inc.ru/avm/tg-bots.git
+```
+
 ## Security Model
 
 This project is intentionally designed for a trusted local network. Localhost and ordinary LAN access remain unauthenticated. Requests whose `Host`, `X-Forwarded-Host`, or `Origin` matches `PROTECTED_API_HOSTS` require a permanent API token for `/api/v1/*`, `/api/v1/events`, and `/mcp/v1/*`. The default protected hosts are `tg.sh-inc.ru` and `tg.sh-inc.dev`.
@@ -27,10 +39,13 @@ Bot tokens are stored in SQLite as plain text by product decision. Do not expose
 ## Development
 
 ```bash
-python -m pip install -e ".[dev]"
-pytest -q
+uv sync --extra dev
+uv run pytest -q
+uv run ruff check .
 uvicorn tg_bot_aggregator.main:create_app --factory --reload
 ```
+
+The repository keeps `uv.lock` and `.python-version` for reproducible local and CI installs. Runtime Docker images still install from `pyproject.toml` inside Python 3.11.
 
 The API is versioned under `/api/v1`. MCP endpoints are under `/mcp/v1`.
 

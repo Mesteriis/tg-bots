@@ -7,9 +7,9 @@ Thanks for considering a contribution.
 Use Python 3.11 or newer.
 
 ```bash
-python -m pip install -e ".[dev]"
-PYTHONPATH=src python -m ruff check .
-PYTHONPATH=src python -m pytest
+uv sync --extra dev
+uv run ruff check .
+uv run pytest
 ```
 
 ## Pull Requests

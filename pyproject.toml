@@ -17,7 +17,6 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Framework :: FastAPI",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -54,9 +53,10 @@ dev = [
 tg-bot-aggregator = "tg_bot_aggregator.main:run"
 
 [project.urls]
-Homepage = "https://git.sh-inc.ru/avm/tg-bots"
-Repository = "https://git.sh-inc.ru/avm/tg-bots"
-Issues = "https://git.sh-inc.ru/avm/tg-bots/issues"
+Homepage = "https://github.com/Mesteriis/tg-bots"
+Repository = "https://github.com/Mesteriis/tg-bots"
+"Internal Deploy Repository" = "https://git.sh-inc.ru/avm/tg-bots"
+Issues = "https://github.com/Mesteriis/tg-bots/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
