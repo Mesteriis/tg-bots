@@ -6,14 +6,14 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import tg_bot_aggregator.tasks as tasks_module
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.models import Base, SendHistory
-from tg_bot_aggregator.repositories import (
-    BotRepository,
-    DestinationRepository,
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
+from tg_bot_aggregator.domain.ops.repository import (
     OpsAutomationRuleRepository,
     OpsRecommendationRepository,
 )
+from tg_bot_aggregator.models import Base, SendHistory
 from tg_bot_aggregator.tasks import (
     backup_snapshot,
     create_broker,

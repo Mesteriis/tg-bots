@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import create_send_service, get_session
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.errors import NotFoundError
 from tg_bot_aggregator.domain.reliability.service import (
     RateBucketSnapshot,
     RateLimitStore,
@@ -16,13 +17,12 @@ from tg_bot_aggregator.domain.reliability.service import (
     ReliabilityReadService,
     SendRateLimiter,
 )
-from tg_bot_aggregator.domain.sending.service import SendServiceError
-from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
-from tg_bot_aggregator.repositories import (
-    NotFoundError,
+from tg_bot_aggregator.domain.sending.repository import (
     SendAttemptRepository,
     SendHistoryRepository,
 )
+from tg_bot_aggregator.domain.sending.service import SendServiceError
+from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
 from tg_bot_aggregator.schemas import (
     BulkSendHistoryRequest,
     BulkSendHistoryResult,

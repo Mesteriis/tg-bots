@@ -5,12 +5,12 @@ import httpx
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from tg_bot_aggregator.api_tokens import api_token_prefix, hash_api_token
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.events import MemoryEventBus
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.domain.auth.service import api_token_prefix, hash_api_token
+from tg_bot_aggregator.infra.events import MemoryEventBus
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.main import create_app
 from tg_bot_aggregator.models import Base
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 
 async def _client() -> httpx.AsyncClient:

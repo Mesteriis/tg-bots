@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from tg_bot_aggregator.media_browser import MediaBrowser, MediaBrowserError
+from tg_bot_aggregator.domain.media.browser import MediaBrowser, MediaBrowserError
 
 
 def test_media_browser_lists_direct_children_without_host_paths(tmp_path: Path) -> None:

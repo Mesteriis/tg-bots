@@ -1,22 +1,26 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.repositories import (
-    AnalyticsRepository,
-    ApiTokenRepository,
-    AuditRepository,
-    BackupRunRepository,
+from tg_bot_aggregator.domain.analytics.repository import AnalyticsRepository
+from tg_bot_aggregator.domain.auth.repository import ApiTokenRepository
+from tg_bot_aggregator.domain.backups.repository import BackupRunRepository
+from tg_bot_aggregator.domain.batches.repository import SendBatchRepository
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
+from tg_bot_aggregator.domain.diagnostics.repository import DiagnosticSettingsRepository
+from tg_bot_aggregator.domain.discovery.repository import (
     BotDiscoveryEventRepository,
     BotDiscoverySettingsRepository,
-    BotRepository,
-    DestinationRepository,
-    DiagnosticSettingsRepository,
-    RuntimeSettingsRepository,
-    SendBatchRepository,
+)
+from tg_bot_aggregator.domain.operations.repository import RuntimeSettingsRepository
+from tg_bot_aggregator.domain.sending.repository import (
     SendHistoryRepository,
     SendProfileRepository,
+)
+from tg_bot_aggregator.domain.templates.repository import (
     TemplateRepository,
     TemplateVersionRepository,
 )
+from tg_bot_aggregator.infra.audit import AuditRepository
 
 
 async def test_repositories_cover_core_crud(db_session: AsyncSession) -> None:

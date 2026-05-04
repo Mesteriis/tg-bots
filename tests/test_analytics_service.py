@@ -1,10 +1,10 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.analytics_service import AnalyticsService
-from tg_bot_aggregator.events import MemoryEventBus
-from tg_bot_aggregator.mtproto_service import AnalyticsMetrics
-from tg_bot_aggregator.repositories import AnalyticsRepository
+from tg_bot_aggregator.domain.analytics.mtproto import AnalyticsMetrics
+from tg_bot_aggregator.domain.analytics.repository import AnalyticsRepository
+from tg_bot_aggregator.domain.analytics.service import AnalyticsService
+from tg_bot_aggregator.infra.events import MemoryEventBus
 
 
 class FakeMtproto:

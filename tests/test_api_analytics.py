@@ -1,11 +1,11 @@
 import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.events import MemoryEventBus
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.infra.events import MemoryEventBus
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.main import create_app
 from tg_bot_aggregator.models import Base
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 
 async def test_analytics_target_crud_and_refresh_queue() -> None:

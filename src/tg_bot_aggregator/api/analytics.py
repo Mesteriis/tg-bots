@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
-from tg_bot_aggregator.repositories import AnalyticsRepository
+from tg_bot_aggregator.domain.analytics.repository import AnalyticsRepository
 from tg_bot_aggregator.schemas import (
     AnalyticsRefreshRequest,
     AnalyticsRefreshResponse,

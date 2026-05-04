@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
-from tg_bot_aggregator.repositories import AuditRepository
+from tg_bot_aggregator.infra.audit import AuditRepository
 from tg_bot_aggregator.schemas import AuditEventRead
 
 router = APIRouter(prefix="/audit", tags=["audit"])

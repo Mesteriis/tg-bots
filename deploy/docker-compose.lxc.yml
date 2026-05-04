@@ -48,7 +48,7 @@ services:
     env_file:
       - path: ../.env
         required: true
-    command: ["python", "-m", "tg_bot_aggregator.diagnostics.bot"]
+    command: ["python", "-m", "tg_bot_aggregator.domain.diagnostics.bot"]
     volumes:
       - app-data:/data
     depends_on:
@@ -60,7 +60,7 @@ services:
     env_file:
       - path: ../.env
         required: true
-    command: ["python", "-m", "tg_bot_aggregator.discovery.bot"]
+    command: ["python", "-m", "tg_bot_aggregator.domain.discovery.bot"]
     volumes:
       - app-data:/data
     depends_on:

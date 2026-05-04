@@ -1,4 +1,4 @@
-from tg_bot_aggregator.diagnostics.formatter import (
+from tg_bot_aggregator.domain.diagnostics.formatter import (
     build_copy_keyboard,
     chunk_report,
     format_update_report,

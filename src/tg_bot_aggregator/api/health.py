@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
+from tg_bot_aggregator.domain.backups.repository import BackupRunRepository
 from tg_bot_aggregator.domain.media.paths import check_shared_media_root
-from tg_bot_aggregator.repositories import BackupRunRepository
 
 router = APIRouter(tags=["health"])
 

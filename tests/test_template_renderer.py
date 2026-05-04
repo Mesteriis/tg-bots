@@ -1,6 +1,6 @@
 import pytest
 
-from tg_bot_aggregator import template_renderer
+from tg_bot_aggregator.domain.templates import renderer as template_renderer
 
 TemplateRenderError = template_renderer.TemplateRenderError
 render_template_text = template_renderer.render_template_text

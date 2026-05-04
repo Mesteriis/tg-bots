@@ -3,13 +3,13 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from tg_bot_aggregator.diagnostics.bot import DiagnosticPollingBot
-from tg_bot_aggregator.models import Base
-from tg_bot_aggregator.repositories import (
-    BotRepository,
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.diagnostics.bot import DiagnosticPollingBot
+from tg_bot_aggregator.domain.diagnostics.repository import (
     DiagnosticSettingsRepository,
     DiagnosticUpdateRepository,
 )
+from tg_bot_aggregator.models import Base
 
 
 class FakeBotApi:

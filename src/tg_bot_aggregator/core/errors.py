@@ -1,3 +1,4 @@
-from tg_bot_aggregator.repositories import NotFoundError
+class NotFoundError(ValueError):
+    pass
 
 __all__ = ["NotFoundError"]

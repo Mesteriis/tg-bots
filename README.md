@@ -306,7 +306,7 @@ GET /api/v1/diagnostics/bot
 PATCH /api/v1/diagnostics/bot
 ```
 
-The dedicated `diagnostic-bot` compose service runs `python -m tg_bot_aggregator.diagnostics.bot`, reads the selected bot from the database, calls `getUpdates`, and replies to every received or forwarded message with a readable report. Forum topics are detected through `message_thread_id` and replies are sent back to the same topic. Important IDs are exposed as Telegram copy buttons where the client supports `copy_text`.
+The dedicated `diagnostic-bot` compose service runs `python -m tg_bot_aggregator.domain.diagnostics.bot`, reads the selected bot from the database, calls `getUpdates`, and replies to every received or forwarded message with a readable report. Forum topics are detected through `message_thread_id` and replies are sent back to the same topic. Important IDs are exposed as Telegram copy buttons where the client supports `copy_text`.
 
 Each diagnostic update is also stored as compact metadata and can be converted into a saved destination from the dashboard:
 
@@ -318,7 +318,7 @@ POST /api/v1/diagnostics/updates/{update_id}/destination
 Run one local polling iteration without starting the infinite loop:
 
 ```bash
-python -m tg_bot_aggregator.diagnostics.bot --once
+python -m tg_bot_aggregator.domain.diagnostics.bot --once
 ```
 
 ## Discovery Polling Bot
@@ -337,7 +337,7 @@ PATCH /api/v1/discovery/bots/{bot_id}
 GET /api/v1/discovery/events
 ```
 
-The dedicated `discovery-bot` compose service runs `python -m tg_bot_aggregator.discovery.bot`.
+The dedicated `discovery-bot` compose service runs `python -m tg_bot_aggregator.domain.discovery.bot`.
 
 ## Audit
 

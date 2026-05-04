@@ -4,7 +4,7 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.core.security import redact_secrets
-from tg_bot_aggregator.repositories import AuditRepository
+from tg_bot_aggregator.infra.audit import AuditRepository
 
 
 async def record_audit_event(

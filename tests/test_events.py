@@ -1,6 +1,11 @@
 import json
 
-from tg_bot_aggregator.events import EventRecord, MemoryEventBus, build_event_payload, format_sse
+from tg_bot_aggregator.infra.events import (
+    EventRecord,
+    MemoryEventBus,
+    build_event_payload,
+    format_sse,
+)
 
 
 def test_event_payload_and_sse_frame_shape() -> None:

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from tg_bot_aggregator.config import Settings
+from tg_bot_aggregator.core.config import Settings
 
 
 def test_settings_defaults_are_local_and_versioned() -> None:
@@ -61,7 +61,7 @@ def test_diagnostic_bot_is_wired_in_compose_env_and_docs() -> None:
     readme = Path("README.md").read_text()
 
     assert "diagnostic-bot:" in compose
-    assert 'python", "-m", "tg_bot_aggregator.diagnostics.bot' in compose
+    assert 'python", "-m", "tg_bot_aggregator.domain.diagnostics.bot' in compose
     assert "DIAGNOSTIC_POLL_TIMEOUT_SECONDS" in env_example
     assert "DIAGNOSTIC_RETRY_DELAY_SECONDS" in env_example
     assert "Diagnostic Polling Bot" in readme

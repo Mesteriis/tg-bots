@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
-from tg_bot_aggregator.models import DiagnosticBotSettings
-from tg_bot_aggregator.repositories import (
-    BotRepository,
-    DestinationRepository,
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
+from tg_bot_aggregator.domain.diagnostics.repository import (
     DiagnosticSettingsRepository,
     DiagnosticUpdateRepository,
 )
+from tg_bot_aggregator.models import DiagnosticBotSettings
 from tg_bot_aggregator.schemas import (
     DestinationRead,
     DiagnosticBotSettingsRead,

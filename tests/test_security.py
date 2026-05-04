@@ -1,4 +1,4 @@
-from tg_bot_aggregator.security import (
+from tg_bot_aggregator.core.security import (
     REDACTED,
     RedactBotTokenAccessLogFilter,
     host_matches,

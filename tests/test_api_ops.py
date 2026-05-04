@@ -2,20 +2,22 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.events import MemoryEventBus
-from tg_bot_aggregator.main import create_app
-from tg_bot_aggregator.models import Base, utc_now
-from tg_bot_aggregator.repositories import (
-    AuditRepository,
-    BotRepository,
-    DiagnosticUpdateRepository,
-    McpSettingsRepository,
-    OpsActionRunRepository,
-    OpsAutomationRuleRepository,
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.diagnostics.repository import DiagnosticUpdateRepository
+from tg_bot_aggregator.domain.mcp.repository import McpSettingsRepository
+from tg_bot_aggregator.domain.operations.repository import (
     RuntimeAdvancedSettingsRepository,
     RuntimeSettingsRepository,
 )
+from tg_bot_aggregator.domain.ops.repository import (
+    OpsActionRunRepository,
+    OpsAutomationRuleRepository,
+)
+from tg_bot_aggregator.infra.audit import AuditRepository
+from tg_bot_aggregator.infra.events import MemoryEventBus
+from tg_bot_aggregator.main import create_app
+from tg_bot_aggregator.models import Base, utc_now
 
 
 @pytest.fixture

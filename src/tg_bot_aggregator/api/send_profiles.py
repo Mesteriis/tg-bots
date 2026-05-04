@@ -2,11 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
-from tg_bot_aggregator.repositories import (
-    BotRepository,
-    DestinationRepository,
-    SendProfileRepository,
-)
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
+from tg_bot_aggregator.domain.sending.repository import SendProfileRepository
 from tg_bot_aggregator.schemas import SendProfileCreate, SendProfileRead, SendProfileUpdate
 
 router = APIRouter(prefix="/send-profiles", tags=["send-profiles"])

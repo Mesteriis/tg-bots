@@ -5,11 +5,11 @@ from pathlib import Path
 import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.events import MemoryEventBus
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.infra.events import MemoryEventBus
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.main import create_app
 from tg_bot_aggregator.models import Base
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 
 async def _client(
@@ -197,6 +197,24 @@ async def test_create_bot_returns_gateway_error_when_bot_api_unreachable() -> No
     assert response.json() == {
         "detail": "Telegram Bot API request failed: name resolution failed"
     }
+
+
+async def test_create_duplicate_destination_returns_conflict() -> None:
+    client, _ = await _client()
+    async with client:
+        bot = (await client.post("/api/v1/bots", json={"name": "ops", "token": "123:token"})).json()
+        first = await client.post(
+            "/api/v1/destinations",
+            json={"bot_id": bot["id"], "kind": "channel", "chat_id": "@ops"},
+        )
+        duplicate = await client.post(
+            "/api/v1/destinations",
+            json={"bot_id": bot["id"], "kind": "channel", "chat_id": "@ops"},
+        )
+
+    assert first.status_code == 201
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "destination with this bot, chat and thread already exists"
 
 
 async def test_template_validation_endpoint_renders_valid_template() -> None:

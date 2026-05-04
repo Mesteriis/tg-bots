@@ -271,6 +271,9 @@ def test_static_ui_uses_destination_modal_and_full_width_list() -> None:
     assert '@click="closeDestinationModal"' in html
     assert "openDestinationModal" in html
     assert "closeDestinationModal" in html
+    assert "deleteDestination" in html
+    assert "Удалить адресата" in html
+    assert 'method: "DELETE"' in html
 
 
 def test_static_ui_uses_dropdowns_for_fixed_choices() -> None:

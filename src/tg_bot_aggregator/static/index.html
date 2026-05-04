@@ -387,6 +387,12 @@
         justify-content: center;
         padding: 0;
       }
+      .row-actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        white-space: nowrap;
+      }
       .checkbox-label {
         display: flex;
         align-items: center;
@@ -1008,7 +1014,10 @@
                       <td>{{ item.chat_id }}</td>
                       <td>{{ item.message_thread_id || '-' }}</td>
                       <td>{{ destinationHealth[item.id]?.status ? statusLabel(destinationHealth[item.id].status) : 'не проверялся' }}</td>
-                      <td><button class="btn icon-only" title="Проверить адресата" @click="checkDestination(item.id)"><i data-lucide="radar"></i></button></td>
+                      <td class="row-actions">
+                        <button class="btn icon-only" title="Проверить адресата" @click="checkDestination(item.id)"><i data-lucide="radar"></i></button>
+                        <button class="btn icon-only danger" title="Удалить адресата" @click="deleteDestination(item.id)"><i data-lucide="trash-2"></i></button>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -2894,6 +2903,14 @@
             await this.api("/destinations", { method: "POST", body: JSON.stringify(this.forms.destination) });
             this.closeDestinationModal();
             this.resetDestinationForm();
+            await this.refreshAll();
+          },
+          async deleteDestination(id) {
+            if (!confirm("Удалить адресата? История отправок останется без изменений.")) return;
+            await this.api(`/destinations/${id}`, { method: "DELETE" });
+            const nextHealth = { ...this.destinationHealth };
+            delete nextHealth[id];
+            this.destinationHealth = nextHealth;
             await this.refreshAll();
           },
           async checkDestination(id) {

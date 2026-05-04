@@ -7,23 +7,23 @@ from tg_bot_aggregator.audit import record_audit_event
 from tg_bot_aggregator.core.config import Settings, get_settings
 from tg_bot_aggregator.core.db import create_engine, create_session_factory
 from tg_bot_aggregator.domain.analytics.mtproto import MtprotoService
+from tg_bot_aggregator.domain.analytics.repository import MtprotoSessionRepository
 from tg_bot_aggregator.domain.analytics.service import AnalyticsService
+from tg_bot_aggregator.domain.backups.repository import BackupRunRepository
 from tg_bot_aggregator.domain.backups.service import BackupService, BackupServiceError
 from tg_bot_aggregator.domain.batches.service import WorkflowService
+from tg_bot_aggregator.domain.operations.repository import (
+    RuntimeAdvancedSettingsRepository,
+    RuntimeSettingsRepository,
+)
+from tg_bot_aggregator.domain.ops.repository import OpsAutomationRuleRepository
 from tg_bot_aggregator.domain.ops.service import TelegramOpsService
 from tg_bot_aggregator.domain.reliability.service import RedisRateLimitStore, SendRateLimiter
+from tg_bot_aggregator.domain.sending.repository import SendHistoryRepository
 from tg_bot_aggregator.domain.sending.service import SendService
 from tg_bot_aggregator.infra.events import RedisEventBus
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.models import utc_now
-from tg_bot_aggregator.repositories import (
-    BackupRunRepository,
-    MtprotoSessionRepository,
-    OpsAutomationRuleRepository,
-    RuntimeAdvancedSettingsRepository,
-    RuntimeSettingsRepository,
-    SendHistoryRepository,
-)
 from tg_bot_aggregator.runtime_settings import apply_runtime_settings
 
 

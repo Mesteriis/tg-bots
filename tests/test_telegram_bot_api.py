@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 import pytest
 
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from tg_bot_aggregator.shared_paths import SharedPathError, validate_shared_file
+from tg_bot_aggregator.domain.media.paths import SharedPathError, validate_shared_file
 
 
 def test_validate_shared_file_success(tmp_path: Path) -> None:

@@ -6,24 +6,24 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.models import utc_now
-from tg_bot_aggregator.reliability import MemoryRateLimitStore, SendRateLimiter
-from tg_bot_aggregator.repositories import (
-    BotRepository,
-    DestinationRepository,
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.domain.batches.repository import SendBatchRepository
+from tg_bot_aggregator.domain.batches.service import WorkflowService
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
+from tg_bot_aggregator.domain.reliability.service import MemoryRateLimitStore, SendRateLimiter
+from tg_bot_aggregator.domain.sending.repository import (
     SendAttemptRepository,
-    SendBatchRepository,
     SendHistoryRepository,
-    TemplateRepository,
 )
-from tg_bot_aggregator.send_service import (
+from tg_bot_aggregator.domain.sending.service import (
     IdempotencyConflictError,
     SendService,
     SendServiceError,
 )
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
-from tg_bot_aggregator.workflow_service import WorkflowService
+from tg_bot_aggregator.domain.templates.repository import TemplateRepository
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
+from tg_bot_aggregator.models import utc_now
 
 
 class CapturingEvents:

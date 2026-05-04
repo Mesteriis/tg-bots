@@ -4,26 +4,26 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from tg_bot_aggregator.models import Base, Destination, OpsFact, utc_now
-from tg_bot_aggregator.repositories import (
-    BotDiscoveryEventRepository,
-    BotRepository,
-    DestinationRepository,
-    DiagnosticUpdateRepository,
-    McpCoverageSnapshotRepository,
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
+from tg_bot_aggregator.domain.diagnostics.repository import DiagnosticUpdateRepository
+from tg_bot_aggregator.domain.discovery.repository import BotDiscoveryEventRepository
+from tg_bot_aggregator.domain.mcp.repository import McpCoverageSnapshotRepository
+from tg_bot_aggregator.domain.ops.repository import (
     OpsActionRunRepository,
     OpsAutomationRuleRepository,
     OpsFactRepository,
     OpsRecommendationRepository,
 )
-from tg_bot_aggregator.schemas import McpCoverageRead
-from tg_bot_aggregator.telegram_ops import (
+from tg_bot_aggregator.domain.ops.service import (
     McpCoverageService,
     TelegramOpsError,
     TelegramOpsService,
     build_destination_diff,
     normalize_destination_kind,
 )
+from tg_bot_aggregator.models import Base, Destination, OpsFact, utc_now
+from tg_bot_aggregator.schemas import McpCoverageRead
 
 
 @pytest.mark.asyncio

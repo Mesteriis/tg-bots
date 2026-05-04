@@ -471,7 +471,7 @@ Create empty `__init__.py` files in `core` and `infra`.
 In `src/tg_bot_aggregator/core/db.py`, change:
 
 ```python
-from tg_bot_aggregator.config import Settings, get_settings
+from tg_bot_aggregator.core.config import Settings, get_settings
 ```
 
 to:
@@ -483,7 +483,7 @@ from tg_bot_aggregator.core.config import Settings, get_settings
 In `src/tg_bot_aggregator/infra/telegram_client.py`, change:
 
 ```python
-from tg_bot_aggregator.security import redact_secrets, redact_text
+from tg_bot_aggregator.core.security import redact_secrets, redact_text
 ```
 
 to:

@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_bot_api_client, get_session
-from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
-from tg_bot_aggregator.repositories import (
-    BotRepository,
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.repository import (
     DestinationHealthRepository,
     DestinationRepository,
 )
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
 from tg_bot_aggregator.schemas import (
     DestinationCheckRead,
     DestinationCreate,
@@ -28,7 +29,14 @@ async def list_destinations(session: AsyncSession = Depends(get_session)) -> lis
 async def create_destination(
     payload: DestinationCreate, session: AsyncSession = Depends(get_session)
 ) -> object:
-    row = await DestinationRepository(session).create(**payload.model_dump())
+    try:
+        row = await DestinationRepository(session).create(**payload.model_dump())
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="destination with this bot, chat and thread already exists",
+        ) from exc
     await session.commit()
     return row
 
@@ -52,7 +60,14 @@ async def update_destination(
     repo = DestinationRepository(session)
     if await repo.get(destination_id) is None:
         raise HTTPException(status_code=404, detail="destination not found")
-    row = await repo.update(destination_id, **payload.model_dump(exclude_unset=True))
+    try:
+        row = await repo.update(destination_id, **payload.model_dump(exclude_unset=True))
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="destination with this bot, chat and thread already exists",
+        ) from exc
     await session.commit()
     return row
 

@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
-from tg_bot_aggregator.repositories import (
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.discovery.repository import (
     BotDiscoveryEventRepository,
     BotDiscoverySettingsRepository,
-    BotRepository,
 )
 from tg_bot_aggregator.schemas import (
     BotDiscoveryEventRead,

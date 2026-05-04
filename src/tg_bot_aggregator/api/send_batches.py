@@ -4,14 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import create_send_service, get_session
+from tg_bot_aggregator.core.errors import NotFoundError
+from tg_bot_aggregator.domain.batches.repository import SendBatchRepository
 from tg_bot_aggregator.domain.batches.service import WorkflowService
+from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
 from tg_bot_aggregator.domain.sending.service import SendServiceError
-from tg_bot_aggregator.repositories import (
-    BotRepository,
-    DestinationRepository,
-    NotFoundError,
-    SendBatchRepository,
-)
 from tg_bot_aggregator.schemas import SendBatchCreate, SendBatchPreviewRead, SendBatchRead
 
 router = APIRouter(prefix="/send-batches", tags=["send-batches"])
