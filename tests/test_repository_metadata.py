@@ -11,6 +11,29 @@ IGNORED_SECRET_SCAN_DIRS = {
     "output",
 }
 LEAKED_TEST_BOT_TOKEN_PREFIX = "8578509043" + ":"
+LEGACY_MODULE_IMPORT_MARKERS = [
+    "tg_bot_aggregator.repositories",
+    "tg_bot_aggregator.config",
+    "tg_bot_aggregator.db",
+    "tg_bot_aggregator.security",
+    "tg_bot_aggregator.events",
+    "tg_bot_aggregator.telegram_bot_api",
+    "tg_bot_aggregator.api_tokens",
+    "tg_bot_aggregator.auth_middleware",
+    "tg_bot_aggregator.mcp_catalog",
+    "tg_bot_aggregator.mcp_server",
+    "tg_bot_aggregator.media_browser",
+    "tg_bot_aggregator.shared_paths",
+    "tg_bot_aggregator.template_renderer",
+    "tg_bot_aggregator.send_service",
+    "tg_bot_aggregator.workflow_service",
+    "tg_bot_aggregator.reliability",
+    "tg_bot_aggregator.operations_service",
+    "tg_bot_aggregator.backup_service",
+    "tg_bot_aggregator.analytics_service",
+    "tg_bot_aggregator.mtproto_service",
+    "tg_bot_aggregator.telegram_ops",
+]
 
 
 def test_oss_repository_files_exist() -> None:
@@ -129,6 +152,35 @@ def test_repository_does_not_contain_known_leaked_test_bot_token_prefix() -> Non
             leaked_paths.append(listed_file)
 
     assert leaked_paths == []
+
+
+def test_runtime_files_do_not_import_removed_compatibility_modules() -> None:
+    checked_roots = ("alembic/", "src/", "tests/", "deploy/", ".gitea/", ".github/")
+    offenders: list[str] = []
+    listed_files = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+
+    for listed_file in listed_files:
+        if listed_file == "tests/test_repository_metadata.py":
+            continue
+        if not listed_file.startswith(checked_roots):
+            continue
+
+        path = ROOT / listed_file
+        try:
+            content = path.read_text()
+        except UnicodeDecodeError:
+            continue
+
+        if any(marker in content for marker in LEGACY_MODULE_IMPORT_MARKERS):
+            offenders.append(listed_file)
+
+    assert offenders == []
 
 
 def test_deploy_compose_contains_runtime_services() -> None:
