@@ -204,6 +204,11 @@ def _authenticated_git_repo_url(
     return urlunparse(parsed._replace(netloc=f"{username}:{password}@{host}"))
 
 
+def _is_missing_remote_branch_error(error: BackupServiceError, branch: str) -> bool:
+    message = str(error).lower()
+    return f"remote branch {branch.lower()} not found" in message
+
+
 def normalize_restore_sections(
     sections: list[str] | tuple[str, ...] | None,
 ) -> tuple[list[str], list[str]]:
@@ -655,14 +660,25 @@ class BackupService:
         auth_repo_url = _authenticated_git_repo_url(self.settings, repo_url, service)
         if not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
-            _run_git(["git", "clone", "--branch", branch, auth_repo_url, str(self.workdir)])
+            try:
+                _run_git(["git", "clone", "--branch", branch, auth_repo_url, str(self.workdir)])
+            except BackupServiceError as exc:
+                if not _is_missing_remote_branch_error(exc, branch):
+                    raise
+                _run_git(["git", "clone", auth_repo_url, str(self.workdir)])
             _run_git(["git", "remote", "set-url", "origin", repo_url], cwd=self.workdir)
 
         try:
             _run_git(["git", "remote", "set-url", "origin", auth_repo_url], cwd=self.workdir)
             _run_git(["git", "fetch", "origin"], cwd=self.workdir)
-            _run_git(["git", "checkout", branch], cwd=self.workdir)
-            _run_git(["git", "pull", "--ff-only"], cwd=self.workdir)
+            _run_git(["git", "checkout", "-B", branch], cwd=self.workdir)
+            has_remote_branch = True
+            try:
+                _run_git(["git", "rev-parse", "--verify", f"origin/{branch}"], cwd=self.workdir)
+            except BackupServiceError:
+                has_remote_branch = False
+            if has_remote_branch:
+                _run_git(["git", "pull", "--ff-only", "origin", branch], cwd=self.workdir)
 
             backup_path = self.workdir / (self.settings.backup_git_path or "tg-bots.json")
             backup_path.parent.mkdir(parents=True, exist_ok=True)
@@ -680,4 +696,7 @@ class BackupService:
             return commit
         finally:
             if (self.workdir / ".git").exists():
-                _run_git(["git", "remote", "set-url", "origin", repo_url], cwd=self.workdir)
+                try:
+                    _run_git(["git", "remote", "set-url", "origin", repo_url], cwd=self.workdir)
+                except BackupServiceError:
+                    pass
