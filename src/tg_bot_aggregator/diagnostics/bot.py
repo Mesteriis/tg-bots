@@ -6,20 +6,20 @@ from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from tg_bot_aggregator.config import get_settings
-from tg_bot_aggregator.db import create_engine, create_session_factory
+from tg_bot_aggregator.core.config import get_settings
+from tg_bot_aggregator.core.db import create_engine, create_session_factory
 from tg_bot_aggregator.diagnostics.formatter import (
     build_copy_keyboard,
     chunk_report,
     format_update_report,
 )
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
 from tg_bot_aggregator.models import Base
 from tg_bot_aggregator.repositories import (
     BotRepository,
     DiagnosticSettingsRepository,
     DiagnosticUpdateRepository,
 )
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
 
 logger = logging.getLogger(__name__)
 

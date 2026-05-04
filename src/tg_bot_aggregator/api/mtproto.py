@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
-from tg_bot_aggregator.mtproto_service import MtprotoService
+from tg_bot_aggregator.domain.analytics.mtproto import MtprotoService
 from tg_bot_aggregator.repositories import MtprotoSessionRepository
 from tg_bot_aggregator.schemas import (
     MtprotoCodeRequest,

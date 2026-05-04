@@ -5,7 +5,8 @@ from typing import Any, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from tg_bot_aggregator.mcp_catalog import MCP_TOOL_NAMES
+from tg_bot_aggregator.core.security import redact_secrets
+from tg_bot_aggregator.domain.mcp.catalog import MCP_TOOL_NAMES
 from tg_bot_aggregator.models import (
     Bot,
     Destination,
@@ -25,7 +26,6 @@ from tg_bot_aggregator.repositories import (
     OpsFactRepository,
     OpsRecommendationRepository,
 )
-from tg_bot_aggregator.security import redact_secrets
 
 OpsRisk = Literal["low", "medium", "high"]
 

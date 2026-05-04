@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
-from tg_bot_aggregator.mcp_catalog import MCP_TOOL_DEFINITIONS, MCP_TOOL_NAMES
+from tg_bot_aggregator.domain.mcp.catalog import MCP_TOOL_DEFINITIONS, MCP_TOOL_NAMES
 from tg_bot_aggregator.models import McpSettings
 from tg_bot_aggregator.repositories import McpSettingsRepository
 from tg_bot_aggregator.schemas import (

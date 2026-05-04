@@ -4,11 +4,11 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from tg_bot_aggregator.api_tokens import API_TOKEN_COOKIE, API_TOKEN_HEADER, hash_api_token
 from tg_bot_aggregator.audit import record_audit_event
-from tg_bot_aggregator.config import Settings
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.security import is_protected_host_request
+from tg_bot_aggregator.domain.auth.service import API_TOKEN_COOKIE, API_TOKEN_HEADER, hash_api_token
 from tg_bot_aggregator.repositories import ApiTokenRepository
-from tg_bot_aggregator.security import is_protected_host_request
 
 
 class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):

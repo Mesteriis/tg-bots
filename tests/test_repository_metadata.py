@@ -24,6 +24,7 @@ def test_oss_repository_files_exist() -> None:
         ".python-version",
         "MANIFEST.in",
         "uv.lock",
+        ".github/workflows/ci.yml",
         ".gitea/ISSUE_TEMPLATE/bug_report.md",
         ".gitea/ISSUE_TEMPLATE/feature_request.md",
     ]
@@ -36,14 +37,42 @@ def test_oss_repository_files_exist() -> None:
 def test_rnet_deploy_workflow_uses_pve_deploy_and_nginx_update() -> None:
     workflow = (ROOT / ".gitea/workflows/ci-deploy.yml").read_text()
 
+    assert "concurrency:" in workflow
     assert "runs-on: python" in workflow
-    assert "uv sync --extra dev" in workflow
-    assert "pve-deploy ensure $CT_ID $CT_NAME" in workflow
-    assert "pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml" in workflow
+    assert "uv sync --extra dev --locked" in workflow
+    assert 'pve-deploy ensure "$CT_ID" "$CT_NAME"' in workflow
+    assert "deploy/env/prepare-lxc-bundle.sh" in workflow
+    assert 'pve-deploy deploy "$CT_ID" "$DEPLOY_BUNDLE" deploy/docker-compose.lxc.yml' in workflow
     assert "up -d --build --force-recreate --remove-orphans" in workflow
-    assert "deploy/nginx/update-nginx-ui.sh" in workflow
+    assert 'bash deploy/nginx/update-nginx-ui.sh "$NGINX_UI_CT_ID"' in workflow
+    assert "Smoke test app and proxy" in workflow
     assert "curl -fsS \"http://${APP_IP}:8000/api/v1/health\"" in workflow
     assert "Waiting for app health, attempt ${attempt}/45" in workflow
+    assert "git push github HEAD:main --force" in workflow
+
+
+def test_github_mirror_ci_exists_for_portfolio_repo() -> None:
+    workflow = ROOT / ".github/workflows/ci.yml"
+    content = workflow.read_text()
+
+    assert "name: GitHub CI" in content
+    assert "uv sync --extra dev --locked" in content
+    assert "uv run ruff check ." in content
+    assert "uv run pytest -q" in content
+    assert "README.md" in content
+
+
+def test_lxc_env_template_and_bundle_script_exist_without_secret_values() -> None:
+    template = (ROOT / "deploy/env/.env.lxc.template").read_text()
+    script = (ROOT / "deploy/env/prepare-lxc-bundle.sh").read_text()
+
+    assert "TELEGRAM_API_ID={{TELEGRAM_API_ID}}" in template
+    assert "TELEGRAM_API_HASH={{TELEGRAM_API_HASH}}" in template
+    assert "mktemp -d" in script
+    assert "install -m 600" in script
+    assert "rsync" in script
+    assert "b93aadb8" not in template
+    assert "b93aadb8" not in script
 
 
 def test_lxc_configure_script_uses_nfs_v4_media_pseudo_root() -> None:

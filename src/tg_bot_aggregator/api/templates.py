@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
+from tg_bot_aggregator.domain.templates.renderer import validate_template_text
 from tg_bot_aggregator.repositories import TemplateRepository, TemplateVersionRepository
 from tg_bot_aggregator.schemas import (
     TemplateCreate,
@@ -11,7 +12,6 @@ from tg_bot_aggregator.schemas import (
     TemplateValidateRequest,
     TemplateVersionRead,
 )
-from tg_bot_aggregator.template_renderer import validate_template_text
 
 router = APIRouter(prefix="/templates", tags=["templates"])
 

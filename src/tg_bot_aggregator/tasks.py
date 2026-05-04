@@ -3,15 +3,19 @@ from datetime import timedelta
 import redis.asyncio as redis
 from taskiq_redis import RedisAsyncResultBackend, RedisStreamBroker
 
-from tg_bot_aggregator.analytics_service import AnalyticsService
 from tg_bot_aggregator.audit import record_audit_event
-from tg_bot_aggregator.backup_service import BackupService, BackupServiceError
-from tg_bot_aggregator.config import Settings, get_settings
-from tg_bot_aggregator.db import create_engine, create_session_factory
-from tg_bot_aggregator.events import RedisEventBus
+from tg_bot_aggregator.core.config import Settings, get_settings
+from tg_bot_aggregator.core.db import create_engine, create_session_factory
+from tg_bot_aggregator.domain.analytics.mtproto import MtprotoService
+from tg_bot_aggregator.domain.analytics.service import AnalyticsService
+from tg_bot_aggregator.domain.backups.service import BackupService, BackupServiceError
+from tg_bot_aggregator.domain.batches.service import WorkflowService
+from tg_bot_aggregator.domain.ops.service import TelegramOpsService
+from tg_bot_aggregator.domain.reliability.service import RedisRateLimitStore, SendRateLimiter
+from tg_bot_aggregator.domain.sending.service import SendService
+from tg_bot_aggregator.infra.events import RedisEventBus
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.models import utc_now
-from tg_bot_aggregator.mtproto_service import MtprotoService
-from tg_bot_aggregator.reliability import RedisRateLimitStore, SendRateLimiter
 from tg_bot_aggregator.repositories import (
     BackupRunRepository,
     MtprotoSessionRepository,
@@ -21,10 +25,6 @@ from tg_bot_aggregator.repositories import (
     SendHistoryRepository,
 )
 from tg_bot_aggregator.runtime_settings import apply_runtime_settings
-from tg_bot_aggregator.send_service import SendService
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
-from tg_bot_aggregator.telegram_ops import TelegramOpsService
-from tg_bot_aggregator.workflow_service import WorkflowService
 
 
 def create_broker(settings: Settings | None = None) -> RedisStreamBroker:

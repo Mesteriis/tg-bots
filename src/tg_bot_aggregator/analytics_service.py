@@ -2,8 +2,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.events import MemoryEventBus
-from tg_bot_aggregator.mtproto_service import MtprotoService
+from tg_bot_aggregator.domain.analytics.mtproto import MtprotoService
+from tg_bot_aggregator.infra.events import MemoryEventBus
 from tg_bot_aggregator.repositories import AnalyticsRepository, NotFoundError
 
 

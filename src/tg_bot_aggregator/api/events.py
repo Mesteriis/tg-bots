@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from tg_bot_aggregator.events import EventRecord, build_event_payload, format_sse
+from tg_bot_aggregator.infra.events import EventRecord, build_event_payload, format_sse
 
 router = APIRouter(tags=["events"])
 

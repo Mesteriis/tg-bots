@@ -9,11 +9,11 @@ from typing import Any, Protocol
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.config import Settings
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.security import redact_secrets
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiError
 from tg_bot_aggregator.models import SendHistory, utc_now
 from tg_bot_aggregator.repositories import SendAttemptRepository, SendHistoryRepository
-from tg_bot_aggregator.security import redact_secrets
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiError
 
 
 @dataclass(frozen=True)

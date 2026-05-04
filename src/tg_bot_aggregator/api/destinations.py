@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_bot_api_client, get_session
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
 from tg_bot_aggregator.repositories import (
     BotRepository,
     DestinationHealthRepository,
@@ -14,7 +15,6 @@ from tg_bot_aggregator.schemas import (
     DestinationRead,
     DestinationUpdate,
 )
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
 
 router = APIRouter(prefix="/destinations", tags=["destinations"])
 

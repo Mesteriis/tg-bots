@@ -4,7 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from tg_bot_aggregator.config import get_settings
+from tg_bot_aggregator.core.config import get_settings
 
 DRIFT_VERSION = "0004_ops_automation"
 HEAD_VERSION = "0009_destination_chat_thread_identity"

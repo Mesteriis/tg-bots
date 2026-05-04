@@ -6,7 +6,7 @@ from typing import Any
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-from tg_bot_aggregator.config import Settings
+from tg_bot_aggregator.core.config import Settings
 from tg_bot_aggregator.repositories import MtprotoSessionRepository
 
 

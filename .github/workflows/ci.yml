@@ -1,0 +1,26 @@
+name: GitHub CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: github-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev --locked
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+      - name: Documentation smoke
+        run: |
+          test -s README.md
+          test -s LICENSE
+          test -s SECURITY.md
+          test -s CONTRIBUTING.md

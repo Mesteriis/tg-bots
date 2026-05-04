@@ -8,15 +8,16 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import create_send_service, get_session
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
-from tg_bot_aggregator.reliability import (
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.domain.reliability.service import (
     RateBucketSnapshot,
     RateLimitStore,
     RedisRateLimitStore,
     ReliabilityReadService,
     SendRateLimiter,
 )
+from tg_bot_aggregator.domain.sending.service import SendServiceError
+from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
 from tg_bot_aggregator.repositories import (
     NotFoundError,
     SendAttemptRepository,
@@ -31,7 +32,6 @@ from tg_bot_aggregator.schemas import (
     SendAttemptRead,
     SendHistoryRead,
 )
-from tg_bot_aggregator.send_service import SendServiceError
 
 router = APIRouter(prefix="/reliability", tags=["reliability"])
 

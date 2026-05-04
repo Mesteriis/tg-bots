@@ -12,6 +12,7 @@ from anyio import to_thread
 from sqlalchemy import DateTime, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tg_bot_aggregator.core.security import redact_secrets, redact_text
 from tg_bot_aggregator.models import (
     ApiToken,
     Bot,
@@ -26,7 +27,6 @@ from tg_bot_aggregator.models import (
     SendProfile,
 )
 from tg_bot_aggregator.schemas import RuntimeSettingsRead
-from tg_bot_aggregator.security import redact_secrets, redact_text
 
 BACKUP_MODELS: tuple[tuple[str, type[Any]], ...] = (
     ("bots", Bot),

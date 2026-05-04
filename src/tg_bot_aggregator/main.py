@@ -6,36 +6,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from tg_bot_aggregator.api import (
-    analytics,
-    audit,
-    auth,
-    bots,
-    destinations,
-    diagnostics,
-    discovery,
-    events,
-    health,
-    mcp_settings,
-    media,
-    mtproto,
-    operations,
-    ops,
-    reliability,
-    send,
-    send_batches,
-    send_profiles,
-    telegram_compat,
-    templates,
-)
-from tg_bot_aggregator.auth_middleware import ProtectedHostAuthMiddleware
-from tg_bot_aggregator.config import Settings, get_settings
-from tg_bot_aggregator.db import create_engine, create_session_factory
-from tg_bot_aggregator.events import MemoryEventBus
-from tg_bot_aggregator.mcp_server import create_mcp_asgi_app, create_mcp_server
+from tg_bot_aggregator.api.router import create_api_router
+from tg_bot_aggregator.core.config import Settings, get_settings
+from tg_bot_aggregator.core.db import create_engine, create_session_factory
+from tg_bot_aggregator.core.security import install_secret_log_filters
+from tg_bot_aggregator.domain.auth.middleware import ProtectedHostAuthMiddleware
+from tg_bot_aggregator.domain.mcp.server import create_mcp_asgi_app, create_mcp_server
+from tg_bot_aggregator.infra.events import MemoryEventBus
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.models import Base
-from tg_bot_aggregator.security import install_secret_log_filters
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 FAVICON_SVG = (
     b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
@@ -103,27 +82,7 @@ def create_app(
     )
     app.add_middleware(ProtectedHostAuthMiddleware, settings=resolved_settings)
 
-    prefix = resolved_settings.api_v1_prefix
-    app.include_router(health.router, prefix=prefix)
-    app.include_router(audit.router, prefix=prefix)
-    app.include_router(auth.router, prefix=prefix)
-    app.include_router(bots.router, prefix=prefix)
-    app.include_router(destinations.router, prefix=prefix)
-    app.include_router(diagnostics.router, prefix=prefix)
-    app.include_router(discovery.router, prefix=prefix)
-    app.include_router(media.router, prefix=prefix)
-    app.include_router(ops.router, prefix=prefix)
-    app.include_router(operations.router, prefix=prefix)
-    app.include_router(reliability.router, prefix=prefix)
-    app.include_router(templates.router, prefix=prefix)
-    app.include_router(send.router, prefix=prefix)
-    app.include_router(send_batches.router, prefix=prefix)
-    app.include_router(send_profiles.router, prefix=prefix)
-    app.include_router(mtproto.router, prefix=prefix)
-    app.include_router(mcp_settings.router, prefix=prefix)
-    app.include_router(analytics.router, prefix=prefix)
-    app.include_router(events.router, prefix=prefix)
-    app.include_router(telegram_compat.router)
+    app.include_router(create_api_router(resolved_settings.api_v1_prefix))
 
     def mcp_session_factory() -> async_sessionmaker[AsyncSession]:
         return app.state.session_factory

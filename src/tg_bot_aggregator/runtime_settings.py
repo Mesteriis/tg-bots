@@ -1,9 +1,9 @@
 from typing import Any
 
-from tg_bot_aggregator.config import Settings
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.models import RuntimeAdvancedSettings, RuntimeSettings
 from tg_bot_aggregator.schemas import RuntimeSettingsRead
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
 
 SETTING_MODEL_FIELDS = {
     "telegram_bot_api_base_url",

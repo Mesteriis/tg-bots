@@ -1,0 +1,1 @@
+"""Batch sending domain."""

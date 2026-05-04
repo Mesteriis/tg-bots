@@ -16,7 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from tg_bot_aggregator.mcp_catalog import MCP_DEFAULT_ENABLED_TOOL_NAMES
+from tg_bot_aggregator.domain.mcp.catalog import MCP_DEFAULT_ENABLED_TOOL_NAMES
 
 
 def utc_now() -> datetime:

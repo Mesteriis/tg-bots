@@ -10,26 +10,30 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.applications import Starlette
 
-from tg_bot_aggregator.api_tokens import (
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.domain.auth.service import (
     api_token_prefix,
     generate_api_token,
     hash_api_token,
     normalize_token_scopes,
 )
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.events import MemoryEventBus
-from tg_bot_aggregator.mcp_catalog import (
+from tg_bot_aggregator.domain.batches.service import WorkflowService
+from tg_bot_aggregator.domain.mcp.catalog import (
     MCP_BOOTSTRAP_ENABLED_TOOL_NAMES,
     MCP_TOOL_DEFINITIONS,
 )
-from tg_bot_aggregator.media_browser import MediaBrowser
-from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
-from tg_bot_aggregator.reliability import (
+from tg_bot_aggregator.domain.media.browser import MediaBrowser
+from tg_bot_aggregator.domain.ops.service import McpCoverageService, TelegramOpsService
+from tg_bot_aggregator.domain.reliability.service import (
     RateBucketSnapshot,
     RedisRateLimitStore,
     ReliabilityReadService,
     SendRateLimiter,
 )
+from tg_bot_aggregator.domain.sending.service import SendService, SendServiceError
+from tg_bot_aggregator.infra.events import MemoryEventBus
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
+from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
 from tg_bot_aggregator.repositories import (
     AnalyticsRepository,
     ApiTokenRepository,
@@ -49,10 +53,6 @@ from tg_bot_aggregator.repositories import (
     SendProfileRepository,
     TemplateRepository,
 )
-from tg_bot_aggregator.send_service import SendService, SendServiceError
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
-from tg_bot_aggregator.telegram_ops import McpCoverageService, TelegramOpsService
-from tg_bot_aggregator.workflow_service import WorkflowService
 
 SessionFactoryProvider = Callable[[], async_sessionmaker[AsyncSession]]
 EnqueueSendHistory = Callable[[int], Awaitable[str | None]]

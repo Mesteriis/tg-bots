@@ -7,8 +7,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import create_send_service, get_session
+from tg_bot_aggregator.domain.sending.service import SendService, SendServiceError
 from tg_bot_aggregator.repositories import BotRepository
-from tg_bot_aggregator.send_service import SendService, SendServiceError
 
 router = APIRouter(tags=["telegram-compatible"])
 

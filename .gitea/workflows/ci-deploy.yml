@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: tg-bots-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CT_ID: 103
   CT_NAME: tg-bots
@@ -19,9 +23,9 @@ jobs:
     runs-on: python
     steps:
       - uses: actions/checkout@v4
-      - run: uv sync --extra dev
+      - run: uv sync --extra dev --locked
       - run: uv run ruff check .
-      - run: uv run pytest
+      - run: uv run pytest -q
 
   deploy:
     needs: test
@@ -31,54 +35,53 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Ensure Proxmox LXC
-        run: pve-deploy ensure $CT_ID $CT_NAME $CT_MEMORY $CT_CORES $CT_DISK
+        run: pve-deploy ensure "$CT_ID" "$CT_NAME" "$CT_MEMORY" "$CT_CORES" "$CT_DISK"
 
       - name: Configure Proxmox LXC
         run: bash deploy/proxmox/configure-lxc.sh "$CT_ID"
 
-      - name: Write runtime environment
+      - name: Prepare deploy bundle
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: |
-          cat > .env <<EOF
-          APP_HOST=0.0.0.0
-          APP_PORT=8000
-          DATABASE_URL=sqlite+aiosqlite:////data/app.db
-          REDIS_URL=redis://redis:6379/0
-          TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
-          TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
-          TELEGRAM_BOT_API_BASE_URL=http://telegram-bot-api:8081
-          SHARED_MEDIA_ROOT=/shared/media
-          MAX_LOCAL_FILE_BYTES=2097152000
-          CORS_ALLOWED_ORIGINS=http://127.0.0.1:8000,http://localhost:8000,https://tg.sh-inc.ru,https://tg.sh-inc.dev
-          MCP_ALLOWED_ORIGINS=http://127.0.0.1:8000,http://localhost:8000,https://tg.sh-inc.ru,https://tg.sh-inc.dev
-          PROTECTED_API_HOSTS=tg.sh-inc.ru,tg.sh-inc.dev
-          TELETHON_SESSION_DIR=/data/telethon
-          SCHEDULER_INTERVAL_SECONDS=3600
-          DIAGNOSTIC_POLL_TIMEOUT_SECONDS=30
-          DIAGNOSTIC_RETRY_DELAY_SECONDS=5
-          DISCOVERY_POLL_TIMEOUT_SECONDS=30
-          DISCOVERY_RETRY_DELAY_SECONDS=5
-          SEND_RETRY_MAX_ATTEMPTS=3
-          SEND_RETRY_DELAY_SECONDS=1
-          EOF
+          DEPLOY_BUNDLE="$(bash deploy/env/prepare-lxc-bundle.sh)"
+          echo "DEPLOY_BUNDLE=${DEPLOY_BUNDLE}" >> "$GITHUB_ENV"
 
       - name: Deploy Docker Compose stack
         run: |
-          pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml
+          pve-deploy deploy "$CT_ID" "$DEPLOY_BUNDLE" deploy/docker-compose.lxc.yml
           APP_IP="$(bash deploy/proxmox/ct-ip.sh "$CT_ID")"
           ssh "root@${APP_IP}" "cd /opt/app && docker compose -f deploy/docker-compose.lxc.yml up -d --build --force-recreate --remove-orphans"
 
       - name: Update nginx-ui upstream
         run: |
           APP_IP="$(bash deploy/proxmox/ct-ip.sh "$CT_ID")"
-          APP_UPSTREAM="http://${APP_IP}:8000" bash deploy/nginx/update-nginx-ui.sh "$CT_ID"
+          APP_UPSTREAM="http://${APP_IP}:8000" bash deploy/nginx/update-nginx-ui.sh "$NGINX_UI_CT_ID"
+
+      - name: Smoke test app and proxy
+        run: |
+          APP_IP="$(bash deploy/proxmox/ct-ip.sh "$CT_ID")"
           for attempt in $(seq 1 45); do
             if curl -fsS "http://${APP_IP}:8000/api/v1/health"; then
-              exit 0
+              break
             fi
             echo "Waiting for app health, attempt ${attempt}/45"
             sleep 2
           done
           curl -fsS "http://${APP_IP}:8000/api/v1/health"
+          curl -fsS "http://${APP_IP}:8000/api/v1/mcp/settings"
+          curl -fsS "http://${APP_IP}:8000/api/v1/reliability/summary"
+          curl -fsSI "http://${APP_IP}:8000/" | grep -q "200"
+          NGINX_IP="$(ssh "root@${PVE_HOST}" "pct exec ${NGINX_UI_CT_ID} -- hostname -I | awk '{print \$1}'")"
+          curl -fsSI -H "Host: tg.sh-inc.ru" "http://${NGINX_IP}/" | grep -q "200"
+          curl -fsSI -H "Host: tg.sh-inc.dev" "http://${NGINX_IP}/" | grep -q "200"
+
+      - name: Push verified main to GitHub mirror
+        run: |
+          git remote remove github 2>/dev/null || true
+          git remote add github git@github.com:Mesteriis/tg-bots.git
+          git push github HEAD:main --force
 
       - if: success()
         run: tg-notify "tg-bots deployed to CT ${CT_ID}" --success

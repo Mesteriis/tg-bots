@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from tg_bot_aggregator.shared_paths import ensure_shared_media_root
+from tg_bot_aggregator.domain.media.paths import ensure_shared_media_root
 
 
 class MediaBrowserError(ValueError):

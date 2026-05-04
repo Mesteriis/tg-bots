@@ -10,14 +10,18 @@ from typing import Any, Protocol
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.models import Destination, SendHistory, utc_now
-from tg_bot_aggregator.reliability import (
+from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.security import redact_secrets, redact_text
+from tg_bot_aggregator.domain.media.paths import SharedFile, SharedPathError, validate_shared_file
+from tg_bot_aggregator.domain.reliability.service import (
     SendQueueService,
     SendRateLimiter,
     compute_retry_decision,
     latency_ms_since,
 )
+from tg_bot_aggregator.domain.templates.renderer import render_template_text
+from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
+from tg_bot_aggregator.models import Destination, SendHistory, utc_now
 from tg_bot_aggregator.repositories import (
     BotRepository,
     DestinationRepository,
@@ -26,10 +30,6 @@ from tg_bot_aggregator.repositories import (
     SendHistoryRepository,
     TemplateRepository,
 )
-from tg_bot_aggregator.security import redact_secrets, redact_text
-from tg_bot_aggregator.shared_paths import SharedFile, SharedPathError, validate_shared_file
-from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
-from tg_bot_aggregator.template_renderer import render_template_text
 
 
 class EventPublisher(Protocol):

@@ -9,7 +9,7 @@ from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.mcp_catalog import MCP_DEFAULT_ENABLED_TOOL_NAMES
+from tg_bot_aggregator.domain.mcp.catalog import MCP_DEFAULT_ENABLED_TOOL_NAMES
 from tg_bot_aggregator.models import (
     AnalyticsRun,
     AnalyticsSnapshot,

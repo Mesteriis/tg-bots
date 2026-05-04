@@ -5,7 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
 from tg_bot_aggregator.audit import record_audit_event
-from tg_bot_aggregator.mcp_catalog import MCP_BOOTSTRAP_ENABLED_TOOL_NAMES
+from tg_bot_aggregator.domain.mcp.catalog import MCP_BOOTSTRAP_ENABLED_TOOL_NAMES
+from tg_bot_aggregator.domain.ops.service import (
+    McpCoverageService,
+    TelegramOpsError,
+    TelegramOpsService,
+)
 from tg_bot_aggregator.repositories import (
     McpSettingsRepository,
     NotFoundError,
@@ -23,11 +28,6 @@ from tg_bot_aggregator.schemas import (
     OpsRecommendationRead,
     OpsRuleRead,
     OpsRuleUpdate,
-)
-from tg_bot_aggregator.telegram_ops import (
-    McpCoverageService,
-    TelegramOpsError,
-    TelegramOpsService,
 )
 
 router = APIRouter(prefix="/ops", tags=["ops"])

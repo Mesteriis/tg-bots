@@ -2,8 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import create_send_service, get_session
+from tg_bot_aggregator.domain.batches.service import WorkflowService
+from tg_bot_aggregator.domain.operations.service import OperationsService
+from tg_bot_aggregator.domain.sending.service import IdempotencyConflictError, SendServiceError
+from tg_bot_aggregator.domain.templates.renderer import TemplateRenderError
 from tg_bot_aggregator.models import utc_now
-from tg_bot_aggregator.operations_service import OperationsService
 from tg_bot_aggregator.repositories import NotFoundError, SendHistoryRepository
 from tg_bot_aggregator.schemas import (
     SendDryRunRead,
@@ -15,9 +18,6 @@ from tg_bot_aggregator.schemas import (
     SendTemplateRequest,
     SendTextRequest,
 )
-from tg_bot_aggregator.send_service import IdempotencyConflictError, SendServiceError
-from tg_bot_aggregator.template_renderer import TemplateRenderError
-from tg_bot_aggregator.workflow_service import WorkflowService
 
 router = APIRouter(tags=["send"])
 

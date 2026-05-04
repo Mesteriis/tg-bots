@@ -1,7 +1,7 @@
 from typing import Any
 
+from tg_bot_aggregator.domain.sending.service import SendService, SendServiceError
 from tg_bot_aggregator.repositories import NotFoundError, SendBatchRepository
-from tg_bot_aggregator.send_service import SendService, SendServiceError
 
 
 class WorkflowService:

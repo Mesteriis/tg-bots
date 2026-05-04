@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
-from tg_bot_aggregator.api_tokens import (
+from tg_bot_aggregator.audit import record_audit_event
+from tg_bot_aggregator.domain.auth.service import (
     API_TOKEN_COOKIE,
     api_token_prefix,
     generate_api_token,
     hash_api_token,
     normalize_token_scopes,
 )
-from tg_bot_aggregator.audit import record_audit_event
 from tg_bot_aggregator.repositories import ApiTokenRepository
 from tg_bot_aggregator.schemas import (
     ApiTokenCreate,

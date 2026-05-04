@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_session
 from tg_bot_aggregator.audit import record_audit_event
-from tg_bot_aggregator.backup_service import (
+from tg_bot_aggregator.domain.backups.service import (
     BackupService,
     BackupServiceError,
     RepositoryPrivacy,

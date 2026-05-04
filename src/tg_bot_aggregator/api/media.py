@@ -1,7 +1,7 @@
 from anyio import to_thread
 from fastapi import APIRouter, HTTPException, Request
 
-from tg_bot_aggregator.media_browser import MediaBrowser, MediaBrowserError
+from tg_bot_aggregator.domain.media.browser import MediaBrowser, MediaBrowserError
 from tg_bot_aggregator.schemas import MediaListingRead
 
 router = APIRouter(prefix="/media", tags=["media"])
