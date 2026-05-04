@@ -55,6 +55,27 @@ def test_settings_parse_protected_api_hosts() -> None:
     assert settings.protected_api_hosts == ["tg.sh-inc.ru", "tg.sh-inc.dev"]
 
 
+def test_settings_treat_blank_optional_integer_env_values_as_unset(monkeypatch) -> None:
+    for name in [
+        "SEND_GLOBAL_RATE_PER_MINUTE",
+        "SEND_BOT_RATE_PER_MINUTE",
+        "SEND_CHAT_RATE_PER_MINUTE",
+        "SEND_DESTINATION_RATE_PER_MINUTE",
+        "SEND_DEDUPE_WINDOW_SECONDS",
+        "RATE_LIMIT_PER_MINUTE",
+    ]:
+        monkeypatch.setenv(name, "")
+
+    settings = Settings()
+
+    assert settings.send_global_rate_per_minute is None
+    assert settings.send_bot_rate_per_minute is None
+    assert settings.send_chat_rate_per_minute is None
+    assert settings.send_destination_rate_per_minute is None
+    assert settings.send_dedupe_window_seconds is None
+    assert settings.rate_limit_per_minute is None
+
+
 def test_diagnostic_bot_is_wired_in_compose_env_and_docs() -> None:
     compose = Path("docker-compose.yml").read_text()
     env_example = Path(".env.example").read_text()

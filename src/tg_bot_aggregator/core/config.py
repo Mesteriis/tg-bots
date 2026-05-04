@@ -172,6 +172,21 @@ class Settings(BaseSettings):
     def parse_origins(cls, value: str | list[str]) -> list[str]:
         return _split_csv(value)
 
+    @field_validator(
+        "send_global_rate_per_minute",
+        "send_bot_rate_per_minute",
+        "send_chat_rate_per_minute",
+        "send_destination_rate_per_minute",
+        "send_dedupe_window_seconds",
+        "rate_limit_per_minute",
+        mode="before",
+    )
+    @classmethod
+    def parse_optional_int(cls, value: str | int | None) -> int | None:
+        if value == "":
+            return None
+        return value
+
     @property
     def is_local_bot_api(self) -> bool:
         local_prefixes = ("http://telegram-bot-api", "http://localhost", "http://127.0.0.1")
