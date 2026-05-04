@@ -4,7 +4,7 @@ import secrets
 API_TOKEN_PREFIX = "tga_"
 API_TOKEN_COOKIE = "tg_api_token"
 API_TOKEN_HEADER = "X-API-Token"
-API_TOKEN_SCOPES = ("read", "send", "mcp_admin", "tg_compat")
+API_TOKEN_SCOPES = ("read", "send", "mcp_admin", "tg_compat", "ops_admin")
 
 
 def generate_api_token() -> str:

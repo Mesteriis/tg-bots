@@ -46,6 +46,31 @@ MCP_TOOL_DEFINITIONS: tuple[McpToolDefinition, ...] = (
     McpToolDefinition("release_stale_send_locks", "Release stale send locks", "task", "write"),
     McpToolDefinition("bulk_retry_sends", "Bulk retry sends", "send", "write"),
     McpToolDefinition("bulk_cancel_sends", "Bulk cancel sends", "send", "write"),
+    McpToolDefinition("inspect_bot_access", "Inspect bot access", "ops", "read"),
+    McpToolDefinition("list_ops_facts", "List Telegram Ops facts", "ops", "read"),
+    McpToolDefinition("run_ops_scan", "Run Telegram Ops scan", "ops", "write"),
+    McpToolDefinition(
+        "list_ops_recommendations",
+        "List Telegram Ops recommendations",
+        "ops",
+        "read",
+    ),
+    McpToolDefinition("preview_ops_action", "Preview Telegram Ops action", "ops", "write"),
+    McpToolDefinition("apply_ops_action", "Apply Telegram Ops action", "ops", "admin"),
+    McpToolDefinition(
+        "dismiss_ops_recommendation",
+        "Dismiss Telegram Ops recommendation",
+        "ops",
+        "write",
+    ),
+    McpToolDefinition("list_ops_rules", "List Telegram Ops rules", "ops", "read"),
+    McpToolDefinition("update_ops_rule", "Update Telegram Ops rule", "ops", "admin"),
+    McpToolDefinition("run_ops_rule", "Run Telegram Ops rule", "ops", "admin"),
+    McpToolDefinition("pause_ops_rule", "Pause Telegram Ops rule", "ops", "admin"),
+    McpToolDefinition("resume_ops_rule", "Resume Telegram Ops rule", "ops", "admin"),
+    McpToolDefinition("explain_failed_send", "Explain failed send", "ops", "read"),
+    McpToolDefinition("get_mcp_coverage_matrix", "Get MCP coverage matrix", "ops", "read"),
+    McpToolDefinition("recommend_mcp_preset", "Recommend MCP preset", "ops", "read"),
     McpToolDefinition("update_discovery_settings", "Update discovery settings", "task", "write"),
     McpToolDefinition("list_api_tokens", "List API tokens", "security", "admin"),
     McpToolDefinition("create_api_token", "Create API token", "security", "admin"),
@@ -56,6 +81,7 @@ MCP_TOOL_NAMES: tuple[str, ...] = tuple(tool.name for tool in MCP_TOOL_DEFINITIO
 MCP_READ_ONLY_TOOL_NAMES: tuple[str, ...] = tuple(
     tool.name for tool in MCP_TOOL_DEFINITIONS if tool.risk == "read"
 )
+MCP_BOOTSTRAP_ENABLED_TOOL_NAMES: tuple[str, ...] = MCP_READ_ONLY_TOOL_NAMES
 MCP_SENDER_TOOL_NAMES: tuple[str, ...] = tuple(
     tool.name for tool in MCP_TOOL_DEFINITIONS if tool.category in {"read", "send"}
 )
@@ -85,4 +111,10 @@ MCP_DEFAULT_ENABLED_TOOL_NAMES: tuple[str, ...] = (
     "release_stale_send_locks",
     "bulk_retry_sends",
     "bulk_cancel_sends",
+    "list_ops_facts",
+    "list_ops_recommendations",
+    "list_ops_rules",
+    "explain_failed_send",
+    "get_mcp_coverage_matrix",
+    "recommend_mcp_preset",
 )

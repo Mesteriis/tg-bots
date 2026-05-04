@@ -2,10 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.api.dependencies import get_bot_api_client, get_session
-from tg_bot_aggregator.repositories import BotRepository, DestinationRepository
+from tg_bot_aggregator.repositories import (
+    BotRepository,
+    DestinationHealthRepository,
+    DestinationRepository,
+)
 from tg_bot_aggregator.schemas import (
     DestinationCheckRead,
     DestinationCreate,
+    DestinationHealthRead,
     DestinationRead,
     DestinationUpdate,
 )
@@ -69,6 +74,7 @@ async def check_destination(
     bot_api: TelegramBotApiClient = Depends(get_bot_api_client),
 ) -> object:
     destinations = DestinationRepository(session)
+    health = DestinationHealthRepository(session)
     destination = await destinations.get(destination_id)
     if destination is None:
         raise HTTPException(status_code=404, detail="destination not found")
@@ -80,6 +86,14 @@ async def check_destination(
     try:
         chat_response = await bot_api.get_chat(bot.token, destination.chat_id)
     except TelegramBotApiError as exc:
+        await health.upsert_for_destination(
+            destination_id,
+            status="failed",
+            last_error=exc.description,
+            last_member_count=None,
+            raw_chat_json=None,
+        )
+        await session.commit()
         raise HTTPException(status_code=502, detail=exc.description) from exc
 
     chat = chat_response.get("result")
@@ -102,6 +116,13 @@ async def check_destination(
     except TelegramBotApiError as exc:
         warnings.append(exc.description)
 
+    await health.upsert_for_destination(
+        destination_id,
+        status="ok",
+        last_error="; ".join(warnings) if warnings else None,
+        last_member_count=member_count,
+        raw_chat_json=chat,
+    )
     await session.commit()
     return {
         "destination_id": destination_id,
@@ -110,3 +131,16 @@ async def check_destination(
         "member_count": member_count,
         "warnings": warnings,
     }
+
+
+@router.get("/{destination_id}/health", response_model=DestinationHealthRead)
+async def get_destination_health(
+    destination_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> object:
+    if await DestinationRepository(session).get(destination_id) is None:
+        raise HTTPException(status_code=404, detail="destination not found")
+    row = await DestinationHealthRepository(session).get_for_destination(destination_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="destination health not found")
+    return row

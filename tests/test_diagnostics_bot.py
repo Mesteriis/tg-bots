@@ -5,7 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from tg_bot_aggregator.diagnostics.bot import DiagnosticPollingBot
 from tg_bot_aggregator.models import Base
-from tg_bot_aggregator.repositories import BotRepository, DiagnosticSettingsRepository
+from tg_bot_aggregator.repositories import (
+    BotRepository,
+    DiagnosticSettingsRepository,
+    DiagnosticUpdateRepository,
+)
 
 
 class FakeBotApi:
@@ -127,6 +131,11 @@ async def test_run_once_replies_with_thread_id_and_advances_offset() -> None:
     assert fake_api.sent_messages[0]["reply_markup"]["inline_keyboard"]
     async for settings in _diagnostic_settings(session_factory):
         assert settings.last_update_id == 11
+    async with session_factory() as session:
+        updates = await DiagnosticUpdateRepository(session).list(limit=10)
+        assert updates[0].update_id == 11
+        assert updates[0].chat_id == "-100123"
+        assert updates[0].message_thread_id == 42
 
 
 async def test_run_once_advances_offset_for_non_message_update_without_reply() -> None:

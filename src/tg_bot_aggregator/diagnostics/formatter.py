@@ -35,11 +35,28 @@ KNOWN_MESSAGE_KEYS = {
 
 
 @dataclass(frozen=True)
+class DiagnosticMetadata:
+    update_id: int | None
+    update_kind: str
+    chat_id: str | None
+    chat_type: str | None
+    chat_title: str | None
+    chat_username: str | None
+    message_id: int | None
+    message_thread_id: int | None
+    is_topic_message: bool | None
+    sender_id: int | None
+    sender_username: str | None
+    text_preview: str | None
+
+
+@dataclass(frozen=True)
 class DiagnosticReport:
     text: str
     identifiers: list[Identifier]
     reply_chat_id: str | None
     reply_message_thread_id: int | None
+    metadata: DiagnosticMetadata
 
 
 def _message_from_update(update: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
@@ -192,6 +209,22 @@ def format_update_report(update: dict[str, Any]) -> DiagnosticReport:
             identifiers=[],
             reply_chat_id=None,
             reply_message_thread_id=None,
+            metadata=DiagnosticMetadata(
+                update_id=update.get("update_id")
+                if isinstance(update.get("update_id"), int)
+                else None,
+                update_kind="unsupported",
+                chat_id=None,
+                chat_type=None,
+                chat_title=None,
+                chat_username=None,
+                message_id=None,
+                message_thread_id=None,
+                is_topic_message=None,
+                sender_id=None,
+                sender_username=None,
+                text_preview=None,
+            ),
         )
 
     identifiers: list[Identifier] = []
@@ -232,11 +265,34 @@ def format_update_report(update: dict[str, Any]) -> DiagnosticReport:
 
     reply_chat_id = str(chat["id"]) if chat.get("id") is not None else None
     reply_thread_id = thread_id if isinstance(thread_id, int) else None
+    sender_id = sender.get("id") if isinstance(sender.get("id"), int) else None
+    text = message.get("text") or message.get("caption")
+    text_preview = str(text)[:500] if text is not None else None
     return DiagnosticReport(
         text="\n".join(lines),
         identifiers=identifiers,
         reply_chat_id=reply_chat_id,
         reply_message_thread_id=reply_thread_id,
+        metadata=DiagnosticMetadata(
+            update_id=update.get("update_id") if isinstance(update.get("update_id"), int) else None,
+            update_kind=update_kind,
+            chat_id=reply_chat_id,
+            chat_type=str(chat.get("type")) if chat.get("type") is not None else None,
+            chat_title=str(chat.get("title")) if chat.get("title") is not None else None,
+            chat_username=str(chat.get("username")) if chat.get("username") is not None else None,
+            message_id=message.get("message_id")
+            if isinstance(message.get("message_id"), int)
+            else None,
+            message_thread_id=reply_thread_id,
+            is_topic_message=message.get("is_topic_message")
+            if isinstance(message.get("is_topic_message"), bool)
+            else None,
+            sender_id=sender_id,
+            sender_username=str(sender.get("username"))
+            if sender.get("username") is not None
+            else None,
+            text_preview=text_preview,
+        ),
     )
 
 

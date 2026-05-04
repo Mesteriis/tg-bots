@@ -4,13 +4,18 @@ from tg_bot_aggregator.repositories import (
     AnalyticsRepository,
     ApiTokenRepository,
     AuditRepository,
+    BackupRunRepository,
     BotDiscoveryEventRepository,
     BotDiscoverySettingsRepository,
     BotRepository,
     DestinationRepository,
     DiagnosticSettingsRepository,
+    RuntimeSettingsRepository,
+    SendBatchRepository,
     SendHistoryRepository,
+    SendProfileRepository,
     TemplateRepository,
+    TemplateVersionRepository,
 )
 
 
@@ -167,3 +172,111 @@ async def test_ops_repositories_support_scopes_alias_idempotency_audit_and_disco
     assert settings.id == loaded_settings.id
     assert (await discovery_events.list(limit=1))[0].id == event.id
     assert (await audit.list(limit=1))[0].id == audit_row.id
+
+
+async def test_send_profile_repository_creates_lists_updates_and_deletes(
+    db_session: AsyncSession,
+) -> None:
+    bots = BotRepository(db_session)
+    destinations = DestinationRepository(db_session)
+    profiles = SendProfileRepository(db_session)
+
+    bot = await bots.create(name="ops", token="123:token")
+    destination = await destinations.create(
+        bot_id=bot.id,
+        kind="channel",
+        chat_id="@ops",
+        alias="ops_channel",
+    )
+    profile = await profiles.create(
+        name="Deploy",
+        bot_id=bot.id,
+        send_kind="template",
+        destination_id=destination.id,
+        template_tag="deploy",
+        variables_json={"service": "api"},
+        is_active=True,
+    )
+    await db_session.commit()
+
+    listed = await profiles.list()
+    updated = await profiles.update(profile.id, name="Deploy prod", destination_alias="prod")
+    await db_session.commit()
+
+    assert listed[0].id == profile.id
+    assert listed[0].variables_json == {"service": "api"}
+    assert updated.name == "Deploy prod"
+    assert updated.destination_alias == "prod"
+    assert await profiles.delete(profile.id) is True
+    assert await profiles.delete(profile.id) is False
+
+
+async def test_send_batch_repository_creates_batch_and_items(
+    db_session: AsyncSession,
+) -> None:
+    bots = BotRepository(db_session)
+    destinations = DestinationRepository(db_session)
+    batches = SendBatchRepository(db_session)
+
+    bot = await bots.create(name="ops", token="123:token")
+    first = await destinations.create(bot_id=bot.id, kind="channel", chat_id="@one")
+    second = await destinations.create(bot_id=bot.id, kind="channel", chat_id="@two")
+    batch = await batches.create_batch(
+        name="Release",
+        bot_id=bot.id,
+        send_kind="text",
+        text="hello",
+    )
+    await batches.add_item(batch.id, destination_id=first.id, chat_id="@one")
+    await batches.add_item(batch.id, destination_id=second.id, chat_id="@two")
+    await db_session.commit()
+
+    loaded = await batches.get_batch(batch.id)
+    items = await batches.list_items(batch.id)
+    await batches.mark_batch_status(batch, "queued")
+    await batches.mark_item_status(items[0], "queued", send_history_id=10)
+    await db_session.commit()
+
+    assert loaded is not None
+    assert loaded.name == "Release"
+    assert [item.chat_id for item in items] == ["@one", "@two"]
+    assert batch.status == "queued"
+    assert items[0].send_history_id == 10
+
+
+async def test_runtime_settings_and_backup_run_repositories(db_session: AsyncSession) -> None:
+    settings_repo = RuntimeSettingsRepository(db_session)
+    backup_runs = BackupRunRepository(db_session)
+
+    settings = await settings_repo.get_or_create()
+    updated = await settings_repo.upsert(max_local_file_bytes=123, backup_git_repo_url="file:///tmp/x")
+    run = await backup_runs.create(
+        status="succeeded",
+        items_exported=2,
+        backup_json={"bots": [], "templates": []},
+    )
+    await db_session.commit()
+
+    assert settings.id == 1
+    assert updated.max_local_file_bytes == 123
+    assert updated.backup_git_repo_url == "file:///tmp/x"
+    assert (await backup_runs.list())[0].id == run.id
+
+
+async def test_template_version_repository_creates_ordered_versions(
+    db_session: AsyncSession,
+) -> None:
+    templates = TemplateRepository(db_session)
+    versions = TemplateVersionRepository(db_session)
+    template = await templates.create(tag="deploy", title="Deploy", text="v1")
+    first = await versions.create_from_template(template)
+    template.text = "v2"
+    second = await versions.create_from_template(template)
+    await db_session.commit()
+
+    listed = await versions.list_for_template(template.id)
+
+    assert [row.id for row in listed] == [first.id, second.id]
+    assert [row.version_number for row in listed] == [1, 2]
+    assert listed[0].text == "v1"
+    assert listed[1].text == "v2"

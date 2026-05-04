@@ -112,6 +112,20 @@
         margin-bottom: 12px;
         gap: 12px;
       }
+      .operator-toolbar {
+        align-items: flex-start;
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .operator-actions {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
       h2 {
         margin: 0;
         font-size: 17px;
@@ -166,6 +180,79 @@
       .subtab:disabled {
         cursor: not-allowed;
         opacity: 0.48;
+      }
+      .segmented {
+        align-items: center;
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .status-strip {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+      .status-meter {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 8px;
+        padding: 10px 12px;
+      }
+      .status-meter-label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .status-meter-value {
+        color: var(--text-strong);
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .status-meter-line {
+        background: var(--bg-deep);
+        border-radius: 999px;
+        height: 5px;
+        overflow: hidden;
+      }
+      .status-meter-fill {
+        background: var(--accent);
+        border-radius: inherit;
+        display: block;
+        height: 100%;
+        transition: width 180ms ease;
+      }
+      .status-meter-fill.ok {
+        background: var(--ok);
+      }
+      .status-meter-fill.danger {
+        background: var(--danger);
+      }
+      .status-meter-fill.warning {
+        background: var(--warning);
+      }
+      .stepper {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+      .step-pill {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--muted);
+        cursor: pointer;
+        padding: 10px 12px;
+        text-align: left;
+        transition:
+          border-color 150ms ease,
+          color 150ms ease,
+          transform 150ms ease;
+      }
+      .step-pill.active {
+        border-color: var(--accent);
+        color: var(--text-strong);
+        transform: translateY(-1px);
       }
       .settings-grid {
         grid-template-columns:
@@ -703,6 +790,12 @@
         padding: 14px;
         box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
       }
+      .modal-panel.compact-modal {
+        max-width: 560px;
+      }
+      .modal-panel.danger-modal {
+        max-width: 520px;
+      }
       .error-banner {
         margin-bottom: 14px;
         padding: 10px 12px;
@@ -741,14 +834,25 @@
           animation-duration: 1ms !important;
           transition-duration: 1ms !important;
         }
+        .status-meter-fill,
+        .reliability-edge,
+        .panel,
+        .modal-panel {
+          animation: none !important;
+          transition: none !important;
+        }
       }
       @media (max-width: 960px) {
         .settings-grid {
           grid-template-columns: 1fr;
         }
-        .toolbar {
+        .toolbar,
+        .operator-toolbar {
           align-items: flex-start;
           flex-direction: column;
+        }
+        .operator-actions {
+          justify-content: flex-start;
         }
       }
       @media (max-width: 760px) {
@@ -825,38 +929,63 @@
             <div class="hint">На прокси-доменах нужен постоянный API-токен. Локальный адрес остается открытым.</div>
           </div>
 
-          <div v-if="activeTab === 'bots'" class="grid">
-            <form class="panel" @submit.prevent="createBot">
-              <div class="panel-head">
-                <p class="panel-title">Новый бот</p>
-                <p class="panel-description">Вставь Bot API token. Сервис сразу выполнит getMe и подтянет username, ID и базовые данные.</p>
+          <div v-if="activeTab === 'bots'" class="stack-layout">
+            <div class="operator-toolbar">
+              <div>
+                <p class="panel-title">Управляемые боты</p>
+                <p class="panel-description">Список токенов, через которые доступна отправка, tg-like API и автоматическое обнаружение чатов.</p>
               </div>
-              <label>Имя<input v-model="forms.bot.name" placeholder="@username после проверки" /></label>
-              <label>Токен<input v-model="forms.bot.token" required /></label>
-              <label>Описание<textarea v-model="forms.bot.description"></textarea></label>
-              <button class="btn primary" :disabled="botSaving">
-                <i data-lucide="radar"></i>{{ botSaving ? "Получаю данные" : "Добавить бота" }}
-              </button>
-              <div class="hint">После добавления сразу выполняется getMe: username и ID подтянутся автоматически, имя можно отредактировать.</div>
-            </form>
-            <div class="panel">
+              <div class="operator-actions">
+                <button class="btn primary" type="button" @click="openBotModal"><i data-lucide="plus"></i>Добавить бота</button>
+              </div>
+            </div>
+            <div class="panel full-span">
               <div class="panel-head">
                 <p class="panel-title">Сохраненные боты</p>
-                <p class="panel-description">Список токенов, через которые доступна отправка и автоматическое обнаружение чатов.</p>
+                <p class="panel-description">Username и Telegram bot ID подтягиваются через getMe после добавления или ручной проверки.</p>
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Имя</th><th>Username</th><th></th></tr></thead>
+                  <thead><tr><th>Имя</th><th>Username</th><th>Telegram ID</th><th>Проверка</th><th></th></tr></thead>
                   <tbody>
                     <tr v-for="bot in bots" :key="bot.id">
                       <td>{{ bot.name }}</td>
                       <td>{{ bot.username || '-' }}</td>
+                      <td>{{ bot.telegram_bot_id || '-' }}</td>
+                      <td>{{ bot.last_checked_at ? formatDate(bot.last_checked_at) : '-' }}</td>
                       <td><button class="btn icon-only" title="Проверить бота" @click="checkBot(bot.id)"><i data-lucide="check"></i></button></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
+          </div>
+
+          <div
+            v-if="botModalOpen"
+            class="modal-overlay"
+            role="presentation"
+            @click.self="closeBotModal"
+          >
+            <form class="modal-panel compact-modal" role="dialog" aria-modal="true" aria-labelledby="bot-modal-title" @submit.prevent="createBot">
+              <div class="panel-head with-actions">
+                <div>
+                  <p id="bot-modal-title" class="panel-title">Новый бот</p>
+                  <p class="panel-description">Вставь Bot API token. Сервис сразу выполнит getMe и подтянет username, ID и базовые данные.</p>
+                </div>
+                <button class="btn icon-only" type="button" title="Закрыть" @click="closeBotModal"><i data-lucide="x"></i></button>
+              </div>
+              <label>Имя<input v-model="forms.bot.name" placeholder="@username после проверки" /></label>
+              <label>Токен<input v-model="forms.bot.token" required /></label>
+              <label>Описание<textarea v-model="forms.bot.description"></textarea></label>
+              <div class="actions">
+                <button class="btn primary" :disabled="botSaving">
+                  <i data-lucide="radar"></i>{{ botSaving ? "Получаю данные" : "Добавить бота" }}
+                </button>
+                <button class="btn" type="button" @click="closeBotModal">Отмена</button>
+              </div>
+              <div class="hint">После добавления сразу выполняется getMe: username и ID подтянутся автоматически, имя можно отредактировать.</div>
+            </form>
           </div>
 
           <div v-if="activeTab === 'destinations'" class="stack-layout">
@@ -1011,31 +1140,45 @@
             <div class="subtabs" role="tablist" aria-label="Отправка">
               <button
                 class="subtab"
-                :class="{ active: sendSubTab === 'text' }"
+                :class="{ active: sendWorkTab === 'quick' }"
                 role="tab"
-                :aria-selected="sendSubTab === 'text'"
-                @click="sendSubTab = 'text'"
-              >Ручной текст</button>
+                :aria-selected="sendWorkTab === 'quick'"
+                @click="sendWorkTab = 'quick'; if (sendSubTab === 'file') sendSubTab = 'text'"
+              >Быстрая отправка</button>
               <button
                 class="subtab"
-                :class="{ active: sendSubTab === 'template' }"
+                :class="{ active: sendWorkTab === 'profiles' }"
                 role="tab"
-                :aria-selected="sendSubTab === 'template'"
-                @click="sendSubTab = 'template'"
-              >По шаблону</button>
+                :aria-selected="sendWorkTab === 'profiles'"
+                @click="sendWorkTab = 'profiles'"
+              >Профили</button>
               <button
                 class="subtab"
-                :class="{ active: sendSubTab === 'file' }"
+                :class="{ active: sendWorkTab === 'batch' }"
                 role="tab"
-                :aria-selected="sendSubTab === 'file'"
+                :aria-selected="sendWorkTab === 'batch'"
+                @click="sendWorkTab = 'batch'"
+              >Batch</button>
+              <button
+                class="subtab"
+                :class="{ active: sendWorkTab === 'file' }"
+                role="tab"
+                :aria-selected="sendWorkTab === 'file'"
                 :aria-disabled="!fileSendAvailable"
                 :disabled="!fileSendAvailable"
                 :title="fileSendUnavailableReason"
-                @click="fileSendAvailable && (sendSubTab = 'file')"
+                @click="fileSendAvailable && (sendWorkTab = 'file', sendSubTab = 'file')"
               >Файл с шары</button>
+              <button
+                class="subtab"
+                :class="{ active: sendWorkTab === 'preview' }"
+                role="tab"
+                :aria-selected="sendWorkTab === 'preview'"
+                @click="sendWorkTab = 'preview'"
+              >Preview / cURL</button>
             </div>
             <div v-if="!fileSendAvailable" class="hint full-span">Отправка файлов отключена: {{ fileSendUnavailableReason }}. Текст и шаблоны доступны.</div>
-            <div class="panel full-span">
+            <div v-if="sendWorkTab === 'profiles'" class="panel full-span">
               <div class="panel-head">
                 <p class="panel-title">Профили отправки</p>
                 <p class="panel-description">Сохрани часто используемую комбинацию бота, адресата, шаблона или файла и применяй ее без повторного ввода.</p>
@@ -1054,7 +1197,7 @@
                 <button class="btn" type="button" :disabled="sendSubTab === 'file' && !fileSendAvailable" @click="preflightCurrentSend"><i data-lucide="shield-check"></i>Preflight</button>
               </div>
             </div>
-            <div class="panel full-span">
+            <div v-if="sendWorkTab === 'batch'" class="panel full-span">
               <div class="panel-head">
                 <p class="panel-title">Batch-отправка</p>
                 <p class="panel-description">Создает набор отправок по текущему payload и выбранным адресатам. Enqueue создает обычные записи истории в очереди.</p>
@@ -1089,7 +1232,19 @@
                 </table>
               </div>
             </div>
-            <form v-if="sendSubTab === 'text'" class="panel full-span" @submit.prevent="sendText">
+            <div v-if="sendWorkTab === 'quick'" class="panel full-span">
+              <div class="panel-head with-actions">
+                <div>
+                  <p class="panel-title">Быстрая отправка</p>
+                  <p class="panel-description">Выбери текст или сохраненный шаблон, затем проверь payload через Preview/Preflight перед отправкой.</p>
+                </div>
+                <div class="segmented" aria-label="Тип быстрой отправки">
+                  <button class="btn" type="button" :class="{ primary: sendSubTab === 'text' }" @click="sendSubTab = 'text'">Ручной текст</button>
+                  <button class="btn" type="button" :class="{ primary: sendSubTab === 'template' }" @click="sendSubTab = 'template'">По шаблону</button>
+                </div>
+              </div>
+            </div>
+            <form v-if="sendWorkTab === 'quick' && sendSubTab === 'text'" class="panel full-span" @submit.prevent="sendText">
               <div class="panel-head">
                 <p class="panel-title">Ручной текст</p>
                 <p class="panel-description">Для одноразового сообщения или проверки адресата. Tag здесь остается произвольной меткой истории.</p>
@@ -1115,7 +1270,7 @@
                 <button class="btn" type="button" @click="copyCurl('text')"><i data-lucide="copy"></i>cURL</button>
               </div>
             </form>
-            <form v-if="sendSubTab === 'template'" class="panel full-span" @submit.prevent="sendTemplate">
+            <form v-if="sendWorkTab === 'quick' && sendSubTab === 'template'" class="panel full-span" @submit.prevent="sendTemplate">
               <div class="panel-head">
                 <p class="panel-title">Отправка по шаблону</p>
                 <p class="panel-description">Выбери сохраненный tag из списка. Текст, parse mode и предпросмотр ссылок берутся из шаблона.</p>
@@ -1139,7 +1294,7 @@
                 <button class="btn" type="button" @click="copyCurl('template')"><i data-lucide="copy"></i>cURL</button>
               </div>
             </form>
-            <form v-if="sendSubTab === 'file'" class="panel full-span" @submit.prevent="sendFile">
+            <form v-if="sendWorkTab === 'file'" class="panel full-span" @submit.prevent="sendFile">
               <div class="panel-head">
                 <p class="panel-title">Файл с общей шары</p>
                 <p class="panel-description">Передается относительный путь к уже загруженному файлу. FastAPI файл не копирует и не проксирует.</p>
@@ -1191,37 +1346,97 @@
                 </div>
               </fieldset>
             </form>
-            <div v-if="sendDryRun" class="panel full-span">
+            <div v-if="sendWorkTab === 'preview'" class="panel full-span">
               <div class="panel-head">
-                <p class="panel-title">Результат проверки</p>
-                <p class="panel-description">Dry-run показывает итоговый payload и ошибки валидации до реальной отправки.</p>
+                <p class="panel-title">Preview / cURL</p>
+                <p class="panel-description">Dry-run показывает итоговый payload и ошибки валидации до реальной отправки. cURL копирует текущий payload выбранного типа.</p>
               </div>
-              <pre>{{ JSON.stringify(sendDryRun, null, 2) }}</pre>
+              <div class="actions">
+                <button class="btn" type="button" @click="previewCurrentSend"><i data-lucide="scan-line"></i>Preview текущей отправки</button>
+                <button class="btn" type="button" @click="preflightCurrentSend"><i data-lucide="shield-check"></i>Preflight</button>
+                <button class="btn" type="button" @click="copyCurl('text')"><i data-lucide="copy"></i>cURL text</button>
+                <button class="btn" type="button" @click="copyCurl('template')"><i data-lucide="copy"></i>cURL template</button>
+                <button class="btn" type="button" @click="copyCurl('file')"><i data-lucide="copy"></i>cURL file</button>
+              </div>
+              <pre v-if="sendDryRun">{{ JSON.stringify(sendDryRun, null, 2) }}</pre>
+              <p v-else class="field-hint">Запусти Preview или Preflight из любой вкладки отправки. Результат появится здесь без реальной отправки сообщения.</p>
             </div>
           </div>
 
-          <div v-if="activeTab === 'history'" class="panel">
-            <div class="panel-head">
-              <p class="panel-title">Журнал отправок</p>
-              <p class="panel-description">Последние попытки отправки с Telegram message ID, статусом и ошибками для диагностики.</p>
-            </div>
-            <div class="table-wrap">
-              <table><thead><tr><th>ID</th><th>Статус</th><th>Chat</th><th>Tag</th><th>Ошибка</th><th></th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td>{{ item.id }}</td><td>{{ statusLabel(item.status) }}</td><td>{{ item.chat_id }}</td><td>{{ item.tag || '-' }}</td><td>{{ item.error_message || '-' }}</td><td><button v-if="item.status === 'failed'" class="btn icon-only" title="Повторить" @click="retrySendHistory(item.id)"><i data-lucide="rotate-ccw"></i></button><button v-if="item.status === 'queued' || item.status === 'created'" class="btn icon-only" title="Отменить" @click="cancelSendHistory(item.id)"><i data-lucide="ban"></i></button></td></tr></tbody></table>
-            </div>
-            <div class="grid" style="margin-top: 14px;">
-              <div class="panel compact">
-                <div class="panel-head">
-                  <p class="panel-title">Dead-letter</p>
-                  <p class="panel-description">Failed-отправки, которые требуют ручного повтора или исправления адресата.</p>
-                </div>
-                <div class="table-wrap"><table><thead><tr><th>ID</th><th>Chat</th><th>Ошибка</th></tr></thead><tbody><tr v-for="item in deadLetter" :key="item.id"><td>{{ item.id }}</td><td>{{ item.chat_id }}</td><td>{{ item.error_message || '-' }}</td></tr></tbody></table></div>
+          <div v-if="activeTab === 'history'" class="stack-layout">
+            <div class="status-strip">
+              <div class="status-meter">
+                <span class="status-meter-label">Успешно</span>
+                <span class="status-meter-value">{{ historyStatusCounts.succeeded }}</span>
+                <span class="status-meter-line"><span class="status-meter-fill ok" :style="{ width: `${Math.round((historyStatusCounts.succeeded / historyStatusTotal) * 100)}%` }"></span></span>
               </div>
-              <div class="panel compact">
-                <div class="panel-head">
-                  <p class="panel-title">Due queue</p>
-                  <p class="panel-description">Отложенные queued-записи, срок которых уже наступил.</p>
-                </div>
-                <div class="table-wrap"><table><thead><tr><th>ID</th><th>Chat</th><th>Due</th></tr></thead><tbody><tr v-for="item in dueHistory" :key="item.id"><td>{{ item.id }}</td><td>{{ item.chat_id }}</td><td>{{ item.next_retry_at || '-' }}</td></tr></tbody></table></div>
+              <div class="status-meter">
+                <span class="status-meter-label">Ошибки</span>
+                <span class="status-meter-value">{{ historyStatusCounts.failed }}</span>
+                <span class="status-meter-line"><span class="status-meter-fill danger" :style="{ width: `${Math.round((historyStatusCounts.failed / historyStatusTotal) * 100)}%` }"></span></span>
+              </div>
+              <div class="status-meter">
+                <span class="status-meter-label">Очередь</span>
+                <span class="status-meter-value">{{ historyStatusCounts.queued }}</span>
+                <span class="status-meter-line"><span class="status-meter-fill warning" :style="{ width: `${Math.round((historyStatusCounts.queued / historyStatusTotal) * 100)}%` }"></span></span>
+              </div>
+              <div class="status-meter">
+                <span class="status-meter-label">Dead-letter</span>
+                <span class="status-meter-value">{{ historyStatusCounts.dead_letter }}</span>
+                <span class="status-meter-line"><span class="status-meter-fill danger" :style="{ width: `${Math.round((historyStatusCounts.dead_letter / historyStatusTotal) * 100)}%` }"></span></span>
+              </div>
+            </div>
+            <div class="subtabs" role="tablist" aria-label="История">
+              <button class="subtab" :class="{ active: historySubTab === 'all' }" role="tab" :aria-selected="historySubTab === 'all'" @click="historySubTab = 'all'">Все отправки</button>
+              <button class="subtab" :class="{ active: historySubTab === 'queue' }" role="tab" :aria-selected="historySubTab === 'queue'" @click="historySubTab = 'queue'">Очередь</button>
+              <button class="subtab" :class="{ active: historySubTab === 'dead_letter' }" role="tab" :aria-selected="historySubTab === 'dead_letter'" @click="historySubTab = 'dead_letter'">Dead-letter</button>
+              <button class="subtab" :class="{ active: historySubTab === 'attempts' }" role="tab" :aria-selected="historySubTab === 'attempts'" @click="historySubTab = 'attempts'">Попытки</button>
+            </div>
+            <div v-if="historySubTab === 'all'" class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Журнал отправок</p>
+                <p class="panel-description">Последние попытки отправки с Telegram message ID, статусом и ошибками для диагностики.</p>
+              </div>
+              <div class="table-wrap">
+                <table><thead><tr><th>ID</th><th>Статус</th><th>Chat</th><th>Tag</th><th>Ошибка</th><th></th></tr></thead><tbody><tr v-for="item in history" :key="item.id"><td>{{ item.id }}</td><td>{{ statusLabel(item.status) }}</td><td>{{ item.chat_id }}</td><td>{{ item.tag || '-' }}</td><td>{{ item.error_message || '-' }}</td><td><button v-if="item.status === 'failed'" class="btn icon-only" title="Повторить" @click="retrySendHistory(item.id)"><i data-lucide="rotate-ccw"></i></button><button v-if="item.status === 'queued' || item.status === 'created'" class="btn icon-only" title="Отменить" @click="cancelSendHistory(item.id)"><i data-lucide="ban"></i></button></td></tr></tbody></table>
+              </div>
+            </div>
+            <div v-if="historySubTab === 'queue'" class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Due queue</p>
+                <p class="panel-description">Отложенные queued-записи, срок которых уже наступил.</p>
+              </div>
+              <div class="table-wrap"><table><thead><tr><th>ID</th><th>Chat</th><th>Due</th></tr></thead><tbody><tr v-for="item in dueHistory" :key="item.id"><td>{{ item.id }}</td><td>{{ item.chat_id }}</td><td>{{ item.next_retry_at || '-' }}</td></tr></tbody></table></div>
+            </div>
+            <div v-if="historySubTab === 'dead_letter'" class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Dead-letter</p>
+                <p class="panel-description">Failed-отправки, которые требуют ручного повтора или исправления адресата.</p>
+              </div>
+              <div class="table-wrap"><table><thead><tr><th>ID</th><th>Chat</th><th>Ошибка</th></tr></thead><tbody><tr v-for="item in deadLetter" :key="item.id"><td>{{ item.id }}</td><td>{{ item.chat_id }}</td><td>{{ item.error_message || '-' }}</td></tr></tbody></table></div>
+            </div>
+            <div v-if="historySubTab === 'attempts'" class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Попытки reliability worker</p>
+                <p class="panel-description">Последние попытки отправки с retry_after, latency и классификацией ошибки.</p>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>ID</th><th>Send history ID</th><th>Attempt</th><th>Статус</th><th>Error kind</th><th>Error message</th><th>Retry after</th><th>Latency</th></tr></thead>
+                  <tbody>
+                    <tr v-for="attempt in reliabilityAttempts" :key="attempt.id">
+                      <td>{{ attempt.id }}</td>
+                      <td>{{ attempt.send_history_id }}</td>
+                      <td>{{ attempt.attempt_number }}</td>
+                      <td>{{ statusLabel(attempt.status) }}</td>
+                      <td>{{ attempt.error_kind || '-' }}</td>
+                      <td>{{ attempt.error_message || '-' }}</td>
+                      <td>{{ attempt.retry_after || attempt.retry_after_seconds || '-' }}</td>
+                      <td>{{ attempt.latency_ms != null ? `${attempt.latency_ms} ms` : '-' }}</td>
+                    </tr>
+                    <tr v-if="reliabilityAttempts.length === 0"><td colspan="8">Нет попыток.</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1337,8 +1552,8 @@
             </div>
           </div>
 
-          <div v-if="activeTab === 'mtproto'" class="grid">
-            <div class="panel guide-panel">
+          <div v-if="activeTab === 'mtproto'" class="stack-layout">
+            <div class="panel guide-panel full-span">
               <p class="guide-title">Зачем нужен MTProto</p>
               <p class="guide-text">Это вход пользовательской Telegram-сессией через Telethon. Она нужна только для аналитики каналов и чатов, где Bot API не отдает достаточно данных.</p>
               <ol class="guide-list">
@@ -1348,7 +1563,12 @@
               </ol>
               <p class="guide-text">Важно: в локальной сети админка без авторизации, поэтому любой клиент с доступом к ней сможет пользоваться сохраненной MTProto-сессией через функции приложения.</p>
             </div>
-            <form class="panel" @submit.prevent="startLogin">
+            <div class="stepper" aria-label="MTProto login steps">
+              <button class="step-pill" :class="{ active: mtprotoStep === 'phone' }" type="button" @click="mtprotoStep = 'phone'">Шаг 1 · Телефон</button>
+              <button class="step-pill" :class="{ active: mtprotoStep === 'code' }" type="button" @click="mtprotoStep = 'code'">Шаг 2 · Код</button>
+              <button class="step-pill" :class="{ active: mtprotoStep === 'password' }" type="button" @click="mtprotoStep = 'password'">Шаг 3 · 2FA</button>
+            </div>
+            <form v-if="mtprotoStep === 'phone'" class="panel" @submit.prevent="startLogin">
               <div class="panel-head">
                 <p class="panel-title">Шаг 1: запрос кода</p>
                 <p class="panel-description">Номер используется только для старта Telethon-сессии и запроса кода у Telegram.</p>
@@ -1359,7 +1579,7 @@
               </label>
               <button class="btn primary"><i data-lucide="smartphone"></i>Запросить код</button>
             </form>
-            <form class="panel" @submit.prevent="confirmCode">
+            <form v-if="mtprotoStep === 'code'" class="panel" @submit.prevent="confirmCode">
               <div class="panel-head">
                 <p class="panel-title">Шаг 2: подтверждение кода</p>
                 <p class="panel-description">Код приходит в Telegram-приложение аккаунта, который указан на первом шаге.</p>
@@ -1370,7 +1590,7 @@
               </label>
               <button class="btn"><i data-lucide="key-round"></i>Подтвердить код</button>
             </form>
-            <form class="panel" @submit.prevent="confirmPassword">
+            <form v-if="mtprotoStep === 'password'" class="panel" @submit.prevent="confirmPassword">
               <div class="panel-head">
                 <p class="panel-title">Шаг 3: пароль 2FA</p>
                 <p class="panel-description">Заполняется только если Telegram требует облачный пароль для завершения входа.</p>
@@ -1383,17 +1603,17 @@
             </form>
           </div>
 
-          <div v-if="activeTab === 'analytics'" class="grid">
-            <form class="panel" @submit.prevent="createAnalyticsTarget">
-              <div class="panel-head">
-                <p class="panel-title">Новая цель аналитики</p>
+          <div v-if="activeTab === 'analytics'" class="stack-layout">
+            <div class="operator-toolbar">
+              <div>
+                <p class="panel-title">Цели аналитики</p>
                 <p class="panel-description">Peer ref может быть username, numeric ID или другой Telethon-resolvable идентификатор.</p>
               </div>
-              <label>Peer ref<input v-model="forms.analytics.peer_ref" required /></label>
-              <label>Название<input v-model="forms.analytics.title" /></label>
-              <button class="btn primary"><i data-lucide="plus"></i>Добавить цель</button>
-            </form>
-            <div class="panel">
+              <div class="operator-actions">
+                <button class="btn primary" type="button" @click="openAnalyticsModal"><i data-lucide="plus"></i>Добавить цель</button>
+              </div>
+            </div>
+            <div class="panel full-span">
               <div class="panel-head">
                 <p class="panel-title">Цели и ручное обновление</p>
                 <p class="panel-description">Запускает Taskiq refresh для выбранного канала или чата через сохраненную MTProto-сессию.</p>
@@ -1402,6 +1622,29 @@
                 <table><thead><tr><th>Peer</th><th>Название</th><th></th></tr></thead><tbody><tr v-for="target in analyticsTargets" :key="target.id"><td>{{ target.peer_ref }}</td><td>{{ target.title || '-' }}</td><td><button class="btn icon-only" title="Обновить аналитику" @click="refreshAnalytics(target.id)"><i data-lucide="refresh-cw"></i></button></td></tr></tbody></table>
               </div>
             </div>
+          </div>
+
+          <div
+            v-if="analyticsModalOpen"
+            class="modal-overlay"
+            role="presentation"
+            @click.self="closeAnalyticsModal"
+          >
+            <form class="modal-panel compact-modal" role="dialog" aria-modal="true" aria-labelledby="analytics-modal-title" @submit.prevent="createAnalyticsTarget">
+              <div class="panel-head with-actions">
+                <div>
+                  <p id="analytics-modal-title" class="panel-title">Новая цель аналитики</p>
+                  <p class="panel-description">Добавь канал или чат, который будет обновляться через сохраненную MTProto-сессию.</p>
+                </div>
+                <button class="btn icon-only" type="button" title="Закрыть" @click="closeAnalyticsModal"><i data-lucide="x"></i></button>
+              </div>
+              <label>Peer ref<input v-model="forms.analytics.peer_ref" required /></label>
+              <label>Название<input v-model="forms.analytics.title" /></label>
+              <div class="actions">
+                <button class="btn primary"><i data-lucide="plus"></i>Добавить цель</button>
+                <button class="btn" type="button" @click="closeAnalyticsModal">Отмена</button>
+              </div>
+            </form>
           </div>
 
           <div v-if="activeTab === 'diagnostics'" class="grid">
@@ -1468,31 +1711,218 @@
             </div>
           </div>
 
-          <div v-if="activeTab === 'discovery'" class="grid">
+          <div v-if="activeTab === 'discovery'" class="stack-layout">
             <div class="panel">
+              <div class="panel-head with-actions">
+                <div>
+                  <p class="panel-title">Telegram Ops</p>
+                  <p class="panel-description">Факты из diagnostic/discovery, рекомендации по адресатам, правила автоматизации и покрытие MCP-инструментов.</p>
+                </div>
+                <div class="actions">
+                  <button class="btn" type="button" @click="refreshOps"><i data-lucide="refresh-cw"></i>Обновить</button>
+                  <button class="btn primary" type="button" @click="runOpsScan"><i data-lucide="radar"></i>Run scan</button>
+                </div>
+              </div>
+              <div class="subtabs" aria-label="Telegram Ops">
+                <button class="subtab" :class="{ active: activeOpsSubTab === 'overview' }" type="button" @click="activeOpsSubTab = 'overview'">Обзор</button>
+                <button class="subtab" :class="{ active: activeOpsSubTab === 'facts' }" type="button" @click="activeOpsSubTab = 'facts'">Факты</button>
+                <button class="subtab" :class="{ active: activeOpsSubTab === 'recommendations' }" type="button" @click="activeOpsSubTab = 'recommendations'">Рекомендации</button>
+                <button class="subtab" :class="{ active: activeOpsSubTab === 'automation' }" type="button" @click="activeOpsSubTab = 'automation'">Автоматизация</button>
+                <button class="subtab" :class="{ active: activeOpsSubTab === 'runs' }" type="button" @click="activeOpsSubTab = 'runs'">Журнал действий</button>
+                <button class="subtab" :class="{ active: activeOpsSubTab === 'mcp' }" type="button" @click="activeOpsSubTab = 'mcp'">MCP покрытие</button>
+              </div>
+            </div>
+
+            <div v-if="activeOpsSubTab === 'overview'" class="grid">
+              <div class="panel compact">
+                <div class="panel-head">
+                  <p class="panel-title">Сводка</p>
+                  <p class="panel-description">Короткое состояние ops-слоя без JSON-дампов.</p>
+                </div>
+                <div class="metric-grid">
+                  <div class="metric-tile"><span class="metric-label">Факты</span><strong>{{ opsFacts.length }}</strong></div>
+                  <div class="metric-tile"><span class="metric-label">Открытые рекомендации</span><strong>{{ opsOpenRecommendations.length }}</strong></div>
+                  <div class="metric-tile"><span class="metric-label">Правила</span><strong>{{ opsRules.length }}</strong></div>
+                  <div class="metric-tile"><span class="metric-label">MCP gaps</span><strong>{{ opsMissingEnabledTools.length + opsMissingCatalogTools.length }}</strong></div>
+                </div>
+                <div v-if="opsLastScan" class="hint">Последний scan: фактов {{ opsLastScan.facts_created || 0 }}, рекомендаций {{ opsLastScan.recommendations_created || 0 }}.</div>
+              </div>
+              <div class="panel compact">
+                <div class="panel-head">
+                  <p class="panel-title">Автоматическое добавление чатов</p>
+                  <p class="panel-description">Компактные discovery-настройки для ботов, которых добавляют администраторами в группы, каналы и forum topics.</p>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Бот</th><th>Включен</th><th>Update</th><th>Ошибка</th></tr></thead>
+                    <tbody>
+                      <tr v-for="bot in bots" :key="bot.id">
+                        <td>{{ bot.name }}</td>
+                        <td><input :checked="discoveryEnabled(bot.id)" type="checkbox" @change="saveDiscoverySettings(bot.id, $event.target.checked)" /></td>
+                        <td>{{ discoveryFor(bot.id)?.last_update_id || '-' }}</td>
+                        <td>{{ discoveryFor(bot.id)?.last_error || '-' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="hint">Автопоиск читает только my_chat_member updates и автоматически добавляет чаты, куда управляемого бота добавили администратором.</div>
+              </div>
+            </div>
+
+            <div v-if="activeOpsSubTab === 'facts'" class="panel">
               <div class="panel-head">
-                <p class="panel-title">Автоматическое добавление чатов</p>
-                <p class="panel-description">Включи discovery для ботов, которых добавляют администраторами в группы, каналы и форумные темы.</p>
+                <p class="panel-title">Факты</p>
+                <p class="panel-description">Наблюдаемые bot/chat/topic сигналы, из которых строятся рекомендации.</p>
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Бот</th><th>Включен</th><th>Последний update</th><th>Ошибка</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Тип</th><th>Бот</th><th>Chat / thread</th><th>Название</th><th>Источник</th><th>Статус</th><th>Уверенность</th></tr></thead>
                   <tbody>
-                    <tr v-for="bot in bots" :key="bot.id">
-                      <td>{{ bot.name }}</td>
-                      <td><input :checked="discoveryEnabled(bot.id)" type="checkbox" @change="saveDiscoverySettings(bot.id, $event.target.checked)" /></td>
-                      <td>{{ discoveryFor(bot.id)?.last_update_id || '-' }}</td>
-                      <td>{{ discoveryFor(bot.id)?.last_error || '-' }}</td>
+                    <tr v-for="fact in opsFacts" :key="fact.id">
+                      <td>{{ fact.id }}</td>
+                      <td>{{ fact.fact_type }}</td>
+                      <td>{{ fact.bot_id || '-' }}</td>
+                      <td>{{ fact.chat_id || '-' }}<span v-if="fact.message_thread_id"> / {{ fact.message_thread_id }}</span></td>
+                      <td>{{ fact.title || fact.username || '-' }}</td>
+                      <td>{{ fact.source }}</td>
+                      <td>{{ statusLabel(fact.status) }}</td>
+                      <td>{{ fact.confidence }}%</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              <div class="hint">Автопоиск читает только my_chat_member updates и автоматически добавляет чаты, куда управляемого бота добавили администратором.</div>
+            </div>
+
+            <div v-if="activeOpsSubTab === 'recommendations'" class="stack-layout">
+              <div class="panel" v-for="recommendation in opsRecommendations" :key="recommendation.id">
+                <div class="panel-head with-actions">
+                  <div>
+                    <p class="panel-title">#{{ recommendation.id }} · {{ recommendation.title }}</p>
+                    <p class="panel-description">{{ recommendation.reason }}</p>
+                  </div>
+                  <div class="actions">
+                    <span class="badge" :class="{ ok: recommendation.status === 'applied', danger: recommendation.risk === 'high' }">{{ statusLabel(recommendation.status) }} / {{ riskLabel(recommendation.risk) }}</span>
+                    <button class="btn" type="button" @click="previewOpsAction(recommendation.id)">Preview</button>
+                    <button class="btn primary" type="button" @click="applyOpsAction(recommendation.id)">Apply</button>
+                    <button class="btn danger-btn" type="button" @click="dismissOpsRecommendation(recommendation.id)">Dismiss</button>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="meta-table">
+                    <tbody>
+                      <tr v-for="row in opsDiffRows(recommendation.diff_json)" :key="row.key"><th>{{ row.key }}</th><td>{{ row.value }}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div v-if="selectedOpsRecommendation" class="panel">
+                <div class="panel-head">
+                  <p class="panel-title">Preview #{{ selectedOpsRecommendation }}</p>
+                  <p class="panel-description">Изменения перед применением рекомендации.</p>
+                </div>
+                <div class="table-wrap">
+                  <table class="meta-table">
+                    <tbody>
+                      <tr v-for="row in opsDiffRows(opsPreview?.diff)" :key="row.key"><th>{{ row.key }}</th><td>{{ row.value }}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="activeOpsSubTab === 'automation'" class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Автоматизация</p>
+                <p class="panel-description">Правила могут только предлагать изменения или применять низкорисковые действия автоматически.</p>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Правило</th><th>Режим</th><th>Risk limit</th><th>Включено</th><th>Пауза</th><th>Последний запуск</th><th></th></tr></thead>
+                  <tbody>
+                    <tr v-for="rule in opsRules" :key="rule.id">
+                      <td>{{ rule.title }}<br /><span class="status">{{ rule.rule_key }}</span></td>
+                      <td>
+                        <select :value="rule.mode" @change="updateOpsRule(rule, { mode: $event.target.value })">
+                          <option value="suggest_only">suggest_only</option>
+                          <option value="auto_apply">auto_apply</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select :value="rule.risk_limit" @change="updateOpsRule(rule, { risk_limit: $event.target.value })">
+                          <option value="low">low</option>
+                          <option value="medium">medium</option>
+                          <option value="high">high</option>
+                        </select>
+                      </td>
+                      <td><input :checked="rule.is_enabled" type="checkbox" @change="updateOpsRule(rule, { is_enabled: $event.target.checked })" /></td>
+                      <td>{{ rule.is_paused ? 'на паузе' : 'активно' }}</td>
+                      <td>{{ formatDate(rule.last_run_at) }}<br /><span class="status">{{ rule.last_result || '-' }}</span></td>
+                      <td class="actions">
+                        <button class="btn" type="button" @click="runOpsRule(rule.id)">Run</button>
+                        <button v-if="rule.is_paused" class="btn" type="button" @click="resumeOpsRule(rule.id)">Resume</button>
+                        <button v-else class="btn" type="button" @click="pauseOpsRule(rule.id)">Pause</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div v-if="activeOpsSubTab === 'runs'" class="panel">
+              <div class="panel-head">
+                <p class="panel-title">Журнал действий</p>
+                <p class="panel-description">Preview/apply/run операции с результатом и rollback hint.</p>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>ID</th><th>Тип</th><th>Рекомендация</th><th>Правило</th><th>Статус</th><th>Actor</th><th>Создано</th><th>Результат</th></tr></thead>
+                  <tbody>
+                    <tr v-for="run in opsActionRuns" :key="run.id">
+                      <td>{{ run.id }}</td>
+                      <td>{{ run.action_type }}</td>
+                      <td>{{ run.recommendation_id || '-' }}</td>
+                      <td>{{ run.rule_id || '-' }}</td>
+                      <td>{{ statusLabel(run.status) }}</td>
+                      <td>{{ run.actor || run.source }}</td>
+                      <td>{{ formatDate(run.created_at) }}</td>
+                      <td>{{ run.error_message || run.rollback_hint || opsResultSummary(run.result_json) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div v-if="activeOpsSubTab === 'mcp'" class="panel">
+              <div class="panel-head">
+                <p class="panel-title">MCP покрытие</p>
+                <p class="panel-description">Матрица REST/UI/MCP по доменам Telegram Ops и соседним операциям.</p>
+              </div>
+              <div class="table-wrap">
+                <table class="tools-table">
+                  <thead><tr><th>Домен</th><th>Capability</th><th>Enabled</th><th>Missing</th></tr></thead>
+                  <tbody>
+                    <tr v-for="row in opsCoverageRows" :key="row.domain">
+                      <td>{{ row.domain }}<br /><span class="status">risk: {{ riskLabel(row.risk) }}</span></td>
+                      <td>{{ opsCoverageCapabilities(row) }}</td>
+                      <td>{{ opsToolList(row.enabled) }}</td>
+                      <td>{{ opsToolList([...(row.missing_enabled_tools || []), ...(row.missing_catalog_tools || [])]) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-if="opsMissingEnabledTools.length" class="hint">Отключены в MCP settings: {{ opsToolList(opsMissingEnabledTools) }}</div>
+              <div v-if="opsMissingCatalogTools.length" class="hint">Нет в каталоге MCP: {{ opsToolList(opsMissingCatalogTools) }}</div>
             </div>
           </div>
 
-          <div v-if="activeTab === 'mcp'" class="grid settings-grid">
-            <div class="panel compact">
+          <div v-if="activeTab === 'mcp'" class="stack-layout">
+            <div class="subtabs" role="tablist" aria-label="MCP">
+              <button class="subtab" :class="{ active: mcpSubTab === 'profile' }" role="tab" :aria-selected="mcpSubTab === 'profile'" @click="mcpSubTab = 'profile'">Профиль</button>
+              <button class="subtab" :class="{ active: mcpSubTab === 'tools' }" role="tab" :aria-selected="mcpSubTab === 'tools'" @click="mcpSubTab = 'tools'">Инструменты</button>
+              <button class="subtab" :class="{ active: mcpSubTab === 'tokens' }" role="tab" :aria-selected="mcpSubTab === 'tokens'" @click="mcpSubTab = 'tokens'">Токены</button>
+              <button class="subtab" :class="{ active: mcpSubTab === 'connection' }" role="tab" :aria-selected="mcpSubTab === 'connection'" @click="mcpSubTab = 'connection'">Подключение</button>
+            </div>
+            <div v-if="mcpSubTab === 'profile'" class="panel compact">
               <div class="panel-head">
                 <p class="panel-title">Профиль MCP</p>
                 <p class="panel-description">Управляет доступностью MCP transport и быстрыми наборами инструментов для AI-клиентов.</p>
@@ -1507,7 +1937,7 @@
               </div>
               <div class="hint">Отключенные инструменты отклоняются при вызове. После изменения переподключи MCP-клиент, чтобы он обновил discovery.</div>
             </div>
-            <div class="panel compact">
+            <div v-if="mcpSubTab === 'tools'" class="panel full-span">
               <div class="panel-head">
                 <p class="panel-title">Инструменты MCP</p>
                 <p class="panel-description">Отключенный инструмент остается видимым в настройке, но будет отклонен при вызове.</p>
@@ -1526,22 +1956,13 @@
                 </table>
               </div>
             </div>
-            <form class="panel compact" @submit.prevent="createApiToken">
-              <div class="panel-head">
-                <p class="panel-title">Новый постоянный токен</p>
-                <p class="panel-description">Используется для защищенных доменов tg.* и внешнего tg-like API.</p>
-              </div>
-              <label>Имя нового постоянного токена<input v-model="forms.apiToken.name" required /></label>
-              <div class="token-scope-grid">
-                <label class="checkbox-label" v-for="scope in tokenScopes" :key="scope"><input v-model="forms.apiToken.scopes" type="checkbox" :value="scope" /> {{ scopeLabel(scope) }}</label>
-              </div>
-              <button class="btn primary"><i data-lucide="key-round"></i>Создать токен</button>
-              <div v-if="createdApiToken" class="hint">Создан токен: <code>{{ createdApiToken }}</code></div>
-            </form>
-            <div class="panel compact">
-              <div class="panel-head">
-                <p class="panel-title">Созданные токены</p>
-                <p class="panel-description">Токен показывается полностью только в момент создания; дальше доступен только префикс и отзыв.</p>
+            <div v-if="mcpSubTab === 'tokens'" class="panel full-span">
+              <div class="panel-head with-actions">
+                <div>
+                  <p class="panel-title">Созданные токены</p>
+                  <p class="panel-description">Токен показывается полностью только в момент создания; дальше доступен только префикс и отзыв.</p>
+                </div>
+                <button class="btn primary" type="button" @click="openApiTokenModal"><i data-lucide="key-round"></i>Создать токен</button>
               </div>
               <div class="table-wrap">
                 <table class="token-table">
@@ -1551,13 +1972,13 @@
                       <td>{{ token.name }}</td>
                       <td>{{ token.token_prefix }}</td>
                       <td>{{ token.is_active ? 'активен' : 'отозван' }}</td>
-                      <td><button class="btn icon-only" title="Отозвать токен" @click="revokeApiToken(token.id)"><i data-lucide="ban"></i></button></td>
+                      <td><button class="btn icon-only" title="Отозвать токен" @click="openRevokeTokenModal(token)"><i data-lucide="ban"></i></button></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
-            <div class="panel compact">
+            <div v-if="mcpSubTab === 'connection'" class="panel compact">
               <div class="panel-head">
                 <p class="panel-title">Transport endpoints</p>
                 <p class="panel-description">Пути MCP и список хостов, где обязательна проверка постоянного API-токена.</p>
@@ -1571,7 +1992,7 @@
                 </table>
               </div>
             </div>
-            <div class="panel compact">
+            <div v-if="mcpSubTab === 'connection'" class="panel compact">
               <div class="panel-head">
                 <p class="panel-title">Подключение MCP</p>
                 <p class="panel-description">Готовые пути и header для локальных клиентов и защищенных tg.* доменов.</p>
@@ -1587,6 +2008,50 @@
               </div>
               <div class="actions">
                 <button class="btn" type="button" @click="copyMcpConnection"><i data-lucide="copy"></i>Скопировать MCP connection</button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="apiTokenModalOpen"
+            class="modal-overlay"
+            role="presentation"
+            @click.self="closeApiTokenModal"
+          >
+            <form class="modal-panel compact-modal" role="dialog" aria-modal="true" aria-labelledby="api-token-modal-title" @submit.prevent="createApiToken">
+              <div class="panel-head with-actions">
+                <div>
+                  <p id="api-token-modal-title" class="panel-title">Новый постоянный токен</p>
+                  <p class="panel-description">Используется для защищенных доменов tg.* и внешнего tg-like API.</p>
+                </div>
+                <button class="btn icon-only" type="button" title="Закрыть" @click="closeApiTokenModal"><i data-lucide="x"></i></button>
+              </div>
+              <label>Имя нового постоянного токена<input v-model="forms.apiToken.name" required /></label>
+              <div class="token-scope-grid">
+                <label class="checkbox-label" v-for="scope in tokenScopes" :key="scope"><input v-model="forms.apiToken.scopes" type="checkbox" :value="scope" /> {{ scopeLabel(scope) }}</label>
+              </div>
+              <div class="actions">
+                <button class="btn primary"><i data-lucide="key-round"></i>Создать токен</button>
+                <button class="btn" type="button" @click="closeApiTokenModal">Отмена</button>
+              </div>
+              <div v-if="createdApiToken" class="hint">Создан токен: <code>{{ createdApiToken }}</code></div>
+            </form>
+          </div>
+
+          <div
+            v-if="revokeTokenModalOpen"
+            class="modal-overlay"
+            role="presentation"
+            @click.self="closeRevokeTokenModal"
+          >
+            <div class="modal-panel danger-modal" role="dialog" aria-modal="true" aria-labelledby="revoke-token-modal-title">
+              <div class="panel-head">
+                <p id="revoke-token-modal-title" class="panel-title">Отозвать постоянный токен</p>
+                <p class="panel-description">Действие отключит доступ по токену {{ revokeTokenTarget?.token_prefix || '' }}. Внешние MCP/tg-like клиенты с этим токеном перестанут работать.</p>
+              </div>
+              <div class="actions">
+                <button class="btn danger-btn" type="button" @click="confirmRevokeApiToken"><i data-lucide="ban"></i>Отозвать токен</button>
+                <button class="btn" type="button" @click="closeRevokeTokenModal">Отмена</button>
               </div>
             </div>
           </div>
@@ -1612,8 +2077,14 @@
             </div>
           </div>
 
-          <div v-if="activeTab === 'operations'" class="grid settings-grid">
-            <form class="panel" @submit.prevent="saveRuntimeSettings">
+          <div v-if="activeTab === 'operations'" class="stack-layout">
+            <div class="subtabs" role="tablist" aria-label="Операции">
+              <button class="subtab" :class="{ active: operationsSubTab === 'runtime' }" role="tab" :aria-selected="operationsSubTab === 'runtime'" @click="operationsSubTab = 'runtime'">Runtime</button>
+              <button class="subtab" :class="{ active: operationsSubTab === 'infra' }" role="tab" :aria-selected="operationsSubTab === 'infra'" @click="operationsSubTab = 'infra'">Infra и секреты</button>
+              <button class="subtab" :class="{ active: operationsSubTab === 'backup' }" role="tab" :aria-selected="operationsSubTab === 'backup'" @click="operationsSubTab = 'backup'">Backup</button>
+              <button class="subtab" :class="{ active: operationsSubTab === 'restore' }" role="tab" :aria-selected="operationsSubTab === 'restore'" @click="operationsSubTab = 'restore'">Restore</button>
+            </div>
+            <form v-if="operationsSubTab === 'runtime'" class="panel" @submit.prevent="saveRuntimeSettings">
               <div class="panel-head">
                 <p class="panel-title">Runtime-настройки без рестарта</p>
                 <p class="panel-description">Значения сохраняются в SQLite и применяются к текущему FastAPI-процессу сразу после сохранения.</p>
@@ -1635,7 +2106,7 @@
               <label>Callback URL<input v-model="operationsSettings.callback_url" placeholder="https://example.local/send-status" /></label>
               <button class="btn primary"><i data-lucide="save"></i>Применить без рестарта</button>
             </form>
-            <div class="panel">
+            <div v-if="operationsSubTab === 'infra'" class="panel">
               <div class="panel-head">
                 <p class="panel-title">Локальные секреты и infra</p>
                 <p class="panel-description">Это локальная админка: можно хранить пароли и URL здесь. DB/CORS/listen параметры сохраняются в SQLite и backup, но реальный listener и текущий DB connection меняются только после перезапуска процесса.</p>
@@ -1653,7 +2124,8 @@
               <label>Discovery retry delay<input v-model.number="operationsSettings.discovery_retry_delay_seconds" type="number" step="0.1" /></label>
               <button class="btn primary" type="button" @click="saveRuntimeSettings"><i data-lucide="save"></i>Сохранить локальные настройки</button>
             </div>
-            <div class="panel full-span">
+            <div v-if="operationsSubTab === 'backup' || operationsSubTab === 'restore'" class="panel full-span">
+              <div v-if="operationsSubTab === 'backup'" class="stack-layout">
               <div class="panel-head">
                 <p class="panel-title">JSON backup в git</p>
                 <p class="panel-description">Экспортирует конфигурацию и справочники в JSON. GitHub и Gitea проверяются через API перед сборкой snapshot.</p>
@@ -1711,6 +2183,11 @@
                   </tbody>
                 </table>
               </div>
+              <div class="table-wrap" style="margin-top: 12px;">
+                <table><thead><tr><th>ID</th><th>Статус</th><th>Секреты</th><th>Repo</th><th>Элементов</th><th>Commit</th><th>Ошибка</th></tr></thead><tbody><tr v-for="run in backupRuns" :key="run.id"><td>{{ run.id }}</td><td>{{ statusLabel(run.status) }}</td><td>{{ backupSecretsLabel(run.snapshot?.backup_policy) }}</td><td>{{ backupRepoLabel(run.snapshot?.backup_policy?.repo) }}</td><td>{{ run.items_exported }}</td><td>{{ run.git_commit || '-' }}</td><td>{{ run.error_message || '-' }}</td></tr></tbody></table>
+              </div>
+              </div>
+              <div v-if="operationsSubTab === 'restore'" class="stack-layout">
               <div class="subpanel">
                 <div class="panel-head">
                   <p class="panel-title">Restore wizard</p>
@@ -1773,8 +2250,6 @@
                   <button class="btn danger-btn" type="button" @click="applyBackupImport"><i data-lucide="rotate-ccw"></i>Apply RESTORE</button>
                 </div>
               </div>
-              <div class="table-wrap" style="margin-top: 12px;">
-                <table><thead><tr><th>ID</th><th>Статус</th><th>Секреты</th><th>Repo</th><th>Элементов</th><th>Commit</th><th>Ошибка</th></tr></thead><tbody><tr v-for="run in backupRuns" :key="run.id"><td>{{ run.id }}</td><td>{{ statusLabel(run.status) }}</td><td>{{ backupSecretsLabel(run.snapshot?.backup_policy) }}</td><td>{{ backupRepoLabel(run.snapshot?.backup_policy?.repo) }}</td><td>{{ run.items_exported }}</td><td>{{ run.git_commit || '-' }}</td><td>{{ run.error_message || '-' }}</td></tr></tbody></table>
               </div>
             </div>
           </div>
@@ -1783,6 +2258,28 @@
             <div class="panel-head">
               <p class="panel-title">Состояние сервиса</p>
               <p class="panel-description">Читаемый снимок runtime-конфигурации, shared media root и режима Telegram Bot API.</p>
+            </div>
+            <div class="status-strip" style="margin-bottom: 14px;">
+              <div class="status-meter">
+                <span class="status-meter-label">API</span>
+                <span class="status-meter-value" :class="{ danger: health.status !== 'ok' }">{{ statusLabel(health.status) }}</span>
+                <span class="status-meter-line"><span class="status-meter-fill" :class="{ ok: health.status === 'ok', danger: health.status !== 'ok' }" :style="{ width: health.status === 'ok' ? '100%' : '35%' }"></span></span>
+              </div>
+              <div class="status-meter">
+                <span class="status-meter-label">Bot API</span>
+                <span class="status-meter-value">{{ health.local_bot_api ? 'локальный' : 'cloud' }}</span>
+                <span class="status-meter-line"><span class="status-meter-fill" :class="{ ok: health.local_bot_api, warning: !health.local_bot_api }" :style="{ width: health.local_bot_api ? '100%' : '55%' }"></span></span>
+              </div>
+              <div class="status-meter">
+                <span class="status-meter-label">Файлы</span>
+                <span class="status-meter-value">{{ fileSendAvailable ? 'включены' : 'отключены' }}</span>
+                <span class="status-meter-line"><span class="status-meter-fill" :class="{ ok: fileSendAvailable, danger: !fileSendAvailable }" :style="{ width: fileSendAvailable ? '100%' : '25%' }"></span></span>
+              </div>
+              <div class="status-meter">
+                <span class="status-meter-label">Backup</span>
+                <span class="status-meter-value">{{ statusLabel(health.backup_last_status || 'не запускался') }}</span>
+                <span class="status-meter-line"><span class="status-meter-fill" :class="{ ok: health.backup_last_status === 'succeeded', danger: health.backup_last_status === 'failed', warning: !health.backup_last_status }" :style="{ width: health.backup_last_status === 'succeeded' ? '100%' : (health.backup_last_status === 'failed' ? '45%' : '30%') }"></span></span>
+              </div>
             </div>
             <div class="health-grid">
               <div class="health-card">
@@ -1855,7 +2352,7 @@
               { id: "mtproto", label: "MTProto", icon: "smartphone", description: "Вход пользовательской Telegram-сессией для аналитики каналов и чатов через Telethon." },
               { id: "analytics", label: "Аналитика", icon: "chart-no-axes-combined", description: "Цели аналитики и ручной запуск refresh задач через Taskiq и Redis." },
               { id: "diagnostics", label: "Диагностика", icon: "scan-search", description: "Отдельный polling-бот, который отвечает красивой карточкой с ID входящего или пересланного сообщения." },
-              { id: "discovery", label: "Автопоиск", icon: "radar", description: "Автоматическое создание адресатов, когда управляемого бота добавляют в чат администратором." },
+              { id: "discovery", label: "Telegram Ops", icon: "radar", description: "Факты, рекомендации, автоматизация и MCP-покрытие для операционного слоя Telegram." },
               { id: "mcp", label: "MCP", icon: "plug-zap", description: "Настройка MCP transport, tool discovery и постоянных API-токенов для защищенных tg.* доменов." },
               { id: "audit", label: "Аудит", icon: "list-checks", description: "Операционный журнал административных действий и изменений доступа." },
               { id: "operations", label: "Операции", icon: "settings-2", description: "Runtime-настройки без рестарта, send policy, callbacks и JSON backup в git." },
@@ -1899,6 +2396,15 @@
               { value: "runtime_advanced_settings", label: "Infra/advanced" },
             ],
             discoverySettings: [],
+            activeOpsSubTab: "overview",
+            opsFacts: [],
+            opsRecommendations: [],
+            opsRules: [],
+            opsActionRuns: [],
+            opsCoverage: { rows: [], missing_enabled_tools: [], missing_catalog_tools: [] },
+            opsPreview: null,
+            selectedOpsRecommendation: null,
+            opsLastScan: null,
             diagnosticUpdates: [],
             destinationHealth: {},
             mcpConnectionInfo: null,
@@ -1913,9 +2419,19 @@
             selectedSendProfileId: null,
             selectedTemplateId: null,
             templateVersions: [],
+            botModalOpen: false,
             destinationModalOpen: false,
+            analyticsModalOpen: false,
+            apiTokenModalOpen: false,
+            revokeTokenModalOpen: false,
+            revokeTokenTarget: null,
             sendDryRun: null,
+            sendWorkTab: "quick",
             sendSubTab: "text",
+            historySubTab: "all",
+            mcpSubTab: "profile",
+            operationsSubTab: "runtime",
+            mtprotoStep: "phone",
             templateSubTab: "saved",
             templateValidation: { variablesJson: "{}", result: null },
             parseModeOptions: [
@@ -1924,11 +2440,11 @@
               { key: "markdown_v2", value: "MarkdownV2", label: "MarkdownV2" },
               { key: "markdown", value: "Markdown", label: "Markdown legacy" },
             ],
-            tokenScopes: ["read", "send", "mcp_admin", "tg_compat"],
+            tokenScopes: ["read", "send", "mcp_admin", "tg_compat", "ops_admin"],
             mcpSettings: { is_enabled: true, allow_legacy_sse: true, protected_hosts: ["tg.sh-inc.ru", "tg.sh-inc.dev"], transports: [], tools: [] },
             diagnosticSettings: { bot_id: null, bot_name: null, bot_username: null, is_enabled: false, last_update_id: null, last_error: null },
             forms: {
-              apiToken: { name: "dashboard", scopes: ["read", "send", "mcp_admin", "tg_compat"] },
+              apiToken: { name: "dashboard", scopes: ["read", "send", "mcp_admin", "tg_compat", "ops_admin"] },
               bot: { name: "", token: "", description: "" },
               destination: { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, alias: "", title: "" },
               template: { tag: "", title: "", text: "", parse_mode: null, disable_web_page_preview: false },
@@ -1971,8 +2487,32 @@
           restorableBackupRuns() {
             return this.backupRuns.filter((run) => run.snapshot && ["succeeded", "pre_restore"].includes(run.status));
           },
+          opsOpenRecommendations() {
+            return this.opsRecommendations.filter((item) => item.status === "open");
+          },
+          opsCoverageRows() {
+            return Array.isArray(this.opsCoverage?.rows) ? this.opsCoverage.rows : [];
+          },
+          opsMissingEnabledTools() {
+            return Array.isArray(this.opsCoverage?.missing_enabled_tools) ? this.opsCoverage.missing_enabled_tools : [];
+          },
+          opsMissingCatalogTools() {
+            return Array.isArray(this.opsCoverage?.missing_catalog_tools) ? this.opsCoverage.missing_catalog_tools : [];
+          },
           rowDiffRows() {
             return this.restoreWizard.preview?.diff?.rows || [];
+          },
+          historyStatusCounts() {
+            const counts = { succeeded: 0, failed: 0, queued: 0, dead_letter: this.deadLetter.length };
+            this.history.forEach((item) => {
+              if (item.status === "succeeded") counts.succeeded += 1;
+              if (item.status === "failed") counts.failed += 1;
+              if (["queued", "created", "deferred"].includes(item.status)) counts.queued += 1;
+            });
+            return counts;
+          },
+          historyStatusTotal() {
+            return Math.max(1, this.history.length + this.deadLetter.length);
           },
           isProtectedHost() { return ["tg.sh-inc.ru", "tg.sh-inc.dev"].includes(window.location.hostname); }
         },
@@ -2047,6 +2587,7 @@
               send: "отправка",
               mcp_admin: "админ MCP",
               tg_compat: "TG API",
+              ops_admin: "Telegram Ops",
             }[value] || value;
           },
           statusLabel(value) {
@@ -2102,6 +2643,49 @@
             if (value == null) return "-";
             const raw = JSON.stringify(value, null, 2);
             return raw.length > 640 ? `${raw.slice(0, 640)}...` : raw;
+          },
+          formatDate(value) {
+            return value ? new Date(value).toLocaleString("ru-RU") : "-";
+          },
+          formatOpsValue(value) {
+            if (value == null || value === "") return "-";
+            if (Array.isArray(value)) return value.length ? value.map((item) => this.formatOpsValue(item)).join(", ") : "-";
+            if (typeof value === "object") return JSON.stringify(value);
+            return String(value);
+          },
+          opsDiffRows(diff) {
+            if (!diff || typeof diff !== "object") return [{ key: "diff", value: "-" }];
+            if (Array.isArray(diff.rows)) {
+              return diff.rows.map((row, index) => ({
+                key: row.field || row.key || row.name || `row_${index + 1}`,
+                value: [row.action, row.before, row.after, row.value]
+                  .filter((item) => item != null && item !== "")
+                  .map((item) => this.formatOpsValue(item))
+                  .join(" → ") || "-",
+              }));
+            }
+            const preferred = ["operation", "entity", "destination", "fields", "changes"];
+            const keys = [...preferred.filter((key) => key in diff), ...Object.keys(diff).filter((key) => !preferred.includes(key))];
+            return keys.map((key) => ({ key, value: this.formatOpsValue(diff[key]) }));
+          },
+          opsToolList(value) {
+            return Array.isArray(value) && value.length ? value.join(", ") : "-";
+          },
+          opsCoverageCapabilities(row) {
+            const parts = [];
+            if (row.rest) parts.push(`REST: ${this.formatOpsValue(row.rest)}`);
+            if (row.ui) parts.push(`UI: ${this.formatOpsValue(row.ui)}`);
+            if (row.mcp_read_tools?.length) parts.push(`read: ${row.mcp_read_tools.join(", ")}`);
+            if (row.mcp_preview_tools?.length) parts.push(`preview: ${row.mcp_preview_tools.join(", ")}`);
+            if (row.mcp_apply_tools?.length) parts.push(`apply: ${row.mcp_apply_tools.join(", ")}`);
+            if (row.required_scopes?.length) parts.push(`scopes: ${row.required_scopes.join(", ")}`);
+            return parts.join(" · ") || "-";
+          },
+          opsResultSummary(result) {
+            if (!result || typeof result !== "object") return "-";
+            return Object.entries(result)
+              .map(([key, value]) => `${key}: ${this.formatOpsValue(value)}`)
+              .join("; ") || "-";
           },
           batchProgressLabel(progress) {
             if (!progress) return "-";
@@ -2166,8 +2750,24 @@
             this.reliabilityGraph = graph;
             this.reliabilityAttempts = attempts;
           },
+          async refreshOps() {
+            const [opsFacts, opsRecommendations, opsRules, opsActionRuns, opsCoverage] = await Promise.all([
+              this.api("/ops/facts"),
+              this.api("/ops/recommendations"),
+              this.api("/ops/rules"),
+              this.api("/ops/action-runs"),
+              this.api("/ops/mcp-coverage"),
+            ]);
+            Object.assign(this, {
+              opsFacts,
+              opsRecommendations,
+              opsRules,
+              opsActionRuns,
+              opsCoverage: opsCoverage || { rows: [], missing_enabled_tools: [], missing_catalog_tools: [] },
+            });
+          },
           async refreshAll() {
-            const [health, bots, destinations, templates, sendProfiles, sendBatches, history, deadLetter, dueHistory, analyticsTargets, diagnosticSettings, diagnosticUpdates, mcpSettings, mcpConnectionInfo, apiTokens, discoverySettings, auditEvents, operationsSettings, backupRuns, reliabilitySummary, reliabilityGraph, reliabilityAttempts] = await Promise.all([
+            const [health, bots, destinations, templates, sendProfiles, sendBatches, history, deadLetter, dueHistory, analyticsTargets, diagnosticSettings, diagnosticUpdates, mcpSettings, mcpConnectionInfo, apiTokens, discoverySettings, auditEvents, operationsSettings, backupRuns, reliabilitySummary, reliabilityGraph, reliabilityAttempts, opsFacts, opsRecommendations, opsRules, opsActionRuns, opsCoverage] = await Promise.all([
               this.api("/health"),
               this.api("/bots"),
               this.api("/destinations"),
@@ -2190,10 +2790,16 @@
               this.api("/reliability/summary"),
               this.api("/reliability/graph"),
               this.api("/reliability/attempts"),
+              this.api("/ops/facts"),
+              this.api("/ops/recommendations"),
+              this.api("/ops/rules"),
+              this.api("/ops/action-runs"),
+              this.api("/ops/mcp-coverage"),
             ]);
-            Object.assign(this, { health, bots, destinations, templates, sendProfiles, sendBatches, history, deadLetter, dueHistory, analyticsTargets, diagnosticSettings, diagnosticUpdates, mcpSettings, mcpConnectionInfo, apiTokens, discoverySettings, auditEvents, operationsSettings, backupRuns, reliabilitySummary, reliabilityGraph, reliabilityAttempts });
+            Object.assign(this, { health, bots, destinations, templates, sendProfiles, sendBatches, history, deadLetter, dueHistory, analyticsTargets, diagnosticSettings, diagnosticUpdates, mcpSettings, mcpConnectionInfo, apiTokens, discoverySettings, auditEvents, operationsSettings, backupRuns, reliabilitySummary, reliabilityGraph, reliabilityAttempts, opsFacts, opsRecommendations, opsRules, opsActionRuns, opsCoverage: opsCoverage || { rows: [], missing_enabled_tools: [], missing_catalog_tools: [] } });
             this.syncOperationsText();
             if (this.sendSubTab === "file" && !this.fileSendAvailable) this.sendSubTab = "text";
+            if (this.sendWorkTab === "file" && !this.fileSendAvailable) this.sendWorkTab = "quick";
           },
           selectReliabilityNode(id) {
             this.selectedReliabilityNode = id;
@@ -2261,12 +2867,16 @@
             ["reliability.bucket.updated", "reliability.graph.updated"].forEach((name) => {
               source.addEventListener(name, () => this.refreshReliability());
             });
+            ["ops.scan.completed", "ops.action.previewed", "ops.action.applied", "ops.recommendation.dismissed", "ops.rule.updated", "ops.rule.ran", "ops.rule.paused", "ops.rule.resumed"].forEach((name) => {
+              source.addEventListener(name, () => this.refreshOps());
+            });
           },
           async createBot() {
             this.botSaving = true;
             try {
               await this.api("/bots", { method: "POST", body: JSON.stringify(this.forms.bot) });
               this.forms.bot = { name: "", token: "", description: "" };
+              this.closeBotModal();
               await this.refreshAll();
             } catch (error) {
               this.lastError = error instanceof Error ? error.message : "Запрос не выполнен";
@@ -2275,6 +2885,8 @@
             }
           },
           async checkBot(id) { await this.api(`/bots/${id}/check`, { method: "POST" }); await this.refreshAll(); },
+          openBotModal() { this.botModalOpen = true; },
+          closeBotModal() { this.botModalOpen = false; },
           resetDestinationForm() { this.forms.destination = { bot_id: null, kind: "channel", chat_id: "", message_thread_id: null, alias: "", title: "" }; },
           openDestinationModal() { this.destinationModalOpen = true; },
           closeDestinationModal() { this.destinationModalOpen = false; },
@@ -2377,6 +2989,7 @@
             if (!profile) return;
             if (profile.send_kind === "template") {
               this.sendSubTab = "template";
+              this.sendWorkTab = "quick";
               Object.assign(this.forms.templateSend, {
                 bot_id: profile.bot_id,
                 destination_id: profile.destination_id,
@@ -2389,6 +3002,7 @@
             if (profile.send_kind === "file") {
               if (!this.ensureFileSendAvailable()) return;
               this.sendSubTab = "file";
+              this.sendWorkTab = "file";
               Object.assign(this.forms.file, {
                 bot_id: profile.bot_id,
                 destination_id: profile.destination_id,
@@ -2402,6 +3016,7 @@
               return;
             }
             this.sendSubTab = "text";
+            this.sendWorkTab = "quick";
             Object.assign(this.forms.send, {
               bot_id: profile.bot_id,
               destination_id: profile.destination_id,
@@ -2418,12 +3033,14 @@
             const payload = this.currentSendPayload();
             delete payload.send_mode;
             this.sendDryRun = await this.api("/send/preview", { method: "POST", body: JSON.stringify(payload) });
+            this.sendWorkTab = "preview";
           },
           async preflightCurrentSend() {
             if (this.sendSubTab === "file" && !this.ensureFileSendAvailable()) return;
             const payload = this.currentSendPayload();
             delete payload.send_mode;
             this.sendDryRun = await this.api("/send/preflight", { method: "POST", body: JSON.stringify(payload) });
+            this.sendWorkTab = "preview";
           },
           async createSendBatch() {
             if (this.sendSubTab === "file" && !this.ensureFileSendAvailable()) return;
@@ -2495,10 +3112,12 @@
           copyMcpConnection() {
             navigator.clipboard?.writeText(JSON.stringify(this.mcpConnectionInfo, null, 2));
           },
-          async startLogin() { await this.api("/mtproto/login/start", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone }) }); },
-          async confirmCode() { await this.api("/mtproto/login/confirm-code", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone, code: this.forms.mtproto.code }) }); },
+          async startLogin() { await this.api("/mtproto/login/start", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone }) }); this.mtprotoStep = "code"; },
+          async confirmCode() { await this.api("/mtproto/login/confirm-code", { method: "POST", body: JSON.stringify({ phone: this.forms.mtproto.phone, code: this.forms.mtproto.code }) }); this.mtprotoStep = "password"; },
           async confirmPassword() { await this.api("/mtproto/login/confirm-password", { method: "POST", body: JSON.stringify({ password: this.forms.mtproto.password }) }); },
-          async createAnalyticsTarget() { await this.api("/analytics/targets", { method: "POST", body: JSON.stringify(this.forms.analytics) }); this.forms.analytics = { peer_ref: "", title: "" }; await this.refreshAll(); },
+          openAnalyticsModal() { this.analyticsModalOpen = true; },
+          closeAnalyticsModal() { this.analyticsModalOpen = false; },
+          async createAnalyticsTarget() { await this.api("/analytics/targets", { method: "POST", body: JSON.stringify(this.forms.analytics) }); this.forms.analytics = { peer_ref: "", title: "" }; this.closeAnalyticsModal(); await this.refreshAll(); },
           async refreshAnalytics(target_id) { await this.api("/analytics/refresh", { method: "POST", body: JSON.stringify({ target_id }) }); await this.refreshAll(); },
           async retrySendHistory(send_history_id) { await this.api(`/send-history/${send_history_id}/retry`, { method: "POST" }); await this.refreshAll(); },
           async cancelSendHistory(send_history_id) { await this.api(`/send-history/${send_history_id}/cancel`, { method: "POST" }); await this.refreshAll(); },
@@ -2513,6 +3132,57 @@
           async saveDiscoverySettings(bot_id, is_enabled) { await this.api(`/discovery/bots/${bot_id}`, { method: "PATCH", body: JSON.stringify({ is_enabled }) }); await this.refreshAll(); },
           discoveryFor(bot_id) { return this.discoverySettings.find((item) => item.bot_id === bot_id); },
           discoveryEnabled(bot_id) { return Boolean(this.discoveryFor(bot_id)?.is_enabled); },
+          async runOpsScan() {
+            this.opsLastScan = await this.api("/ops/scan", { method: "POST" });
+            await this.refreshOps();
+          },
+          async previewOpsAction(recommendation_id) {
+            this.selectedOpsRecommendation = recommendation_id;
+            this.opsPreview = await this.api(`/ops/recommendations/${recommendation_id}/preview`, { method: "POST" });
+            await this.refreshOps();
+          },
+          async applyOpsAction(recommendation_id) {
+            await this.api(`/ops/recommendations/${recommendation_id}/apply`, { method: "POST" });
+            this.opsPreview = null;
+            this.selectedOpsRecommendation = null;
+            await this.refreshOps();
+            await this.refreshAll();
+          },
+          async dismissOpsRecommendation(recommendation_id) {
+            await this.api(`/ops/recommendations/${recommendation_id}/dismiss`, { method: "POST" });
+            if (this.selectedOpsRecommendation === recommendation_id) {
+              this.opsPreview = null;
+              this.selectedOpsRecommendation = null;
+            }
+            await this.refreshOps();
+          },
+          async updateOpsRule(rule, patch) {
+            try {
+              const updated = await this.api(`/ops/rules/${rule.id}`, {
+                method: "PATCH",
+                body: JSON.stringify(patch),
+              });
+              const index = this.opsRules.findIndex((item) => item.id === rule.id);
+              if (index >= 0) this.opsRules.splice(index, 1, updated);
+            } catch (error) {
+              const message = error.message;
+              await this.refreshOps().catch(() => {});
+              this.lastError = message;
+              throw error;
+            }
+          },
+          async runOpsRule(rule_id) {
+            await this.api(`/ops/rules/${rule_id}/run`, { method: "POST" });
+            await this.refreshOps();
+          },
+          async pauseOpsRule(rule_id) {
+            await this.api(`/ops/rules/${rule_id}/pause`, { method: "POST" });
+            await this.refreshOps();
+          },
+          async resumeOpsRule(rule_id) {
+            await this.api(`/ops/rules/${rule_id}/resume`, { method: "POST" });
+            await this.refreshOps();
+          },
           setMcpPreset(preset) {
             const allowed = {
               read: ["list_bots", "list_destinations", "list_message_templates", "get_analytics_summary", "get_send_history"],
@@ -2532,6 +3202,10 @@
             });
             await this.refreshAll();
           },
+          openApiTokenModal() { this.apiTokenModalOpen = true; },
+          closeApiTokenModal() { this.apiTokenModalOpen = false; this.createdApiToken = ""; },
+          openRevokeTokenModal(token) { this.revokeTokenTarget = token; this.revokeTokenModalOpen = true; },
+          closeRevokeTokenModal() { this.revokeTokenTarget = null; this.revokeTokenModalOpen = false; },
           async createApiToken() {
             const created = await this.api("/auth/tokens", { method: "POST", body: JSON.stringify(this.forms.apiToken) });
             this.createdApiToken = created.token;
@@ -2541,6 +3215,11 @@
             await this.refreshAll();
           },
           async revokeApiToken(token_id) { await this.api(`/auth/tokens/${token_id}`, { method: "DELETE" }); await this.refreshAll(); },
+          async confirmRevokeApiToken() {
+            if (!this.revokeTokenTarget) return;
+            await this.revokeApiToken(this.revokeTokenTarget.id);
+            this.closeRevokeTokenModal();
+          },
           normalizedOperationsSettings() {
             const payload = { ...this.operationsSettings };
             payload.cors_allowed_origins = this.parseCsv(this.operationsText.cors_allowed_origins);

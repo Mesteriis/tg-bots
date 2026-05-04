@@ -48,7 +48,8 @@ def test_static_ui_exposes_mcp_and_api_token_management() -> None:
 
     assert '{ id: "mcp", label: "MCP", icon: "plug-zap"' in html
     assert "activeTab === 'mcp'" in html
-    assert 'activeTab === \'mcp\'" class="grid settings-grid"' in html
+    assert 'activeTab === \'mcp\'" class="stack-layout"' in html
+    assert "mcpSubTab === 'tools'" in html
     assert "mcpSettings" in html
     assert "createApiToken" in html
     assert "saveMcpSettings" in html
@@ -59,6 +60,17 @@ def test_static_ui_exposes_mcp_and_api_token_management() -> None:
 def test_static_ui_exposes_ops_automation_controls() -> None:
     html = Path("src/tg_bot_aggregator/static/index.html").read_text()
 
+    assert '{ id: "discovery", label: "Telegram Ops", icon: "radar"' in html
+    for label in [
+        "Боты",
+        "Адресаты",
+        "Шаблоны",
+        "Отправка",
+        "История",
+        "MCP",
+        "Операции",
+    ]:
+        assert label in html
     assert "destination_alias" in html
     assert "Проверить" in html
     assert "copyCurl" in html
@@ -66,6 +78,54 @@ def test_static_ui_exposes_ops_automation_controls() -> None:
     assert "auditEvents" in html
     assert "send_mode" in html
     assert "tokenScopes" in html
+    assert '"ops_admin"' in html
+    assert "Telegram Ops" in html
+
+
+def test_static_ui_exposes_telegram_ops_control_panel() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    for marker in [
+        "Факты",
+        "Рекомендации",
+        "Автоматизация",
+        "Журнал действий",
+        "MCP покрытие",
+        "Preview",
+        "Apply",
+        "suggest_only",
+        "auto_apply",
+    ]:
+        assert marker in html
+
+    for endpoint in [
+        "/ops/facts",
+        "/ops/scan",
+        "/ops/recommendations",
+        "/ops/rules",
+        "/ops/action-runs",
+        "/ops/mcp-coverage",
+    ]:
+        assert endpoint in html
+
+    for marker in [
+        "updateOpsRule",
+        "runOpsRule",
+        "pauseOpsRule",
+        "resumeOpsRule",
+        "ops.rule.updated",
+        "ops.rule.ran",
+        "ops.rule.paused",
+        "ops.rule.resumed",
+    ]:
+        assert marker in html
+
+    assert ':value="rule.mode"' in html
+    assert ':value="rule.risk_limit"' in html
+    assert ':checked="rule.is_enabled"' in html
+    assert 'v-model="rule.mode"' not in html
+    assert 'v-model="rule.risk_limit"' not in html
+    assert 'v-model="rule.is_enabled"' not in html
 
 
 def test_static_ui_contains_tables_and_mcp_scope_controls() -> None:
@@ -77,6 +137,100 @@ def test_static_ui_contains_tables_and_mcp_scope_controls() -> None:
     assert 'class="tools-table"' in html
     assert 'class="token-scope-grid"' in html
     assert 'class="btn icon-only"' in html
+
+
+def test_static_ui_uses_operator_console_navigation_patterns() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert "operator-toolbar" in html
+    assert "operator-actions" in html
+    assert "status-strip" in html
+    assert "stepper" in html
+    assert "modal-panel compact-modal" in html
+    assert "modal-panel danger-modal" in html
+    assert "prefers-reduced-motion" in html
+
+
+def test_static_ui_uses_modals_for_bot_and_analytics_creation() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert "botModalOpen" in html
+    assert "openBotModal" in html
+    assert "closeBotModal" in html
+    assert "analyticsModalOpen" in html
+    assert "openAnalyticsModal" in html
+    assert "closeAnalyticsModal" in html
+    assert 'aria-labelledby="bot-modal-title"' in html
+    assert 'aria-labelledby="analytics-modal-title"' in html
+
+
+def test_static_ui_uses_operator_send_and_history_subtabs() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    for marker in [
+        'sendWorkTab: "quick"',
+        "sendWorkTab === 'quick'",
+        "sendWorkTab === 'profiles'",
+        "sendWorkTab === 'batch'",
+        "sendWorkTab === 'file'",
+        "sendWorkTab === 'preview'",
+        "Быстрая отправка",
+        "Preview / cURL",
+    ]:
+        assert marker in html
+
+    for marker in [
+        'historySubTab: "all"',
+        "historySubTab === 'all'",
+        "historySubTab === 'queue'",
+        "historySubTab === 'dead_letter'",
+        "historySubTab === 'attempts'",
+        "historyStatusCounts",
+        "Очередь",
+        "Dead-letter",
+        "Попытки",
+    ]:
+        assert marker in html
+
+
+def test_static_ui_uses_operator_mcp_operations_and_mtproto_layouts() -> None:
+    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    for marker in [
+        'mcpSubTab: "profile"',
+        "mcpSubTab === 'profile'",
+        "mcpSubTab === 'tools'",
+        "mcpSubTab === 'tokens'",
+        "mcpSubTab === 'connection'",
+        "apiTokenModalOpen",
+        "revokeTokenModalOpen",
+        "confirmRevokeApiToken",
+    ]:
+        assert marker in html
+
+    for marker in [
+        'operationsSubTab: "runtime"',
+        "operationsSubTab === 'runtime'",
+        "operationsSubTab === 'infra'",
+        "operationsSubTab === 'backup'",
+        "operationsSubTab === 'restore'",
+        "Runtime",
+        "Infra и секреты",
+        "Backup",
+        "Restore",
+    ]:
+        assert marker in html
+
+    for marker in [
+        'mtprotoStep: "phone"',
+        "mtprotoStep === 'phone'",
+        "mtprotoStep === 'code'",
+        "mtprotoStep === 'password'",
+        "Шаг 1",
+        "Шаг 2",
+        "Шаг 3",
+    ]:
+        assert marker in html
 
 
 def test_static_ui_is_russian_first_and_explains_mtproto() -> None:
@@ -183,7 +337,7 @@ def test_static_ui_uses_send_subtabs_for_send_modes() -> None:
     assert 'sendSubTab === \'file\'' in html
     assert '@click="sendSubTab = \'text\'"' in html
     assert '@click="sendSubTab = \'template\'"' in html
-    assert '@click="fileSendAvailable && (sendSubTab = \'file\')"' in html
+    assert '@click="fileSendAvailable && (sendWorkTab = \'file\', sendSubTab = \'file\')"' in html
     assert "Ручной текст" in html
     assert "По шаблону" in html
     assert "Файл с шары" in html

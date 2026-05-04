@@ -1,15 +1,26 @@
+import asyncio
+from pathlib import Path
 from typing import Any
 
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import tg_bot_aggregator.tasks as tasks_module
 from tg_bot_aggregator.config import Settings
-from tg_bot_aggregator.models import SendHistory
+from tg_bot_aggregator.models import Base, SendHistory
+from tg_bot_aggregator.repositories import (
+    BotRepository,
+    DestinationRepository,
+    OpsAutomationRuleRepository,
+    OpsRecommendationRepository,
+)
 from tg_bot_aggregator.tasks import (
     backup_snapshot,
     create_broker,
     due_send_history,
+    ops_automation_rules,
     run_due_send_history,
+    run_ops_automation_rules,
     scheduled_backup_if_due,
     send_batch,
     send_history,
@@ -26,6 +37,7 @@ def test_taskiq_broker_can_be_constructed() -> None:
     assert hasattr(due_send_history, "kiq")
     assert hasattr(backup_snapshot, "kiq")
     assert hasattr(scheduled_backup_if_due, "kiq")
+    assert hasattr(ops_automation_rules, "kiq")
 
 
 class _FakeEngine:
@@ -66,7 +78,12 @@ class _FakeEventBus:
     def __init__(self, redis_url: str) -> None:
         self.redis_url = redis_url
         self.closed = False
+        self.published: list[tuple[str, dict[str, Any]]] = []
         self.instances.append(self)
+
+    async def publish(self, event_type: str, data: dict[str, Any]) -> str:
+        self.published.append((event_type, data))
+        return str(len(self.published))
 
     async def close(self) -> None:
         self.closed = True
@@ -82,6 +99,11 @@ class _RuntimeSettingsRepository:
 
 class _RuntimeAdvancedSettingsRepository(_RuntimeSettingsRepository):
     pass
+
+
+class _FakeAdvancedRuntimeSettings:
+    def __init__(self, settings_json: dict[str, Any]) -> None:
+        self.settings_json = settings_json
 
 
 @pytest.mark.asyncio
@@ -165,3 +187,395 @@ async def test_due_send_history_uses_ready_for_lease_and_closes_redis(
     assert len(_FakeEventBus.instances) == 1
     assert _FakeEventBus.instances[0].closed is True
     assert engine.disposed is True
+
+
+@pytest.mark.asyncio
+async def test_refresh_analytics_target_closes_event_bus(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(REDIS_URL="redis://localhost:6379/15")
+    engine = _FakeEngine()
+    _FakeEventBus.instances = []
+
+    class FakeMtprotoService:
+        def __init__(self, *args: object) -> None:
+            pass
+
+    class FakeAnalyticsService:
+        def __init__(self, session: object, mtproto: object, events: object) -> None:
+            self.events = events
+
+        async def refresh_target(self, target_id: int, run_id: int | None = None) -> int:
+            assert target_id == 7
+            assert run_id == 9
+            return 11
+
+    monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
+    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(tasks_module, "MtprotoService", FakeMtprotoService)
+    monkeypatch.setattr(tasks_module, "AnalyticsService", FakeAnalyticsService)
+    monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
+
+    result = await tasks_module.run_refresh_analytics_target(7, 9)
+
+    assert result == 11
+    assert len(_FakeEventBus.instances) == 1
+    assert _FakeEventBus.instances[0].closed is True
+    assert engine.disposed is True
+
+
+@pytest.mark.asyncio
+async def test_refresh_all_analytics_targets_closes_event_bus(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(REDIS_URL="redis://localhost:6379/15")
+    engine = _FakeEngine()
+    _FakeEventBus.instances = []
+
+    class FakeMtprotoService:
+        def __init__(self, *args: object) -> None:
+            pass
+
+    class FakeAnalyticsService:
+        def __init__(self, session: object, mtproto: object, events: object) -> None:
+            self.events = events
+
+        async def refresh_all(self) -> list[int]:
+            return [1, 2]
+
+    monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
+    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(tasks_module, "MtprotoService", FakeMtprotoService)
+    monkeypatch.setattr(tasks_module, "AnalyticsService", FakeAnalyticsService)
+    monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
+
+    result = await tasks_module.refresh_all_analytics_targets()
+
+    assert result == [1, 2]
+    assert len(_FakeEventBus.instances) == 1
+    assert _FakeEventBus.instances[0].closed is True
+    assert engine.disposed is True
+
+
+@pytest.mark.asyncio
+async def test_send_batch_closes_event_bus(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(REDIS_URL="redis://localhost:6379/15")
+    engine = _FakeEngine()
+    _FakeEventBus.instances = []
+
+    class FakeWorkflowService:
+        def __init__(self, send_service: object) -> None:
+            self.send_service = send_service
+
+        async def enqueue_batch(self, batch_id: int) -> object:
+            assert batch_id == 12
+            return type("Batch", (), {"id": 34})()
+
+    class FakeSendService:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+    monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
+    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(
+        tasks_module,
+        "apply_runtime_settings",
+        lambda settings, basic, advanced: settings,
+    )
+    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
+    monkeypatch.setattr(
+        tasks_module,
+        "RuntimeAdvancedSettingsRepository",
+        _RuntimeAdvancedSettingsRepository,
+    )
+    monkeypatch.setattr(tasks_module, "SendService", FakeSendService)
+    monkeypatch.setattr(tasks_module, "WorkflowService", FakeWorkflowService)
+    monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
+
+    result = await tasks_module.run_send_batch(12)
+
+    assert result == 34
+    assert len(_FakeEventBus.instances) == 1
+    assert _FakeEventBus.instances[0].closed is True
+    assert engine.disposed is True
+
+
+@pytest.mark.asyncio
+async def test_run_ops_automation_rules_applies_low_risk_create_and_publishes_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_url = f"sqlite+aiosqlite:///{tmp_path / 'ops-task.db'}"
+    settings = Settings(
+        DATABASE_URL=database_url,
+        REDIS_URL="redis://localhost:6379/15",
+    )
+    engine = create_async_engine(database_url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+
+        async with session_factory() as session:
+            bot = await BotRepository(session).create(name="ops", token="123:abc")
+            await OpsRecommendationRepository(session).create(
+                recommendation_type="create_destination_from_seen_chat",
+                status="open",
+                risk="low",
+                bot_id=bot.id,
+                fact_ids_json=[],
+                title="Create destination",
+                reason="Observed chat has no destination.",
+                diff_json={
+                    "operation": "create",
+                    "after": {
+                        "bot_id": bot.id,
+                        "chat_id": "-1001",
+                        "message_thread_id": None,
+                        "kind": "supergroup",
+                        "title": "Ops Chat",
+                        "username": None,
+                        "is_active": True,
+                    },
+                },
+                action_payload_json={
+                    "bot_id": bot.id,
+                    "chat_id": "-1001",
+                    "message_thread_id": None,
+                    "kind": "supergroup",
+                    "title": "Ops Chat",
+                    "username": None,
+                    "is_active": True,
+                },
+            )
+            await OpsAutomationRuleRepository(session).upsert_by_key(
+                "create_destination_from_seen_chat",
+                title="Create destinations",
+                mode="auto_apply",
+                is_enabled=True,
+                is_paused=False,
+                risk_limit="low",
+                config_json={},
+            )
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+    _FakeEventBus.instances = []
+    monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        tasks_module,
+        "apply_runtime_settings",
+        lambda settings, basic, advanced: settings,
+    )
+    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
+    monkeypatch.setattr(
+        tasks_module,
+        "RuntimeAdvancedSettingsRepository",
+        _RuntimeAdvancedSettingsRepository,
+    )
+    monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
+
+    result = await run_ops_automation_rules()
+
+    verify_engine = create_async_engine(database_url)
+    verify_session_factory = async_sessionmaker(verify_engine, expire_on_commit=False)
+    try:
+        async with verify_session_factory() as session:
+            destinations = await DestinationRepository(session).list()
+    finally:
+        await verify_engine.dispose()
+
+    assert result == {"applied": 1, "skipped": 0, "failed": 0, "rules_checked": 1}
+    assert len(destinations) == 1
+    assert destinations[0].chat_id == "-1001"
+    assert len(_FakeEventBus.instances) == 1
+    assert _FakeEventBus.instances[0].published == [("ops.automation.ran", result)]
+    assert _FakeEventBus.instances[0].closed is True
+
+
+@pytest.mark.asyncio
+async def test_run_ops_automation_rules_uses_base_database_for_settings_and_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_database_url = f"sqlite+aiosqlite:///{tmp_path / 'base.db'}"
+    alternate_database_url = f"sqlite+aiosqlite:///{tmp_path / 'alternate.db'}"
+    settings = Settings(
+        DATABASE_URL=base_database_url,
+        REDIS_URL="redis://localhost:6379/15",
+    )
+    base_engine = create_async_engine(base_database_url)
+    alternate_engine = create_async_engine(alternate_database_url)
+    try:
+        async with base_engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        async with alternate_engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+
+        base_session_factory = async_sessionmaker(base_engine, expire_on_commit=False)
+        async with base_session_factory() as session:
+            bot = await BotRepository(session).create(name="ops", token="123:abc")
+            await OpsRecommendationRepository(session).create(
+                recommendation_type="create_destination_from_seen_chat",
+                status="open",
+                risk="low",
+                bot_id=bot.id,
+                fact_ids_json=[],
+                title="Create destination",
+                reason="Observed chat has no destination.",
+                diff_json={"operation": "create", "after": {"bot_id": bot.id}},
+                action_payload_json={
+                    "bot_id": bot.id,
+                    "chat_id": "-1002",
+                    "message_thread_id": None,
+                    "kind": "supergroup",
+                    "title": "Ops Chat",
+                    "username": None,
+                    "is_active": True,
+                },
+            )
+            await OpsAutomationRuleRepository(session).upsert_by_key(
+                "create_destination_from_seen_chat",
+                title="Create destinations",
+                mode="auto_apply",
+                is_enabled=True,
+                is_paused=False,
+                risk_limit="low",
+                config_json={},
+            )
+            await session.commit()
+    finally:
+        await base_engine.dispose()
+        await alternate_engine.dispose()
+
+    class AdvancedRepositoryWithDatabaseOverride(_RuntimeSettingsRepository):
+        async def get(self) -> _FakeAdvancedRuntimeSettings:
+            return _FakeAdvancedRuntimeSettings({"database_url": alternate_database_url})
+
+    _FakeEventBus.instances = []
+    monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
+    monkeypatch.setattr(
+        tasks_module,
+        "RuntimeAdvancedSettingsRepository",
+        AdvancedRepositoryWithDatabaseOverride,
+    )
+    monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
+
+    result = await run_ops_automation_rules()
+
+    verify_base_engine = create_async_engine(base_database_url)
+    verify_alternate_engine = create_async_engine(alternate_database_url)
+    try:
+        verify_base_factory = async_sessionmaker(verify_base_engine, expire_on_commit=False)
+        verify_alternate_factory = async_sessionmaker(
+            verify_alternate_engine,
+            expire_on_commit=False,
+        )
+        async with verify_base_factory() as session:
+            base_destinations = await DestinationRepository(session).list()
+        async with verify_alternate_factory() as session:
+            alternate_destinations = await DestinationRepository(session).list()
+    finally:
+        await verify_base_engine.dispose()
+        await verify_alternate_engine.dispose()
+
+    assert result == {"applied": 1, "skipped": 0, "failed": 0, "rules_checked": 1}
+    assert [destination.chat_id for destination in base_destinations] == ["-1002"]
+    assert alternate_destinations == []
+
+
+@pytest.mark.asyncio
+async def test_scheduler_enqueues_ops_automation_without_sleeping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tg_bot_aggregator.scheduler as scheduler
+
+    enqueued: list[str] = []
+
+    class FakeTask:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def kiq(self) -> None:
+            enqueued.append(self.name)
+
+    async def stop_after_first_loop(_interval: int) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setenv("SCHEDULER_INTERVAL_SECONDS", "1")
+    monkeypatch.setattr(
+        scheduler,
+        "refresh_all_analytics_targets",
+        FakeTask("refresh_all_analytics_targets"),
+    )
+    monkeypatch.setattr(scheduler, "due_send_history", FakeTask("due_send_history"))
+    monkeypatch.setattr(scheduler, "scheduled_backup_if_due", FakeTask("scheduled_backup_if_due"))
+    monkeypatch.setattr(scheduler, "ops_automation_rules", FakeTask("ops_automation_rules"))
+    monkeypatch.setattr(scheduler.asyncio, "sleep", stop_after_first_loop)
+
+    with pytest.raises(asyncio.CancelledError):
+        await scheduler.main()
+
+    assert enqueued == [
+        "refresh_all_analytics_targets",
+        "due_send_history",
+        "scheduled_backup_if_due",
+        "ops_automation_rules",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_scheduler_continues_after_enqueue_failure_and_still_sleeps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tg_bot_aggregator.scheduler as scheduler
+
+    enqueued: list[str] = []
+    slept: list[int] = []
+
+    class FakeTask:
+        def __init__(self, name: str, *, fail: bool = False) -> None:
+            self.name = name
+            self.fail = fail
+
+        async def kiq(self) -> None:
+            enqueued.append(self.name)
+            if self.fail:
+                raise RuntimeError(f"{self.name} failed")
+
+    async def stop_after_first_sleep(interval: int) -> None:
+        slept.append(interval)
+        raise asyncio.CancelledError
+
+    monkeypatch.setenv("SCHEDULER_INTERVAL_SECONDS", "5")
+    monkeypatch.setattr(
+        scheduler,
+        "refresh_all_analytics_targets",
+        FakeTask("refresh_all_analytics_targets"),
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "due_send_history",
+        FakeTask("due_send_history", fail=True),
+    )
+    monkeypatch.setattr(scheduler, "scheduled_backup_if_due", FakeTask("scheduled_backup_if_due"))
+    monkeypatch.setattr(scheduler, "ops_automation_rules", FakeTask("ops_automation_rules"))
+    monkeypatch.setattr(scheduler.asyncio, "sleep", stop_after_first_sleep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await scheduler.main()
+
+    assert enqueued == [
+        "refresh_all_analytics_targets",
+        "due_send_history",
+        "scheduled_backup_if_due",
+        "ops_automation_rules",
+    ]
+    assert slept == [5]

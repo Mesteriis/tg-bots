@@ -12,6 +12,8 @@ from tg_bot_aggregator.security import is_protected_host_request
 
 
 class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):
+    _READ_METHODS = {"GET", "HEAD"}
+
     def __init__(self, app: ASGIApp, settings: Settings) -> None:
         super().__init__(app)
         self.settings = settings
@@ -36,7 +38,7 @@ class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):
             if row is None or not row.is_active:
                 await self._record_rejected(request, None, "invalid", "invalid api token")
                 return self._unauthorized()
-            scopes = set(row.scopes_json or ["read", "send", "mcp_admin", "tg_compat"])
+            scopes = set(row.scopes_json or ["read", "send", "mcp_admin", "tg_compat", "ops_admin"])
             if required_scope not in scopes:
                 await record_audit_event(
                     session,
@@ -58,14 +60,15 @@ class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     def _required_scope(self, request: Request) -> str | None:
+        settings = getattr(request.app.state, "settings", self.settings)
         if request.method == "OPTIONS":
             return None
         path = request.url.path
-        if path == "/" or path == f"{self.settings.api_v1_prefix}/auth/session":
+        if path == "/" or path == f"{settings.api_v1_prefix}/auth/session":
             return None
         if not (
-            path.startswith(self.settings.api_v1_prefix)
-            or path.startswith(self.settings.mcp_v1_prefix)
+            path.startswith(settings.api_v1_prefix)
+            or path.startswith(settings.mcp_v1_prefix)
             or path.startswith("/bot")
         ):
             return None
@@ -74,23 +77,32 @@ class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):
         if not is_protected_host_request(
             host=host,
             origin=origin,
-            protected_hosts=self.settings.protected_api_hosts,
+            protected_hosts=settings.protected_api_hosts,
         ):
             return None
-        return self._scope_for_path(path, request.method)
+        return self._scope_for_path(path, request.method, settings)
 
-    def _scope_for_path(self, path: str, method: str) -> str:
+    def _scope_for_path(self, path: str, method: str, settings: Settings) -> str:
         if path.startswith("/bot"):
             return "tg_compat"
-        if path.startswith(self.settings.mcp_v1_prefix):
+        if path.startswith(settings.mcp_v1_prefix):
             return "mcp_admin"
-        if path.startswith(f"{self.settings.api_v1_prefix}/send"):
+        if path.startswith(f"{settings.api_v1_prefix}/send"):
             return "send"
-        if path.startswith(f"{self.settings.api_v1_prefix}/auth/tokens"):
+        if path.startswith(f"{settings.api_v1_prefix}/auth/tokens"):
             return "mcp_admin"
-        if path.startswith(f"{self.settings.api_v1_prefix}/mcp"):
+        if path.startswith(f"{settings.api_v1_prefix}/mcp"):
             return "mcp_admin"
-        if method in {"GET", "HEAD"}:
+        ops_admin_write_prefixes = (
+            f"{settings.api_v1_prefix}/ops",
+            f"{settings.api_v1_prefix}/config",
+            f"{settings.api_v1_prefix}/backup",
+            f"{settings.api_v1_prefix}/operations/backup",
+            f"{settings.api_v1_prefix}/operations/settings",
+        )
+        if method not in self._READ_METHODS and path.startswith(ops_admin_write_prefixes):
+            return "ops_admin"
+        if method in self._READ_METHODS:
             return "read"
         return "mcp_admin"
 

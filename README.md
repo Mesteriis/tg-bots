@@ -16,10 +16,11 @@ Create permanent API tokens from the dashboard MCP tab or through MCP tools whil
 read
 send
 mcp_admin
+ops_admin
 tg_compat
 ```
 
-Protected `/bot...` facade calls require `tg_compat`; send endpoints require `send`; read endpoints require `read`; MCP/settings/token administration requires `mcp_admin`.
+Protected `/bot...` facade calls require `tg_compat`; send endpoints require `send`; read endpoints require `read`; MCP/settings/token administration requires `mcp_admin`; non-GET `/api/v1/ops/*` calls require `ops_admin`.
 
 Bot tokens are stored in SQLite as plain text by product decision. Do not expose the app or database outside the trusted network.
 
@@ -349,6 +350,25 @@ get_mcp_connection_info
 ```
 
 MCP tools share the same path validation, token redaction, send history recording, and protected-host API token policy as REST.
+
+## Telegram Ops
+
+The Telegram Ops dashboard turns discovery and diagnostic facts into operational recommendations. Facts, recommendations, preview, apply, and auto-apply are separate steps so the system can explain what it knows before changing anything.
+
+Auto-apply is limited to low-risk reversible actions. It never sends messages, restores backups, enables secret backups, changes protected hosts, expands API-token scopes, enables write MCP tools, or deletes data.
+
+REST endpoints live under `/api/v1/ops`. MCP tools include:
+
+```text
+list_ops_facts
+list_ops_recommendations
+preview_ops_action
+apply_ops_action
+list_ops_rules
+run_ops_scan
+explain_failed_send
+get_mcp_coverage_matrix
+```
 
 ## Validation
 

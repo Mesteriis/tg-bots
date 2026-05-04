@@ -30,6 +30,11 @@ def test_format_update_report_includes_forum_thread_and_copy_ids() -> None:
     assert report.reply_chat_id == "-100123"
     assert report.reply_message_thread_id == 42
     assert ("Thread ID", "42") in report.identifiers
+    assert report.metadata.chat_id == "-100123"
+    assert report.metadata.message_thread_id == 42
+    assert report.metadata.message_id == 55
+    assert report.metadata.chat_type == "supergroup"
+    assert report.metadata.text_preview == "hello topic"
 
 
 def test_format_update_report_summarizes_forward_reply_and_media() -> None:

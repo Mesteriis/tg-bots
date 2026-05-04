@@ -4,6 +4,8 @@
 
 **Goal:** Add RNet/Gitea deployment automation, nginx-ui proxy automation, and OSS repository metadata.
 
+**Current status:** Local repository preparation is implemented and verified. External operator actions are intentionally still pending: commit, push, RNet/PVE deploy, nginx-ui update, and post-deploy health check.
+
 **Architecture:** Keep deployment as plain shell scripts plus a Gitea workflow. Keep runtime app unchanged; deployment scripts configure infra and compose services around the existing Docker image.
 
 **Tech Stack:** Gitea Actions, RNet `pve-deploy`, Proxmox LXC, Docker Compose, nginx-ui LXC, pytest, ruff.
@@ -15,9 +17,9 @@
 **Files:**
 - Create: `tests/test_repository_metadata.py`
 
-- [ ] Add tests that assert OSS files exist.
-- [ ] Add tests that assert the Gitea workflow uses `runs-on: python`, `pve-deploy ensure`, `pve-deploy deploy`, and nginx update script.
-- [ ] Add tests that assert deploy scripts are present and do not contain hardcoded Telegram secrets.
+- [x] Add tests that assert OSS files exist.
+- [x] Add tests that assert the Gitea workflow uses `runs-on: python`, `pve-deploy ensure`, `pve-deploy deploy`, and nginx update script.
+- [x] Add tests that assert deploy scripts are present and do not contain hardcoded Telegram secrets.
 
 ### Task 2: RNet/Gitea Workflow
 
@@ -29,11 +31,11 @@
 - Create: `deploy/nginx/update-nginx-ui.sh`
 - Create: `docs/deployment/rnet-proxmox.md`
 
-- [ ] Add CI job using `uv sync --extra dev`, ruff, pytest.
-- [ ] Add deploy job using CTID `103`, CT name `tg-bots`, and RNet `pve-deploy`.
-- [ ] Add idempotent LXC configuration script for media mount and Docker.
-- [ ] Add nginx-ui update script for `tg.sh-inc.ru` and `tg.sh-inc.dev`.
-- [ ] Document required Gitea secrets.
+- [x] Add CI job using `uv sync --extra dev`, ruff, pytest.
+- [x] Add deploy job using CTID `103`, CT name `tg-bots`, and RNet `pve-deploy`.
+- [x] Add idempotent LXC configuration script for media mount and Docker.
+- [x] Add nginx-ui update script for `tg.sh-inc.ru` and `tg.sh-inc.dev`.
+- [x] Document required Gitea secrets.
 
 ### Task 3: OSS Metadata
 
@@ -48,17 +50,16 @@
 - Modify: `pyproject.toml`
 - Modify: `README.md`
 
-- [ ] Add MIT license and concise community docs.
-- [ ] Add project metadata, license, classifiers, and URLs.
-- [ ] Update README with OSS and deployment sections.
+- [x] Add MIT license and concise community docs.
+- [x] Add project metadata, license, classifiers, and URLs.
+- [x] Update README with OSS and deployment sections.
 
 ### Task 4: Verify, Commit, Push, Deploy
 
-- [ ] Run `PYTHONPATH=src python3.11 -m pytest`.
-- [ ] Run `PYTHONPATH=src python3.11 -m ruff check .`.
-- [ ] Run `bash -n` for deploy scripts.
+- [x] Run `PYTHONPATH=src python3.11 -m pytest`.
+- [x] Run `PYTHONPATH=src python3.11 -m ruff check .`.
+- [x] Run `bash -n` for deploy scripts.
 - [ ] Commit and merge to `main`.
 - [ ] Push to `origin main`.
 - [ ] Deploy through RNet/pve-deploy or equivalent manual invocation from CI runner.
 - [ ] Update nginx-ui and verify health.
-

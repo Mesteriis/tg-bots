@@ -18,6 +18,10 @@ from tg_bot_aggregator.api_tokens import (
 )
 from tg_bot_aggregator.config import Settings
 from tg_bot_aggregator.events import MemoryEventBus
+from tg_bot_aggregator.mcp_catalog import (
+    MCP_BOOTSTRAP_ENABLED_TOOL_NAMES,
+    MCP_TOOL_DEFINITIONS,
+)
 from tg_bot_aggregator.media_browser import MediaBrowser
 from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
 from tg_bot_aggregator.reliability import (
@@ -36,6 +40,9 @@ from tg_bot_aggregator.repositories import (
     DiagnosticUpdateRepository,
     McpSettingsRepository,
     NotFoundError,
+    OpsAutomationRuleRepository,
+    OpsFactRepository,
+    OpsRecommendationRepository,
     SendAttemptRepository,
     SendBatchRepository,
     SendHistoryRepository,
@@ -44,6 +51,7 @@ from tg_bot_aggregator.repositories import (
 )
 from tg_bot_aggregator.send_service import SendService, SendServiceError
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
+from tg_bot_aggregator.telegram_ops import McpCoverageService, TelegramOpsService
 from tg_bot_aggregator.workflow_service import WorkflowService
 
 SessionFactoryProvider = Callable[[], async_sessionmaker[AsyncSession]]
@@ -55,11 +63,15 @@ async def ensure_mcp_tool_enabled(
     tool_name: str,
 ) -> None:
     async with session_factory() as session:
-        settings = await McpSettingsRepository(session).get_or_create()
-        await session.commit()
-        if not settings.is_enabled:
+        settings = await McpSettingsRepository(session).get()
+        enabled_tools = (
+            set(settings.enabled_tools_json or [])
+            if settings is not None
+            else set(MCP_BOOTSTRAP_ENABLED_TOOL_NAMES)
+        )
+        if settings is not None and not settings.is_enabled:
             raise PermissionError("MCP protocol is disabled")
-        if tool_name not in set(settings.enabled_tools_json or []):
+        if tool_name not in enabled_tools:
             raise PermissionError(f"MCP tool '{tool_name}' is disabled")
 
 
@@ -161,6 +173,120 @@ def _serialize_rate_bucket_snapshot(item: RateBucketSnapshot) -> dict[str, Any]:
         "used": item.used,
         "retry_after_seconds": item.retry_after_seconds,
     }
+
+
+def _isoformat(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def _serialize_ops_fact(item: Any) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "fact_type": item.fact_type,
+        "bot_id": item.bot_id,
+        "chat_id": item.chat_id,
+        "message_thread_id": item.message_thread_id,
+        "source": item.source,
+        "title": item.title,
+        "username": item.username,
+        "kind": item.kind,
+        "status": item.status,
+        "confidence": item.confidence,
+        "observed_at": _isoformat(item.observed_at),
+        "expires_at": _isoformat(item.expires_at),
+        "payload_json": item.payload_json,
+    }
+
+
+def _serialize_ops_recommendation(item: Any) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "recommendation_type": item.recommendation_type,
+        "status": item.status,
+        "risk": item.risk,
+        "bot_id": item.bot_id,
+        "destination_id": item.destination_id,
+        "fact_ids_json": item.fact_ids_json,
+        "title": item.title,
+        "reason": item.reason,
+        "diff_json": item.diff_json,
+        "action_payload_json": item.action_payload_json,
+        "created_at": _isoformat(item.created_at),
+        "updated_at": _isoformat(item.updated_at),
+        "applied_at": _isoformat(item.applied_at),
+        "dismissed_at": _isoformat(item.dismissed_at),
+    }
+
+
+def _serialize_ops_rule(item: Any) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "rule_key": item.rule_key,
+        "title": item.title,
+        "mode": item.mode,
+        "is_enabled": item.is_enabled,
+        "is_paused": item.is_paused,
+        "risk_limit": item.risk_limit,
+        "config_json": item.config_json,
+        "last_run_at": _isoformat(item.last_run_at),
+        "last_result": item.last_result,
+        "created_at": _isoformat(item.created_at),
+        "updated_at": _isoformat(item.updated_at),
+    }
+
+
+def _serialize_send_attempt(item: SendAttempt) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "send_history_id": item.send_history_id,
+        "attempt_number": item.attempt_number,
+        "worker_id": item.worker_id,
+        "started_at": item.started_at.isoformat(),
+        "finished_at": _isoformat(item.finished_at),
+        "status": item.status,
+        "telegram_error_code": item.telegram_error_code,
+        "error_kind": item.error_kind,
+        "error_message": item.error_message,
+        "retry_after_seconds": item.retry_after_seconds,
+        "latency_ms": item.latency_ms,
+        "response_payload_json": item.response_payload_json,
+    }
+
+
+def _failed_send_summary(row: SendHistory, attempts: list[SendAttempt]) -> str:
+    error_code = row.error_code or next(
+        (
+            attempt.telegram_error_code
+            for attempt in reversed(attempts)
+            if attempt.telegram_error_code
+        ),
+        None,
+    )
+    error_kind = row.last_error_kind or next(
+        (attempt.error_kind for attempt in reversed(attempts) if attempt.error_kind),
+        None,
+    )
+    retry_after_seconds = row.retry_after_seconds or next(
+        (
+            attempt.retry_after_seconds
+            for attempt in reversed(attempts)
+            if attempt.retry_after_seconds is not None
+        ),
+        None,
+    )
+    if error_code == "429" or error_kind in {"telegram_rate_limit", "rate_limit"}:
+        if retry_after_seconds is not None:
+            return f"Telegram returned 429; retry is deferred for {retry_after_seconds} seconds."
+        return "Telegram returned 429; retry is deferred."
+    if row.error_message:
+        return row.error_message
+    if attempts:
+        last_attempt_status = attempts[-1].status
+        return (
+            attempts[-1].error_message
+            or f"Last attempt ended with status {last_attempt_status}."
+        )
+    return "No failure details are recorded."
 
 
 def _is_ready_for_enqueue(row: SendHistory, now: datetime) -> bool:
@@ -693,30 +819,282 @@ def create_mcp_server(
             return {"id": destination.id, "chat_id": destination.chat_id}
 
     @mcp.tool()
+    async def inspect_bot_access(bot_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "inspect_bot_access")
+        async with get_session_factory()() as session:
+            bot = await BotRepository(session).get(bot_id)
+            if bot is None:
+                raise ValueError(f"bot {bot_id} not found")
+            destinations = [
+                item
+                for item in await DestinationRepository(session).list()
+                if item.bot_id == bot_id
+            ]
+            facts = await OpsFactRepository(session).list(limit=50)
+            recommendations = await OpsRecommendationRepository(session).list(limit=50)
+            bot_recommendations = [item for item in recommendations if item.bot_id == bot_id]
+            linked_fact_ids = {
+                fact_id
+                for recommendation in bot_recommendations
+                for fact_id in recommendation.fact_ids_json or []
+            }
+            recent_facts = [
+                item for item in facts if item.bot_id == bot_id or item.id in linked_fact_ids
+            ][:10]
+            return {
+                "bot": {
+                    "id": bot.id,
+                    "name": bot.name,
+                    "username": bot.username,
+                    "telegram_bot_id": bot.telegram_bot_id,
+                    "is_active": bot.is_active,
+                    "last_checked_at": _isoformat(bot.last_checked_at),
+                },
+                "destinations": [
+                    {
+                        "id": item.id,
+                        "kind": item.kind,
+                        "chat_id": item.chat_id,
+                        "message_thread_id": item.message_thread_id,
+                        "alias": item.alias,
+                        "title": item.title,
+                        "username": item.username,
+                        "is_active": item.is_active,
+                    }
+                    for item in destinations
+                ],
+                "recent_facts": [_serialize_ops_fact(item) for item in recent_facts],
+                "recent_recommendations": [
+                    _serialize_ops_recommendation(item) for item in bot_recommendations[:10]
+                ],
+            }
+
+    @mcp.tool()
+    async def list_ops_facts(limit: int = 100) -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_ops_facts")
+        async with get_session_factory()() as session:
+            rows = await OpsFactRepository(session).list(limit=limit)
+            return [_serialize_ops_fact(item) for item in rows]
+
+    @mcp.tool()
+    async def run_ops_scan() -> dict[str, int]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "run_ops_scan")
+        async with get_session_factory()() as session:
+            service = TelegramOpsService(
+                session,
+                action_log_session_factory=get_session_factory(),
+            )
+            result = await service.scan(source="mcp")
+            await session.commit()
+            return result
+
+    @mcp.tool()
+    async def list_ops_recommendations(
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_ops_recommendations")
+        async with get_session_factory()() as session:
+            rows = await OpsRecommendationRepository(session).list(status=status, limit=limit)
+            return [_serialize_ops_recommendation(item) for item in rows]
+
+    @mcp.tool()
+    async def preview_ops_action(recommendation_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "preview_ops_action")
+        async with get_session_factory()() as session:
+            service = TelegramOpsService(session)
+            result = await service.preview_action(
+                recommendation_id,
+                source="mcp",
+                actor="mcp",
+            )
+            await session.commit()
+            return result
+
+    @mcp.tool()
+    async def apply_ops_action(recommendation_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "apply_ops_action")
+        async with get_session_factory()() as session:
+            service = TelegramOpsService(
+                session,
+                action_log_session_factory=get_session_factory(),
+            )
+            result = await service.apply_action(
+                recommendation_id,
+                source="mcp",
+                actor="mcp",
+            )
+            await session.commit()
+            return result
+
+    @mcp.tool()
+    async def dismiss_ops_recommendation(recommendation_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "dismiss_ops_recommendation")
+        async with get_session_factory()() as session:
+            service = TelegramOpsService(
+                session,
+                action_log_session_factory=get_session_factory(),
+            )
+            result = await service.dismiss_recommendation(
+                recommendation_id,
+                source="mcp",
+                actor="mcp",
+            )
+            await session.commit()
+            return result
+
+    @mcp.tool()
+    async def list_ops_rules() -> list[dict[str, Any]]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "list_ops_rules")
+        async with get_session_factory()() as session:
+            rows = await OpsAutomationRuleRepository(session).list()
+            return [_serialize_ops_rule(item) for item in rows]
+
+    @mcp.tool()
+    async def update_ops_rule(
+        rule_id: int,
+        mode: str | None = None,
+        is_enabled: bool | None = None,
+        is_paused: bool | None = None,
+        risk_limit: str | None = None,
+        config_json: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "update_ops_rule")
+        async with get_session_factory()() as session:
+            service = TelegramOpsService(
+                session,
+                action_log_session_factory=get_session_factory(),
+            )
+            row = await service.update_rule(
+                rule_id,
+                mode=mode,
+                is_enabled=is_enabled,
+                is_paused=is_paused,
+                risk_limit=risk_limit,
+                config_json=config_json,
+                source="mcp",
+                actor="mcp",
+            )
+            await session.commit()
+            return _serialize_ops_rule(row)
+
+    @mcp.tool()
+    async def run_ops_rule(rule_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "run_ops_rule")
+        async with get_session_factory()() as session:
+            service = TelegramOpsService(
+                session,
+                action_log_session_factory=get_session_factory(),
+            )
+            result = await service.run_rule(rule_id, source="mcp", actor="mcp")
+            await session.commit()
+            return result
+
+    @mcp.tool()
+    async def pause_ops_rule(rule_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "pause_ops_rule")
+        async with get_session_factory()() as session:
+            service = TelegramOpsService(
+                session,
+                action_log_session_factory=get_session_factory(),
+            )
+            row = await service.pause_rule(rule_id, source="mcp", actor="mcp")
+            await session.commit()
+            return _serialize_ops_rule(row)
+
+    @mcp.tool()
+    async def resume_ops_rule(rule_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "resume_ops_rule")
+        async with get_session_factory()() as session:
+            service = TelegramOpsService(
+                session,
+                action_log_session_factory=get_session_factory(),
+            )
+            row = await service.resume_rule(rule_id, source="mcp", actor="mcp")
+            await session.commit()
+            return _serialize_ops_rule(row)
+
+    @mcp.tool()
+    async def explain_failed_send(send_history_id: int) -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "explain_failed_send")
+        async with get_session_factory()() as session:
+            row = await SendHistoryRepository(session).get(send_history_id)
+            if row is None:
+                raise ValueError(f"send history {send_history_id} not found")
+            attempts = await SendAttemptRepository(session).list_for_send(send_history_id)
+            return {
+                "send_history_id": send_history_id,
+                "status": row.status,
+                "error_code": row.error_code,
+                "error_message": row.error_message,
+                "last_error_kind": row.last_error_kind,
+                "attempts": [_serialize_send_attempt(item) for item in attempts],
+                "summary": _failed_send_summary(row, attempts),
+            }
+
+    @mcp.tool()
+    async def get_mcp_coverage_matrix() -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "get_mcp_coverage_matrix")
+        async with get_session_factory()() as session:
+            mcp_settings = await McpSettingsRepository(session).get()
+            enabled_tools = (
+                set(mcp_settings.enabled_tools_json or [])
+                if mcp_settings is not None
+                else set(MCP_BOOTSTRAP_ENABLED_TOOL_NAMES)
+            )
+            return McpCoverageService(enabled_tools).matrix()
+
+    @mcp.tool()
+    async def recommend_mcp_preset(preset: str = "read_only") -> dict[str, Any]:
+        await ensure_mcp_tool_enabled(get_session_factory(), "recommend_mcp_preset")
+        async with get_session_factory()():
+            if preset == "read_only":
+                tools = [tool.name for tool in MCP_TOOL_DEFINITIONS if tool.risk == "read"]
+            elif preset == "sender":
+                tools = [
+                    tool.name
+                    for tool in MCP_TOOL_DEFINITIONS
+                    if tool.risk == "read" or tool.category == "send"
+                ]
+            elif preset == "full":
+                tools = [tool.name for tool in MCP_TOOL_DEFINITIONS]
+            else:
+                raise ValueError(f"unknown MCP preset {preset!r}")
+            return {"preset": preset, "tools": tools}
+
+    @mcp.tool()
     async def get_mcp_connection_info() -> dict[str, Any]:
         await ensure_mcp_tool_enabled(get_session_factory(), "get_mcp_connection_info")
         async with get_session_factory()() as session:
-            mcp_settings = await McpSettingsRepository(session).get_or_create()
-            await session.commit()
+            mcp_settings = await McpSettingsRepository(session).get()
+            is_enabled = mcp_settings.is_enabled if mcp_settings is not None else True
+            allow_legacy_sse = (
+                mcp_settings.allow_legacy_sse if mcp_settings is not None else True
+            )
+            enabled_tools = (
+                list(mcp_settings.enabled_tools_json or [])
+                if mcp_settings is not None
+                else list(MCP_BOOTSTRAP_ENABLED_TOOL_NAMES)
+            )
             first_protected_host = (
                 settings.protected_api_hosts[0] if settings.protected_api_hosts else ""
             )
             return {
                 "streamable_http": {
                     "path": f"{settings.mcp_v1_prefix}/",
-                    "enabled": mcp_settings.is_enabled,
+                    "enabled": is_enabled,
                 },
                 "legacy_sse": {
                     "path": f"{settings.mcp_v1_prefix}/sse",
-                    "enabled": mcp_settings.is_enabled and mcp_settings.allow_legacy_sse,
+                    "enabled": is_enabled and allow_legacy_sse,
                 },
                 "legacy_messages": {
                     "path": f"{settings.mcp_v1_prefix}/messages/",
-                    "enabled": mcp_settings.is_enabled and mcp_settings.allow_legacy_sse,
+                    "enabled": is_enabled and allow_legacy_sse,
                 },
                 "protected_hosts": settings.protected_api_hosts,
                 "required_headers": ["X-API-Token"],
-                "enabled_tools": list(mcp_settings.enabled_tools_json or []),
+                "enabled_tools": enabled_tools,
                 "local_examples": {
                     "streamable_http": (
                         f"http://127.0.0.1:{settings.app_port}{settings.mcp_v1_prefix}/"

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tg_bot_aggregator.api import (
@@ -17,9 +17,14 @@ from tg_bot_aggregator.api import (
     events,
     health,
     mcp_settings,
+    media,
     mtproto,
+    operations,
+    ops,
     reliability,
     send,
+    send_batches,
+    send_profiles,
     telegram_compat,
     templates,
 )
@@ -31,6 +36,13 @@ from tg_bot_aggregator.mcp_server import create_mcp_asgi_app, create_mcp_server
 from tg_bot_aggregator.models import Base
 from tg_bot_aggregator.security import install_secret_log_filters
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
+
+FAVICON_SVG = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+    b'<rect width="64" height="64" rx="14" fill="#282c34"/>'
+    b'<path d="M14 31 50 16 42 50 31 39 24 46 25 35z" fill="#61afef"/>'
+    b"</svg>"
+)
 
 
 def create_app(
@@ -99,9 +111,14 @@ def create_app(
     app.include_router(destinations.router, prefix=prefix)
     app.include_router(diagnostics.router, prefix=prefix)
     app.include_router(discovery.router, prefix=prefix)
-    app.include_router(templates.router, prefix=prefix)
+    app.include_router(media.router, prefix=prefix)
+    app.include_router(ops.router, prefix=prefix)
+    app.include_router(operations.router, prefix=prefix)
     app.include_router(reliability.router, prefix=prefix)
+    app.include_router(templates.router, prefix=prefix)
     app.include_router(send.router, prefix=prefix)
+    app.include_router(send_batches.router, prefix=prefix)
+    app.include_router(send_profiles.router, prefix=prefix)
     app.include_router(mtproto.router, prefix=prefix)
     app.include_router(mcp_settings.router, prefix=prefix)
     app.include_router(analytics.router, prefix=prefix)
@@ -124,6 +141,10 @@ def create_app(
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
         return FileResponse("src/tg_bot_aggregator/static/index.html")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon() -> Response:
+        return Response(FAVICON_SVG, media_type="image/svg+xml")
 
     return app
 

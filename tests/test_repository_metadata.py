@@ -1,6 +1,16 @@
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+IGNORED_SECRET_SCAN_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "output",
+}
+LEAKED_TEST_BOT_TOKEN_PREFIX = "8578509043" + ":"
 
 
 def test_oss_repository_files_exist() -> None:
@@ -42,7 +52,33 @@ def test_deploy_scripts_are_present_and_do_not_commit_telegram_secrets() -> None
         assert content.startswith("#!/usr/bin/env bash")
         assert "TELEGRAM_API_HASH=" not in content
         assert "TELEGRAM_API_ID=" not in content
-        assert "8578509043:" not in content
+        assert LEAKED_TEST_BOT_TOKEN_PREFIX not in content
+
+
+def test_repository_does_not_contain_known_leaked_test_bot_token_prefix() -> None:
+    leaked_paths: list[str] = []
+    listed_files = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+
+    for listed_file in listed_files:
+        path = ROOT / listed_file
+        if IGNORED_SECRET_SCAN_DIRS.intersection(Path(listed_file).parts):
+            continue
+
+        try:
+            content = path.read_text()
+        except UnicodeDecodeError:
+            continue
+
+        if LEAKED_TEST_BOT_TOKEN_PREFIX in content:
+            leaked_paths.append(listed_file)
+
+    assert leaked_paths == []
 
 
 def test_deploy_compose_contains_runtime_services() -> None:

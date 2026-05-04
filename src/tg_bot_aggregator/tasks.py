@@ -15,6 +15,7 @@ from tg_bot_aggregator.reliability import RedisRateLimitStore, SendRateLimiter
 from tg_bot_aggregator.repositories import (
     BackupRunRepository,
     MtprotoSessionRepository,
+    OpsAutomationRuleRepository,
     RuntimeAdvancedSettingsRepository,
     RuntimeSettingsRepository,
     SendHistoryRepository,
@@ -22,6 +23,7 @@ from tg_bot_aggregator.repositories import (
 from tg_bot_aggregator.runtime_settings import apply_runtime_settings
 from tg_bot_aggregator.send_service import SendService
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient
+from tg_bot_aggregator.telegram_ops import TelegramOpsService
 from tg_bot_aggregator.workflow_service import WorkflowService
 
 
@@ -52,10 +54,20 @@ async def _close_redis_client(redis_client: redis.Redis | None) -> None:
         await redis_client.aclose()
 
 
+async def _close_event_bus(event_bus: RedisEventBus | None) -> None:
+    if event_bus is None:
+        return
+    try:
+        await event_bus.close()
+    except Exception:
+        return
+
+
 async def run_refresh_analytics_target(target_id: int, run_id: int | None = None) -> int:
     settings = get_settings()
     engine = create_engine(settings)
     session_factory = create_session_factory(engine)
+    events: RedisEventBus | None = None
     try:
         async with session_factory() as session:
             mtproto = MtprotoService(settings, MtprotoSessionRepository(session))
@@ -63,6 +75,7 @@ async def run_refresh_analytics_target(target_id: int, run_id: int | None = None
             service = AnalyticsService(session, mtproto, events)
             return await service.refresh_target(target_id, run_id)
     finally:
+        await _close_event_bus(events)
         await engine.dispose()
 
 
@@ -76,6 +89,7 @@ async def refresh_all_analytics_targets() -> list[int]:
     settings = get_settings()
     engine = create_engine(settings)
     session_factory = create_session_factory(engine)
+    events: RedisEventBus | None = None
     try:
         async with session_factory() as session:
             mtproto = MtprotoService(settings, MtprotoSessionRepository(session))
@@ -83,6 +97,7 @@ async def refresh_all_analytics_targets() -> list[int]:
             service = AnalyticsService(session, mtproto, events)
             return await service.refresh_all()
     finally:
+        await _close_event_bus(events)
         await engine.dispose()
 
 
@@ -115,8 +130,7 @@ async def run_send_history(send_history_id: int) -> int:
             )
             return row.id
     finally:
-        if events is not None:
-            await events.close()
+        await _close_event_bus(events)
         await _close_redis_client(redis_client)
         await engine.dispose()
 
@@ -170,8 +184,7 @@ async def run_due_send_history(limit: int = 100) -> list[int]:
                 )
             return processed
     finally:
-        if events is not None:
-            await events.close()
+        await _close_event_bus(events)
         await _close_redis_client(redis_client)
         await engine.dispose()
 
@@ -185,6 +198,7 @@ async def run_send_batch(batch_id: int) -> int:
     settings = get_settings()
     engine = create_engine(settings)
     session_factory = create_session_factory(engine)
+    events: RedisEventBus | None = None
     try:
         async with session_factory() as session:
             settings = apply_runtime_settings(
@@ -204,6 +218,7 @@ async def run_send_batch(batch_id: int) -> int:
             batch = await service.enqueue_batch(batch_id)
             return batch.id
     finally:
+        await _close_event_bus(events)
         await engine.dispose()
 
 
@@ -320,3 +335,49 @@ async def run_scheduled_backup_if_due() -> int | None:
 @broker.task
 async def scheduled_backup_if_due() -> int | None:
     return await run_scheduled_backup_if_due()
+
+
+async def run_ops_automation_rules() -> dict[str, int]:
+    settings = get_settings()
+    engine = create_engine(settings)
+    session_factory = create_session_factory(engine)
+    events: RedisEventBus | None = None
+    result = {"applied": 0, "skipped": 0, "failed": 0, "rules_checked": 0}
+    try:
+        events = RedisEventBus(settings.redis_url)
+        async with session_factory() as session:
+            service = TelegramOpsService(
+                session,
+                action_log_session_factory=session_factory,
+            )
+            rules = [
+                rule
+                for rule in await OpsAutomationRuleRepository(session).list()
+                if rule.is_enabled and not rule.is_paused
+            ]
+            for rule in rules:
+                result["rules_checked"] += 1
+                try:
+                    rule_result = await service.run_rule(
+                        rule.id,
+                        source="scheduler",
+                        actor="scheduler",
+                    )
+                except Exception:
+                    await session.rollback()
+                    result["failed"] += 1
+                    continue
+                result["applied"] += int(rule_result.get("applied", 0))
+                result["skipped"] += int(rule_result.get("skipped", 0))
+                result["failed"] += int(rule_result.get("failed", 0))
+                await session.commit()
+        await events.publish("ops.automation.ran", result)
+        return result
+    finally:
+        await _close_event_bus(events)
+        await engine.dispose()
+
+
+@broker.task
+async def ops_automation_rules() -> dict[str, int]:
+    return await run_ops_automation_rules()

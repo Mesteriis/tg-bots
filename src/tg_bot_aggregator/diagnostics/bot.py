@@ -14,7 +14,11 @@ from tg_bot_aggregator.diagnostics.formatter import (
     format_update_report,
 )
 from tg_bot_aggregator.models import Base
-from tg_bot_aggregator.repositories import BotRepository, DiagnosticSettingsRepository
+from tg_bot_aggregator.repositories import (
+    BotRepository,
+    DiagnosticSettingsRepository,
+    DiagnosticUpdateRepository,
+)
 from tg_bot_aggregator.telegram_bot_api import TelegramBotApiClient, TelegramBotApiError
 
 logger = logging.getLogger(__name__)
@@ -101,8 +105,34 @@ class DiagnosticPollingBot:
         await self.bot_api.delete_webhook(active.token, drop_pending_updates=False)
         return "ready"
 
+    async def _store_update(self, report: Any, update: dict[str, Any]) -> None:
+        metadata = report.metadata
+        if metadata.update_id is None:
+            return
+        async with self.session_factory() as session:
+            repo = DiagnosticUpdateRepository(session)
+            if await repo.get_by_update_id(metadata.update_id) is not None:
+                return
+            await repo.create(
+                update_id=metadata.update_id,
+                update_kind=metadata.update_kind,
+                chat_id=metadata.chat_id,
+                chat_type=metadata.chat_type,
+                chat_title=metadata.chat_title,
+                chat_username=metadata.chat_username,
+                message_id=metadata.message_id,
+                message_thread_id=metadata.message_thread_id,
+                is_topic_message=metadata.is_topic_message,
+                sender_id=metadata.sender_id,
+                sender_username=metadata.sender_username,
+                text_preview=metadata.text_preview,
+                raw_update_json=update,
+            )
+            await session.commit()
+
     async def _reply_to_update(self, token: str, update: dict[str, Any]) -> None:
         report = format_update_report(update)
+        await self._store_update(report, update)
         if report.reply_chat_id is None:
             return
         chunks = chunk_report(report.text)
