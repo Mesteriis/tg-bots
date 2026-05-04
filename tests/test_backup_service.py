@@ -165,4 +165,9 @@ def test_push_snapshot_bootstraps_empty_repo_without_remote_branch(
     assert commands[0][0][:4] == ["git", "clone", "--branch", "main"]
     assert commands[1][0][:2] == ["git", "clone"]
     assert any(args[:4] == ["git", "checkout", "-B", "main"] for args, _ in commands)
+    assert any(args[:4] == ["git", "config", "user.email", "tg-bots@local"] for args, _ in commands)
+    assert any(
+        args[:4] == ["git", "config", "user.name", "Telegram Bot Aggregator"]
+        for args, _ in commands
+    )
     assert any(args[:3] == ["git", "push", "origin"] for args, _ in commands)

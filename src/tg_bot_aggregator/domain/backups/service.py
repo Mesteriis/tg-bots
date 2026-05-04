@@ -686,6 +686,14 @@ class BackupService:
                 json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True),
                 encoding="utf-8",
             )
+            _run_git(
+                ["git", "config", "user.email", "tg-bots@local"],
+                cwd=self.workdir,
+            )
+            _run_git(
+                ["git", "config", "user.name", "Telegram Bot Aggregator"],
+                cwd=self.workdir,
+            )
             _run_git(["git", "add", str(backup_path.relative_to(self.workdir))], cwd=self.workdir)
             diff_status = _run_git(["git", "status", "--porcelain"], cwd=self.workdir)
             if not diff_status:
