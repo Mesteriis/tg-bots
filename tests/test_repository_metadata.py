@@ -114,3 +114,13 @@ def test_deploy_compose_contains_runtime_services() -> None:
     ]:
         assert service in compose
     assert "/mnt/omw-media:/shared/media:ro" in compose
+
+
+def test_lxc_deploy_compose_paths_resolve_from_deploy_directory() -> None:
+    compose = (ROOT / "deploy/docker-compose.lxc.yml").read_text()
+    lines = {line.strip() for line in compose.splitlines()}
+
+    assert "build: ." not in lines
+    assert "build: .." in lines
+    assert "- path: .env" not in lines
+    assert "- path: ../.env" in lines

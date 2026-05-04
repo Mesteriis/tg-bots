@@ -1,9 +1,9 @@
 services:
   app:
-    build: .
+    build: ..
     restart: unless-stopped
     env_file:
-      - path: .env
+      - path: ../.env
         required: true
     command:
       - sh
@@ -19,10 +19,10 @@ services:
       - telegram-bot-api
 
   worker:
-    build: .
+    build: ..
     restart: unless-stopped
     env_file:
-      - path: .env
+      - path: ../.env
         required: true
     command: ["taskiq", "worker", "tg_bot_aggregator.tasks:broker", "tg_bot_aggregator.tasks"]
     volumes:
@@ -33,20 +33,20 @@ services:
       - telegram-bot-api
 
   scheduler:
-    build: .
+    build: ..
     restart: unless-stopped
     env_file:
-      - path: .env
+      - path: ../.env
         required: true
     command: ["python", "-m", "tg_bot_aggregator.scheduler"]
     depends_on:
       - redis
 
   diagnostic-bot:
-    build: .
+    build: ..
     restart: unless-stopped
     env_file:
-      - path: .env
+      - path: ../.env
         required: true
     command: ["python", "-m", "tg_bot_aggregator.diagnostics.bot"]
     volumes:
@@ -55,10 +55,10 @@ services:
       - telegram-bot-api
 
   discovery-bot:
-    build: .
+    build: ..
     restart: unless-stopped
     env_file:
-      - path: .env
+      - path: ../.env
         required: true
     command: ["python", "-m", "tg_bot_aggregator.discovery.bot"]
     volumes:
@@ -74,7 +74,7 @@ services:
     image: aiogram/telegram-bot-api:latest
     restart: unless-stopped
     env_file:
-      - path: .env
+      - path: ../.env
         required: true
     environment:
       TELEGRAM_LOCAL: "1"
