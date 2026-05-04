@@ -39,15 +39,17 @@ curl -fsS "http://${APP_IP}:8000/api/v1/health"
 
 ## Media Mount
 
-The LXC configure script mounts:
+The LXC configure script mounts the OMV media share through NFSv4:
 
 ```text
-192.168.1.23:/export/media -> /mnt/omw-media
+192.168.1.23:/media -> /mnt/omw-media
 ```
+
+OMV `showmount -e` exposes the NFSv3 path as `/export/media`, but `/export` is the
+NFSv4 pseudo-root (`fsid=0`), so NFSv4 clients must mount `/media`.
 
 The compose file mounts it read-only into app containers as:
 
 ```text
 /mnt/omw-media:/shared/media:ro
 ```
-

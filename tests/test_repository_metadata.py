@@ -44,6 +44,13 @@ def test_rnet_deploy_workflow_uses_pve_deploy_and_nginx_update() -> None:
     assert "curl -fsS \"http://${APP_IP}:8000/api/v1/health\"" in workflow
 
 
+def test_lxc_configure_script_uses_nfs_v4_media_pseudo_root() -> None:
+    script = (ROOT / "deploy/proxmox/configure-lxc.sh").read_text()
+
+    assert 'MEDIA_EXPORT="${MEDIA_EXPORT:-192.168.1.23:/media}"' in script
+    assert "mount -t nfs -o vers=4 ${MEDIA_EXPORT}" in script
+
+
 def test_package_metadata_points_to_public_portfolio_mirror() -> None:
     metadata = (ROOT / "pyproject.toml").read_text()
 

@@ -3,7 +3,7 @@ set -euo pipefail
 
 CT_ID="${1:?usage: configure-lxc.sh <ctid>}"
 PVE_HOST="${PVE_HOST:-192.168.1.2}"
-MEDIA_EXPORT="${MEDIA_EXPORT:-192.168.1.23:/export/media}"
+MEDIA_EXPORT="${MEDIA_EXPORT:-192.168.1.23:/media}"
 MEDIA_MOUNT="${MEDIA_MOUNT:-/mnt/omw-media}"
 
 ssh_pve() {

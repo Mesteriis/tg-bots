@@ -250,8 +250,11 @@ Restore is intentionally explicit. The preferred dashboard flow is the restore w
 The app does not upload large file bodies. An external uploader writes files to the OMW `media` share. The Docker host must mount:
 
 ```text
-192.168.1.23:/export/media -> /mnt/omw-media -> /shared/media
+192.168.1.23:/media -> /mnt/omw-media -> /shared/media
 ```
+
+For this OMV host, `/export/media` is the NFSv3 export shown by `showmount`; the
+deployment script uses the NFSv4 pseudo-root path `/media`.
 
 The app validates relative paths under `/shared/media` and sends files through a local Telegram Bot API server in local mode.
 If `SHARED_MEDIA_ROOT` is missing, not readable, or above-limit files exceed `MAX_LOCAL_FILE_BYTES`, file sends fail with a normal API error before any Telegram call. Set `SHARED_MEDIA_REQUIRE_MOUNT=true` when the deployment must reject a plain directory that is not an actual mounted share. The dashboard disables file sending when health reports shared media or local Bot API as unavailable.
