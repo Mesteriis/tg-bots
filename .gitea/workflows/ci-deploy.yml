@@ -68,6 +68,13 @@ jobs:
         run: |
           APP_IP="$(bash deploy/proxmox/ct-ip.sh "$CT_ID")"
           APP_UPSTREAM="http://${APP_IP}:8000" bash deploy/nginx/update-nginx-ui.sh "$CT_ID"
+          for attempt in $(seq 1 45); do
+            if curl -fsS "http://${APP_IP}:8000/api/v1/health"; then
+              exit 0
+            fi
+            echo "Waiting for app health, attempt ${attempt}/45"
+            sleep 2
+          done
           curl -fsS "http://${APP_IP}:8000/api/v1/health"
 
       - if: success()

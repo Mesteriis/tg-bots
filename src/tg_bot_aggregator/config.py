@@ -1,8 +1,8 @@
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 def _split_csv(value: str | list[str]) -> list[str]:
@@ -44,15 +44,15 @@ class Settings(BaseSettings):
         default=2_097_152_000, validation_alias="MAX_LOCAL_FILE_BYTES"
     )
 
-    cors_allowed_origins: list[str] = Field(
+    cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://127.0.0.1:8000", "http://localhost:8000"],
         validation_alias="CORS_ALLOWED_ORIGINS",
     )
-    mcp_allowed_origins: list[str] = Field(
+    mcp_allowed_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://127.0.0.1:8000", "http://localhost:8000"],
         validation_alias="MCP_ALLOWED_ORIGINS",
     )
-    protected_api_hosts: list[str] = Field(
+    protected_api_hosts: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["tg.sh-inc.ru", "tg.sh-inc.dev"],
         validation_alias="PROTECTED_API_HOSTS",
     )

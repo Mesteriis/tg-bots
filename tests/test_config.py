@@ -31,6 +31,24 @@ def test_settings_parse_csv_origins() -> None:
     assert settings.mcp_allowed_origins == ["http://localhost:8000"]
 
 
+def test_settings_parse_csv_origins_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000",
+    )
+    monkeypatch.setenv("MCP_ALLOWED_ORIGINS", "http://localhost:8000")
+    monkeypatch.setenv("PROTECTED_API_HOSTS", "tg.sh-inc.ru,tg.sh-inc.dev")
+
+    settings = Settings()
+
+    assert settings.cors_allowed_origins == [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+    assert settings.mcp_allowed_origins == ["http://localhost:8000"]
+    assert settings.protected_api_hosts == ["tg.sh-inc.ru", "tg.sh-inc.dev"]
+
+
 def test_settings_parse_protected_api_hosts() -> None:
     settings = Settings(PROTECTED_API_HOSTS="tg.sh-inc.ru,tg.sh-inc.dev")
 

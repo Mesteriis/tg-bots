@@ -42,6 +42,7 @@ def test_rnet_deploy_workflow_uses_pve_deploy_and_nginx_update() -> None:
     assert "pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml" in workflow
     assert "deploy/nginx/update-nginx-ui.sh" in workflow
     assert "curl -fsS \"http://${APP_IP}:8000/api/v1/health\"" in workflow
+    assert "Waiting for app health, attempt ${attempt}/45" in workflow
 
 
 def test_lxc_configure_script_uses_nfs_v4_media_pseudo_root() -> None:
