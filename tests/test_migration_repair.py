@@ -37,18 +37,7 @@ def _create_repairable_database(path: str) -> None:
         connection.execute(
             """
             create table runtime_settings (
-                id integer primary key,
-                reliability_enabled boolean,
-                send_default_mode varchar(40),
-                send_global_rate_per_minute integer,
-                send_bot_rate_per_minute integer,
-                send_chat_rate_per_minute integer,
-                send_destination_rate_per_minute integer,
-                send_retry_base_delay_seconds float,
-                send_retry_max_delay_seconds float,
-                send_worker_lease_seconds integer,
-                send_stale_lock_grace_seconds integer,
-                send_dedupe_window_seconds integer
+                id integer primary key
             )
             """
         )
@@ -57,15 +46,7 @@ def _create_repairable_database(path: str) -> None:
             create table send_history (
                 id integer primary key,
                 status varchar(40),
-                next_retry_at datetime,
-                priority integer,
-                locked_at datetime,
-                locked_by varchar(200),
-                lock_expires_at datetime,
-                last_attempt_at datetime,
-                retry_after_seconds integer,
-                last_error_kind varchar(80),
-                dedupe_window_key varchar(200)
+                next_retry_at datetime
             )
             """
         )
@@ -115,6 +96,16 @@ def test_repair_sqlite_metadata_created_schema_stamps_head_and_indexes(tmp_path)
         assert "ix_ops_facts_fact_type" in indexes
         assert "ix_ops_recommendations_status" in indexes
         assert "uq_destinations_bot_chat_thread" in indexes
+        runtime_columns = {
+            row[1] for row in connection.execute("pragma table_info(runtime_settings)")
+        }
+        send_history_columns = {
+            row[1] for row in connection.execute("pragma table_info(send_history)")
+        }
+        assert "reliability_enabled" in runtime_columns
+        assert "send_dedupe_window_seconds" in runtime_columns
+        assert "priority" in send_history_columns
+        assert "dedupe_window_key" in send_history_columns
         scopes_json = connection.execute(
             "select scopes_json from api_tokens where id = 1"
         ).fetchone()[0]

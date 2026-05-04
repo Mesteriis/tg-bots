@@ -27,30 +27,60 @@ REQUIRED_METADATA_CREATED_TABLES = {
     "mcp_coverage_snapshots",
 }
 
-REQUIRED_COLUMNS: dict[str, set[str]] = {
+ADD_COLUMN_SQL: dict[str, dict[str, str]] = {
     "runtime_settings": {
-        "reliability_enabled",
-        "send_default_mode",
-        "send_global_rate_per_minute",
-        "send_bot_rate_per_minute",
-        "send_chat_rate_per_minute",
-        "send_destination_rate_per_minute",
-        "send_retry_base_delay_seconds",
-        "send_retry_max_delay_seconds",
-        "send_worker_lease_seconds",
-        "send_stale_lock_grace_seconds",
-        "send_dedupe_window_seconds",
+        "reliability_enabled": (
+            "alter table runtime_settings add column reliability_enabled boolean"
+        ),
+        "send_default_mode": (
+            "alter table runtime_settings add column send_default_mode varchar(40)"
+        ),
+        "send_global_rate_per_minute": (
+            "alter table runtime_settings add column send_global_rate_per_minute integer"
+        ),
+        "send_bot_rate_per_minute": (
+            "alter table runtime_settings add column send_bot_rate_per_minute integer"
+        ),
+        "send_chat_rate_per_minute": (
+            "alter table runtime_settings add column send_chat_rate_per_minute integer"
+        ),
+        "send_destination_rate_per_minute": (
+            "alter table runtime_settings add column send_destination_rate_per_minute integer"
+        ),
+        "send_retry_base_delay_seconds": (
+            "alter table runtime_settings add column send_retry_base_delay_seconds float"
+        ),
+        "send_retry_max_delay_seconds": (
+            "alter table runtime_settings add column send_retry_max_delay_seconds float"
+        ),
+        "send_worker_lease_seconds": (
+            "alter table runtime_settings add column send_worker_lease_seconds integer"
+        ),
+        "send_stale_lock_grace_seconds": (
+            "alter table runtime_settings add column send_stale_lock_grace_seconds integer"
+        ),
+        "send_dedupe_window_seconds": (
+            "alter table runtime_settings add column send_dedupe_window_seconds integer"
+        ),
     },
     "send_history": {
-        "priority",
-        "locked_at",
-        "locked_by",
-        "lock_expires_at",
-        "last_attempt_at",
-        "retry_after_seconds",
-        "last_error_kind",
-        "dedupe_window_key",
+        "priority": "alter table send_history add column priority integer not null default 100",
+        "locked_at": "alter table send_history add column locked_at datetime",
+        "locked_by": "alter table send_history add column locked_by varchar(200)",
+        "lock_expires_at": "alter table send_history add column lock_expires_at datetime",
+        "last_attempt_at": "alter table send_history add column last_attempt_at datetime",
+        "retry_after_seconds": "alter table send_history add column retry_after_seconds integer",
+        "last_error_kind": "alter table send_history add column last_error_kind varchar(80)",
+        "dedupe_window_key": "alter table send_history add column dedupe_window_key varchar(200)",
     },
+}
+
+INDEX_REQUIRED_COLUMNS: dict[str, set[str]] = {
+    "destinations": {"bot_id", "chat_id", "message_thread_id"},
+    "send_history": {"id", "status", "next_retry_at", "priority", "lock_expires_at"},
+    "send_attempts": {"send_history_id"},
+    "ops_facts": {"fact_type"},
+    "ops_recommendations": {"status"},
 }
 
 
@@ -87,7 +117,7 @@ def _current_alembic_version(connection: sqlite3.Connection) -> str | None:
     return str(row[0])
 
 
-def _validate_metadata_created_schema(connection: sqlite3.Connection) -> None:
+def _validate_metadata_created_tables(connection: sqlite3.Connection) -> None:
     tables = _table_names(connection)
     missing_tables = sorted(REQUIRED_METADATA_CREATED_TABLES - tables)
     if missing_tables:
@@ -97,8 +127,10 @@ def _validate_metadata_created_schema(connection: sqlite3.Connection) -> None:
             f"{joined}"
         )
 
+
+def _validate_index_columns(connection: sqlite3.Connection) -> None:
     missing_columns: dict[str, list[str]] = {}
-    for table_name, required_columns in REQUIRED_COLUMNS.items():
+    for table_name, required_columns in INDEX_REQUIRED_COLUMNS.items():
         existing_columns = _column_names(connection, table_name)
         missing = sorted(required_columns - existing_columns)
         if missing:
@@ -111,6 +143,14 @@ def _validate_metadata_created_schema(connection: sqlite3.Connection) -> None:
             "Cannot repair Alembic metadata-created schema drift; missing columns: "
             f"{details}"
         )
+
+
+def _add_missing_reliability_columns(connection: sqlite3.Connection) -> None:
+    for table_name, column_sql_by_name in ADD_COLUMN_SQL.items():
+        existing_columns = _column_names(connection, table_name)
+        for column_name, add_column_sql in column_sql_by_name.items():
+            if column_name not in existing_columns:
+                connection.execute(add_column_sql)
 
 
 def _create_missing_migration_indexes(connection: sqlite3.Connection) -> None:
@@ -185,7 +225,9 @@ def repair_sqlite_metadata_created_schema(database_url: str) -> bool:
         if current_version != DRIFT_VERSION:
             return False
 
-        _validate_metadata_created_schema(connection)
+        _validate_metadata_created_tables(connection)
+        _add_missing_reliability_columns(connection)
+        _validate_index_columns(connection)
         _create_missing_migration_indexes(connection)
         _backfill_ops_admin_scope(connection)
         connection.execute("update alembic_version set version_num = ?", (HEAD_VERSION,))
