@@ -12,9 +12,14 @@ from tg_bot_aggregator.core.db import create_engine, create_session_factory
 from tg_bot_aggregator.core.security import install_secret_log_filters
 from tg_bot_aggregator.domain.auth.middleware import ProtectedHostAuthMiddleware
 from tg_bot_aggregator.domain.mcp.server import create_mcp_asgi_app, create_mcp_server
+from tg_bot_aggregator.domain.operations.repository import (
+    RuntimeAdvancedSettingsRepository,
+    RuntimeSettingsRepository,
+)
 from tg_bot_aggregator.infra.events import MemoryEventBus
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.models import Base
+from tg_bot_aggregator.runtime_settings import apply_runtime_settings, apply_runtime_settings_to_app
 
 FAVICON_SVG = (
     b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
@@ -43,6 +48,13 @@ def create_app(
             app.state.session_factory = create_session_factory(engine)
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+        async with app.state.session_factory() as session:
+            effective_settings = apply_runtime_settings(
+                resolved_settings,
+                await RuntimeSettingsRepository(session).get(),
+                await RuntimeAdvancedSettingsRepository(session).get(),
+            )
+        apply_runtime_settings_to_app(app, effective_settings)
         yield
         if engine is not None:
             await engine.dispose()

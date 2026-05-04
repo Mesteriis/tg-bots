@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse, urlunparse
 
 import httpx
 from anyio import to_thread
@@ -181,6 +181,27 @@ def _repo_api_headers(settings: RuntimeSettingsRead, service: str) -> dict[str, 
     if token and settings.backup_git_auth_method == "token":
         headers["Authorization"] = f"Bearer {token}" if service == "github" else f"token {token}"
     return headers
+
+
+def _authenticated_git_repo_url(
+    settings: RuntimeSettingsRead,
+    repo_url: str,
+    service: str,
+) -> str:
+    token = settings.backup_git_api_token
+    if not token or settings.backup_git_auth_method != "token":
+        return repo_url
+
+    parsed = urlparse(repo_url)
+    if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+        return repo_url
+
+    username = "x-access-token" if service == "github" else "oauth2"
+    password = quote(token, safe="")
+    host = parsed.hostname
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    return urlunparse(parsed._replace(netloc=f"{username}:{password}@{host}"))
 
 
 def normalize_restore_sections(
@@ -625,25 +646,38 @@ class BackupService:
         if not repo_url:
             return None
         branch = self.settings.backup_git_branch or "main"
+        ref = _parse_git_repo_url(repo_url)
+        service = (
+            _resolve_git_service(self.settings.backup_git_service, ref.host)
+            if ref
+            else "gitea"
+        )
+        auth_repo_url = _authenticated_git_repo_url(self.settings, repo_url, service)
         if not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
-            _run_git(["git", "clone", "--branch", branch, repo_url, str(self.workdir)])
-        else:
+            _run_git(["git", "clone", "--branch", branch, auth_repo_url, str(self.workdir)])
+            _run_git(["git", "remote", "set-url", "origin", repo_url], cwd=self.workdir)
+
+        try:
+            _run_git(["git", "remote", "set-url", "origin", auth_repo_url], cwd=self.workdir)
             _run_git(["git", "fetch", "origin"], cwd=self.workdir)
             _run_git(["git", "checkout", branch], cwd=self.workdir)
             _run_git(["git", "pull", "--ff-only"], cwd=self.workdir)
 
-        backup_path = self.workdir / (self.settings.backup_git_path or "tg-bots.json")
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
-        backup_path.write_text(
-            json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
-        _run_git(["git", "add", str(backup_path.relative_to(self.workdir))], cwd=self.workdir)
-        diff_status = _run_git(["git", "status", "--porcelain"], cwd=self.workdir)
-        if not diff_status:
-            return None
-        _run_git(["git", "commit", "-m", "backup: update tg-bots snapshot"], cwd=self.workdir)
-        commit = _run_git(["git", "rev-parse", "HEAD"], cwd=self.workdir)
-        _run_git(["git", "push", "origin", branch], cwd=self.workdir)
-        return commit
+            backup_path = self.workdir / (self.settings.backup_git_path or "tg-bots.json")
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+            backup_path.write_text(
+                json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            _run_git(["git", "add", str(backup_path.relative_to(self.workdir))], cwd=self.workdir)
+            diff_status = _run_git(["git", "status", "--porcelain"], cwd=self.workdir)
+            if not diff_status:
+                return None
+            _run_git(["git", "commit", "-m", "backup: update tg-bots snapshot"], cwd=self.workdir)
+            commit = _run_git(["git", "rev-parse", "HEAD"], cwd=self.workdir)
+            _run_git(["git", "push", "origin", branch], cwd=self.workdir)
+            return commit
+        finally:
+            if (self.workdir / ".git").exists():
+                _run_git(["git", "remote", "set-url", "origin", repo_url], cwd=self.workdir)

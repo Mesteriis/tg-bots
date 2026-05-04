@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, timedelta
 
 import redis.asyncio as redis
 from taskiq_redis import RedisAsyncResultBackend, RedisStreamBroker
@@ -322,7 +322,10 @@ async def run_scheduled_backup_if_due() -> int | None:
             latest_runs = await BackupRunRepository(session).list(limit=1)
             latest = latest_runs[0] if latest_runs else None
             if latest and latest.finished_at:
-                next_due_at = latest.finished_at + timedelta(
+                finished_at = latest.finished_at
+                if finished_at.tzinfo is None:
+                    finished_at = finished_at.replace(tzinfo=UTC)
+                next_due_at = finished_at + timedelta(
                     seconds=settings.backup_schedule_interval_seconds
                 )
                 if utc_now() < next_due_at:

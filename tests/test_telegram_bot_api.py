@@ -167,3 +167,35 @@ async def test_bot_api_client_checks_chat_metadata() -> None:
         ("getChat", {"chat_id": "-100"}),
         ("getChatMemberCount", {"chat_id": "-100"}),
     ]
+
+
+async def test_bot_api_client_falls_back_to_localhost_when_internal_hostname_is_unresolvable(
+) -> None:
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def post(self, url: str, json: dict[str, Any]) -> httpx.Response:
+            self.calls.append(url)
+            if url.startswith("http://telegram-bot-api:8081/"):
+                request = httpx.Request("POST", url)
+                raise httpx.ConnectError("[Errno -2] Name or service not known", request=request)
+            return httpx.Response(
+                200,
+                json={"ok": True, "result": {"id": 1, "username": "ops_bot"}},
+            )
+
+        async def aclose(self) -> None:
+            return None
+
+    fake_client = FakeClient()
+    client = TelegramBotApiClient("http://telegram-bot-api:8081", fake_client)  # type: ignore[arg-type]
+
+    result = await client.get_me("123:token")
+
+    assert result["result"]["username"] == "ops_bot"
+    assert fake_client.calls == [
+        "http://telegram-bot-api:8081/bot123:token/getMe",
+        "http://127.0.0.1:8081/bot123:token/getMe",
+    ]
+    assert client.base_url == "http://127.0.0.1:8081"

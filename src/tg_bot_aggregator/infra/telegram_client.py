@@ -1,5 +1,6 @@
 import logging
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 
@@ -33,9 +34,32 @@ class TelegramBotApiClient:
         self.base_url = base_url.rstrip("/")
         self._client = client
         self._timeout = httpx.Timeout(timeout_seconds)
+        self._fallback_base_url = self._build_fallback_base_url(self.base_url)
+
+    @staticmethod
+    def _build_fallback_base_url(base_url: str) -> str | None:
+        parsed = urlparse(base_url)
+        if parsed.hostname != "telegram-bot-api":
+            return None
+        netloc = "127.0.0.1"
+        if parsed.port is not None:
+            netloc = f"{netloc}:{parsed.port}"
+        return urlunparse(parsed._replace(netloc=netloc)).rstrip("/")
 
     def _build_url(self, token: str, method: str) -> str:
         return f"{self.base_url}/bot{token}/{method}"
+
+    async def _send_post(
+        self,
+        client: httpx.AsyncClient,
+        token: str,
+        method: str,
+        payload: dict[str, Any],
+        *,
+        base_url: str,
+    ) -> httpx.Response:
+        url = f"{base_url.rstrip('/')}/bot{token}/{method}"
+        return await client.post(url, json=payload)
 
     async def _post(self, token: str, method: str, payload: dict[str, Any]) -> dict[str, Any]:
         close_client = False
@@ -45,15 +69,41 @@ class TelegramBotApiClient:
             close_client = True
         try:
             try:
-                response = await client.post(self._build_url(token, method), json=payload)
+                response = await self._send_post(
+                    client,
+                    token,
+                    method,
+                    payload,
+                    base_url=self.base_url,
+                )
             except httpx.RequestError as exc:
-                message = redact_text(str(exc))
-                raise TelegramBotApiError(
-                    method=method,
-                    error_code=None,
-                    description=f"Telegram Bot API request failed: {message}",
-                    payload={},
-                ) from exc
+                if self._fallback_base_url is not None:
+                    try:
+                        response = await self._send_post(
+                            client,
+                            token,
+                            method,
+                            payload,
+                            base_url=self._fallback_base_url,
+                        )
+                        self.base_url = self._fallback_base_url
+                        self._fallback_base_url = None
+                    except httpx.RequestError:
+                        message = redact_text(str(exc))
+                        raise TelegramBotApiError(
+                            method=method,
+                            error_code=None,
+                            description=f"Telegram Bot API request failed: {message}",
+                            payload={},
+                        ) from exc
+                else:
+                    message = redact_text(str(exc))
+                    raise TelegramBotApiError(
+                        method=method,
+                        error_code=None,
+                        description=f"Telegram Bot API request failed: {message}",
+                        payload={},
+                    ) from exc
             data = response.json()
         finally:
             if close_client:

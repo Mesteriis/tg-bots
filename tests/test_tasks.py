@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -579,3 +580,62 @@ async def test_scheduler_continues_after_enqueue_failure_and_still_sleeps(
         "ops_automation_rules",
     ]
     assert slept == [5]
+
+
+@pytest.mark.asyncio
+async def test_scheduled_backup_if_due_accepts_naive_finished_at(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(
+        REDIS_URL="redis://localhost:6379/15",
+        BACKUP_SCHEDULE_ENABLED=True,
+        BACKUP_SCHEDULE_INTERVAL_SECONDS=3600,
+    )
+    engine = _FakeEngine()
+    latest_run = type(
+        "Run",
+        (),
+        {"finished_at": datetime(2026, 5, 4, 12, 0, 0)},
+    )()
+
+    class FakeBackupRunRepository:
+        def __init__(self, session: object) -> None:
+            self.session = session
+
+        async def list(self, limit: int = 1) -> list[object]:
+            assert limit == 1
+            return [latest_run]
+
+    called: dict[str, object] = {}
+
+    async def fake_run_backup_snapshot(push_to_git: bool | None = None) -> int:
+        called["push_to_git"] = push_to_git
+        return 77
+
+    monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
+    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(
+        tasks_module,
+        "apply_runtime_settings",
+        lambda settings, basic, advanced: settings,
+    )
+    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
+    monkeypatch.setattr(
+        tasks_module,
+        "RuntimeAdvancedSettingsRepository",
+        _RuntimeAdvancedSettingsRepository,
+    )
+    monkeypatch.setattr(tasks_module, "BackupRunRepository", FakeBackupRunRepository)
+    monkeypatch.setattr(
+        tasks_module,
+        "utc_now",
+        lambda: datetime(2026, 5, 4, 14, 0, 1, tzinfo=tasks_module.UTC),
+    )
+    monkeypatch.setattr(tasks_module, "run_backup_snapshot", fake_run_backup_snapshot)
+
+    result = await tasks_module.run_scheduled_backup_if_due()
+
+    assert result == 77
+    assert called["push_to_git"] is False
+    assert engine.disposed is True

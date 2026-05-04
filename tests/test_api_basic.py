@@ -6,6 +6,10 @@ import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.domain.operations.repository import (
+    RuntimeAdvancedSettingsRepository,
+    RuntimeSettingsRepository,
+)
 from tg_bot_aggregator.infra.events import MemoryEventBus
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.main import create_app
@@ -794,6 +798,39 @@ async def test_runtime_settings_patch_persists_local_secret_and_infra_settings()
     assert patched["backup_schedule_enabled"] is True
     assert loaded["backup_schedule_interval_seconds"] == 3600
     assert loaded["backup_schedule_push_to_git"] is True
+
+
+async def test_app_lifespan_loads_persisted_runtime_settings() -> None:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        await RuntimeSettingsRepository(session).upsert(
+            telegram_bot_api_base_url="http://127.0.0.1:8081",
+            backup_git_repo_url="https://git.sh-inc.ru/avm/tg-bots-backup.git",
+        )
+        await RuntimeAdvancedSettingsRepository(session).upsert(
+            backup_git_service="gitea",
+            backup_git_api_token="secret-token",
+        )
+        await session.commit()
+
+    app = create_app(
+        settings=Settings(DATABASE_URL="sqlite+aiosqlite:///:memory:"),
+        session_factory=session_factory,
+        event_bus=MemoryEventBus(),
+        bot_api_client=TelegramBotApiClient("http://telegram-bot-api:8081"),
+    )
+
+    async with app.router.lifespan_context(app):
+        assert app.state.settings.telegram_bot_api_base_url == "http://127.0.0.1:8081"
+        assert app.state.settings.backup_git_repo_url == "https://git.sh-inc.ru/avm/tg-bots-backup.git"
+        assert app.state.settings.backup_git_service == "gitea"
+        assert app.state.settings.backup_git_api_token == "secret-token"
+        assert app.state.bot_api_client.base_url == "http://127.0.0.1:8081"
+
+    await engine.dispose()
 
 
 async def test_backup_run_exports_json_snapshot() -> None:
