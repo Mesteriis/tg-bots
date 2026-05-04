@@ -40,6 +40,7 @@ def test_rnet_deploy_workflow_uses_pve_deploy_and_nginx_update() -> None:
     assert "uv sync --extra dev" in workflow
     assert "pve-deploy ensure $CT_ID $CT_NAME" in workflow
     assert "pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml" in workflow
+    assert "up -d --build --force-recreate --remove-orphans" in workflow
     assert "deploy/nginx/update-nginx-ui.sh" in workflow
     assert "curl -fsS \"http://${APP_IP}:8000/api/v1/health\"" in workflow
     assert "Waiting for app health, attempt ${attempt}/45" in workflow

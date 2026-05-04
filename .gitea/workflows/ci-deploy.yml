@@ -62,7 +62,10 @@ jobs:
           EOF
 
       - name: Deploy Docker Compose stack
-        run: pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml
+        run: |
+          pve-deploy deploy $CT_ID . deploy/docker-compose.lxc.yml
+          APP_IP="$(bash deploy/proxmox/ct-ip.sh "$CT_ID")"
+          ssh "root@${APP_IP}" "cd /opt/app && docker compose -f deploy/docker-compose.lxc.yml up -d --build --force-recreate --remove-orphans"
 
       - name: Update nginx-ui upstream
         run: |
