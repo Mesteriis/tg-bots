@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import httpx
@@ -144,12 +145,14 @@ def _start_wireguard_server_container(
     config_root: Path,
     network: Network,
 ) -> DockerContainer:
+    uid = str(os.getuid())
+    gid = str(os.getgid())
     container = (
         DockerContainer("lscr.io/linuxserver/wireguard:latest")
         .with_network(network)
         .with_network_aliases("wireguard-server")
-        .with_env("PUID", "1000")
-        .with_env("PGID", "1000")
+        .with_env("PUID", uid)
+        .with_env("PGID", gid)
         .with_env("TZ", "UTC")
         .with_env("SERVERURL", "wireguard-server")
         .with_env("SERVERPORT", "51820")
