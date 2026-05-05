@@ -23,6 +23,8 @@ jobs:
     runs-on: python
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: uv sync --extra dev --locked
       - run: uv run ruff check .
       - run: uv run pytest -q
@@ -33,6 +35,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Ensure Proxmox LXC
         run: pve-deploy ensure "$CT_ID" "$CT_NAME" "$CT_MEMORY" "$CT_CORES" "$CT_DISK"

@@ -68,6 +68,7 @@ def test_rnet_deploy_workflow_uses_pve_deploy_and_nginx_update() -> None:
 
     assert "concurrency:" in workflow
     assert "runs-on: python" in workflow
+    assert "fetch-depth: 0" in workflow
     assert "uv sync --extra dev --locked" in workflow
     assert 'pve-deploy ensure "$CT_ID" "$CT_NAME"' in workflow
     assert "deploy/env/prepare-lxc-bundle.sh" in workflow
