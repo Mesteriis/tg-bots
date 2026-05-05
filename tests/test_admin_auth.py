@@ -53,7 +53,7 @@ async def test_local_admin_api_requires_browser_session(tmp_path: Path) -> None:
     client, _ = await _client(tmp_path)
 
     async with client:
-        response = await client.get("/api/v1/health", headers={"Host": "localhost:8000"})
+        response = await client.get("/api/v1/bots", headers={"Host": "localhost:8000"})
 
     assert response.status_code == 401
     assert response.json() == {"detail": "admin session required"}
@@ -72,13 +72,13 @@ async def test_bootstrap_rotate_creates_auth_file_and_opens_admin_session(tmp_pa
                 "new_password": "change-me-123",
             },
         )
-        health = await client.get("/api/v1/health", headers={"Host": "localhost:8000"})
+        bots = await client.get("/api/v1/bots", headers={"Host": "localhost:8000"})
         state = await client.get("/api/v1/auth/admin/state")
 
     assert rotated.status_code == 204
     assert auth_file.exists()
     assert "tg_admin_session" in rotated.cookies
-    assert health.status_code == 200
+    assert bots.status_code == 200
     assert state.json()["authenticated"] is True
     assert state.json()["bootstrap_required"] is False
     assert state.json()["username"] == "owner"
@@ -98,12 +98,12 @@ async def test_password_login_and_logout_roundtrip(tmp_path: Path) -> None:
             },
         )
         logout = await client.post("/api/v1/auth/admin/logout")
-        denied = await client.get("/api/v1/health", headers={"Host": "localhost:8000"})
+        denied = await client.get("/api/v1/bots", headers={"Host": "localhost:8000"})
         login = await client.post(
             "/api/v1/auth/admin/login",
             json={"username": "owner", "password": "change-me-123"},
         )
-        allowed = await client.get("/api/v1/health", headers={"Host": "localhost:8000"})
+        allowed = await client.get("/api/v1/bots", headers={"Host": "localhost:8000"})
 
     assert logout.status_code == 204
     assert denied.status_code == 401

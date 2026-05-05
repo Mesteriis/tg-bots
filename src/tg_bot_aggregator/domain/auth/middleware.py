@@ -50,6 +50,12 @@ class AdminSessionAuthMiddleware(BaseHTTPMiddleware):
             return False
         if path == f"{settings.api_v1_prefix}/auth/session":
             return False
+        if path in {
+            f"{settings.api_v1_prefix}/health",
+            f"{settings.api_v1_prefix}/mcp/settings",
+            f"{settings.api_v1_prefix}/reliability/summary",
+        }:
+            return False
         if not path.startswith(settings.api_v1_prefix):
             return False
         host = request.headers.get("x-forwarded-host") or request.headers.get("host")
