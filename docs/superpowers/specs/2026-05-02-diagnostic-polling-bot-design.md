@@ -34,7 +34,7 @@ Out of scope:
 The diagnostic bot is a separate process:
 
 ```bash
-python -m tg_bot_aggregator.diagnostics.bot
+python -m tg_bot_aggregator.domain.diagnostics.bot
 ```
 
 Docker Compose runs it as a dedicated `diagnostic-bot` service. It shares the same code image, SQLite data volume, and Bot API base URL configuration as the app.

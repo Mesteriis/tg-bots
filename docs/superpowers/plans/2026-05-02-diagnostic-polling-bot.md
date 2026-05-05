@@ -195,7 +195,7 @@ diagnostic-bot:
   env_file:
     - path: .env
       required: false
-  command: ["python", "-m", "tg_bot_aggregator.diagnostics.bot"]
+  command: ["python", "-m", "tg_bot_aggregator.domain.diagnostics.bot"]
   environment:
     DATABASE_URL: sqlite+aiosqlite:////data/app.db
     TELEGRAM_BOT_API_BASE_URL: http://telegram-bot-api:8081
@@ -255,7 +255,7 @@ Expected: compose config renders.
 Run:
 
 ```bash
-python -m tg_bot_aggregator.diagnostics.bot --once
+python -m tg_bot_aggregator.domain.diagnostics.bot --once
 ```
 
 Expected when no diagnostic bot is enabled on the dashboard: prints `disabled` and exits without a stack trace.
