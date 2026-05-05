@@ -72,10 +72,10 @@ jobs:
           curl -fsS "http://${APP_IP}:8000/api/v1/health"
           curl -fsS "http://${APP_IP}:8000/api/v1/mcp/settings"
           curl -fsS "http://${APP_IP}:8000/api/v1/reliability/summary"
-          curl -fsSI "http://${APP_IP}:8000/" | grep -q "200"
+          curl -fsS -o /dev/null "http://${APP_IP}:8000/"
           NGINX_IP="$(ssh "root@${PVE_HOST}" "pct exec ${NGINX_UI_CT_ID} -- hostname -I | awk '{print \$1}'")"
-          curl -fsSI -H "Host: tg.sh-inc.ru" "http://${NGINX_IP}/" | grep -q "200"
-          curl -fsSI -H "Host: tg.sh-inc.dev" "http://${NGINX_IP}/" | grep -q "200"
+          curl -fsS -o /dev/null -H "Host: tg.sh-inc.ru" "http://${NGINX_IP}/"
+          curl -fsS -o /dev/null -H "Host: tg.sh-inc.dev" "http://${NGINX_IP}/"
 
       - name: Push verified main to GitHub mirror
         run: |

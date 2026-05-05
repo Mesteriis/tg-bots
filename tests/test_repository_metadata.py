@@ -76,6 +76,7 @@ def test_rnet_deploy_workflow_uses_pve_deploy_and_nginx_update() -> None:
     assert 'bash deploy/nginx/update-nginx-ui.sh "$NGINX_UI_CT_ID"' in workflow
     assert "Smoke test app and proxy" in workflow
     assert "curl -fsS \"http://${APP_IP}:8000/api/v1/health\"" in workflow
+    assert 'curl -fsS -o /dev/null "http://${APP_IP}:8000/"' in workflow
     assert "Waiting for app health, attempt ${attempt}/45" in workflow
     assert "git push github HEAD:main --force" in workflow
 
