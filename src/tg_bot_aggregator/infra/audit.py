@@ -3,7 +3,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.models import AuditEvent
+from tg_bot_aggregator.domain.audit.models import AuditEvent
 
 
 class AuditRepository:

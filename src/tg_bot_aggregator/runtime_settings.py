@@ -1,9 +1,10 @@
+from datetime import UTC, datetime
 from typing import Any
 
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.domain.operations.models import RuntimeAdvancedSettings, RuntimeSettings
+from tg_bot_aggregator.domain.operations.schemas import RuntimeSettingsRead
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
-from tg_bot_aggregator.models import RuntimeAdvancedSettings, RuntimeSettings
-from tg_bot_aggregator.schemas import RuntimeSettingsRead
 
 SETTING_MODEL_FIELDS = {
     "telegram_bot_api_base_url",
@@ -34,6 +35,9 @@ SETTING_MODEL_FIELDS = {
     "backup_git_branch",
     "backup_git_path",
     "backup_include_secrets",
+    "telegram_egress_mode",
+    "telegram_egress_enabled",
+    "telegram_egress_provider",
 }
 
 ADVANCED_SETTING_FIELDS = {
@@ -80,6 +84,12 @@ def runtime_update_to_model_values(values: dict[str, Any]) -> dict[str, Any]:
     return model_values
 
 
+def _normalize_runtime_timestamp(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=UTC)
+
+
 def apply_runtime_settings(
     base: Settings,
     row: RuntimeSettings | None,
@@ -106,6 +116,21 @@ def runtime_settings_read(
     advanced: RuntimeAdvancedSettings | None = None,
 ) -> RuntimeSettingsRead:
     effective = apply_runtime_settings(base, row, advanced)
+    telegram_egress_status = (
+        row.telegram_egress_last_status
+        if row is not None and row.telegram_egress_last_status is not None
+        else "disconnected"
+    )
+    telegram_egress_error = row.telegram_egress_last_error if row is not None else None
+    telegram_egress_connected_at = (
+        _normalize_runtime_timestamp(row.telegram_egress_connected_at) if row is not None else None
+    )
+    telegram_egress_last_handshake_at = (
+        _normalize_runtime_timestamp(row.telegram_egress_last_handshake_at)
+        if row is not None
+        else None
+    )
+    telegram_egress_last_egress_ip = row.telegram_egress_last_egress_ip if row is not None else None
     return RuntimeSettingsRead(
         app_host=effective.app_host,
         app_port=effective.app_port,
@@ -155,6 +180,14 @@ def runtime_settings_read(
         backup_schedule_enabled=effective.backup_schedule_enabled,
         backup_schedule_interval_seconds=effective.backup_schedule_interval_seconds,
         backup_schedule_push_to_git=effective.backup_schedule_push_to_git,
+        telegram_egress_mode=effective.telegram_egress_mode,
+        telegram_egress_enabled=effective.telegram_egress_enabled,
+        telegram_egress_provider=effective.telegram_egress_provider,
+        telegram_egress_last_status=telegram_egress_status,
+        telegram_egress_last_error=telegram_egress_error,
+        telegram_egress_connected_at=telegram_egress_connected_at,
+        telegram_egress_last_handshake_at=telegram_egress_last_handshake_at,
+        telegram_egress_last_egress_ip=telegram_egress_last_egress_ip,
     )
 
 

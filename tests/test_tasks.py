@@ -6,15 +6,17 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+import tg_bot_aggregator.infra.uow as uow_module
 import tg_bot_aggregator.tasks as tasks_module
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.orm import Base
 from tg_bot_aggregator.domain.bots.repository import BotRepository
 from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
 from tg_bot_aggregator.domain.ops.repository import (
     OpsAutomationRuleRepository,
     OpsRecommendationRepository,
 )
-from tg_bot_aggregator.models import Base, SendHistory
+from tg_bot_aggregator.domain.sending.models import SendHistory
 from tg_bot_aggregator.tasks import (
     backup_snapshot,
     create_broker,
@@ -49,12 +51,48 @@ class _FakeEngine:
         self.disposed = True
 
 
+class _FakeRuntimeDb:
+    def __init__(self, settings: Settings, session_factory: object, engine: _FakeEngine) -> None:
+        self.settings = settings
+        self.session_factory = session_factory
+        self.engine = engine
+
+    async def close(self) -> None:
+        await self.engine.dispose()
+
+
+def _resolver(
+    settings: Settings,
+    session_factory: object,
+    engine: _FakeEngine,
+):
+    async def _resolve(_base_settings: Settings) -> _FakeRuntimeDb:
+        return _FakeRuntimeDb(
+            settings.model_copy(update={"sqlite_uow_lock_enabled": False}),
+            session_factory,
+            engine,
+        )
+
+    return _resolve
+
+
 class _FakeSession:
     def __init__(self) -> None:
         self.committed = False
+        self.rolled_back = False
+        self.closed = False
 
     async def commit(self) -> None:
         self.committed = True
+
+    async def rollback(self) -> None:
+        self.rolled_back = True
+
+    async def close(self) -> None:
+        self.closed = True
+
+    def in_transaction(self) -> bool:
+        return not (self.committed or self.rolled_back)
 
 
 class _FakeSessionContext:
@@ -157,20 +195,23 @@ async def test_due_send_history_uses_ready_for_lease_and_closes_redis(
             return rows[0]
 
     monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
-    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
-    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(
+        tasks_module,
+        "resolve_runtime_database_state",
+        _resolver(settings, _FakeSession, engine),
+    )
     monkeypatch.setattr(
         tasks_module,
         "apply_runtime_settings",
         lambda settings, basic, advanced: settings,
     )
-    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
+    monkeypatch.setattr(uow_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
     monkeypatch.setattr(
-        tasks_module,
+        uow_module,
         "RuntimeAdvancedSettingsRepository",
         _RuntimeAdvancedSettingsRepository,
     )
-    monkeypatch.setattr(tasks_module, "SendHistoryRepository", FakeSendHistoryRepository)
+    monkeypatch.setattr(uow_module, "SendHistoryRepository", FakeSendHistoryRepository)
     monkeypatch.setattr(tasks_module, "SendService", FakeSendService)
     monkeypatch.setattr(tasks_module.redis, "from_url", lambda url: redis_client)
     monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
@@ -212,8 +253,11 @@ async def test_refresh_analytics_target_closes_event_bus(
             return 11
 
     monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
-    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
-    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(
+        tasks_module,
+        "resolve_runtime_database_state",
+        _resolver(settings, _FakeSession, engine),
+    )
     monkeypatch.setattr(tasks_module, "MtprotoService", FakeMtprotoService)
     monkeypatch.setattr(tasks_module, "AnalyticsService", FakeAnalyticsService)
     monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
@@ -246,8 +290,11 @@ async def test_refresh_all_analytics_targets_closes_event_bus(
             return [1, 2]
 
     monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
-    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
-    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(
+        tasks_module,
+        "resolve_runtime_database_state",
+        _resolver(settings, _FakeSession, engine),
+    )
     monkeypatch.setattr(tasks_module, "MtprotoService", FakeMtprotoService)
     monkeypatch.setattr(tasks_module, "AnalyticsService", FakeAnalyticsService)
     monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
@@ -281,16 +328,19 @@ async def test_send_batch_closes_event_bus(
             pass
 
     monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
-    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
-    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(
+        tasks_module,
+        "resolve_runtime_database_state",
+        _resolver(settings, _FakeSession, engine),
+    )
     monkeypatch.setattr(
         tasks_module,
         "apply_runtime_settings",
         lambda settings, basic, advanced: settings,
     )
-    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
+    monkeypatch.setattr(uow_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
     monkeypatch.setattr(
-        tasks_module,
+        uow_module,
         "RuntimeAdvancedSettingsRepository",
         _RuntimeAdvancedSettingsRepository,
     )
@@ -374,12 +424,6 @@ async def test_run_ops_automation_rules_applies_low_risk_create_and_publishes_ev
         "apply_runtime_settings",
         lambda settings, basic, advanced: settings,
     )
-    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
-    monkeypatch.setattr(
-        tasks_module,
-        "RuntimeAdvancedSettingsRepository",
-        _RuntimeAdvancedSettingsRepository,
-    )
     monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
 
     result = await run_ops_automation_rules()
@@ -461,12 +505,6 @@ async def test_run_ops_automation_rules_uses_base_database_for_settings_and_writ
 
     _FakeEventBus.instances = []
     monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
-    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
-    monkeypatch.setattr(
-        tasks_module,
-        "RuntimeAdvancedSettingsRepository",
-        AdvancedRepositoryWithDatabaseOverride,
-    )
     monkeypatch.setattr(tasks_module, "RedisEventBus", _FakeEventBus)
 
     result = await run_ops_automation_rules()
@@ -613,20 +651,23 @@ async def test_scheduled_backup_if_due_accepts_naive_finished_at(
         return 77
 
     monkeypatch.setattr(tasks_module, "get_settings", lambda: settings)
-    monkeypatch.setattr(tasks_module, "create_engine", lambda settings: engine)
-    monkeypatch.setattr(tasks_module, "create_session_factory", lambda engine: _FakeSessionContext)
+    monkeypatch.setattr(
+        tasks_module,
+        "resolve_runtime_database_state",
+        _resolver(settings, _FakeSession, engine),
+    )
     monkeypatch.setattr(
         tasks_module,
         "apply_runtime_settings",
         lambda settings, basic, advanced: settings,
     )
-    monkeypatch.setattr(tasks_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
+    monkeypatch.setattr(uow_module, "RuntimeSettingsRepository", _RuntimeSettingsRepository)
     monkeypatch.setattr(
-        tasks_module,
+        uow_module,
         "RuntimeAdvancedSettingsRepository",
         _RuntimeAdvancedSettingsRepository,
     )
-    monkeypatch.setattr(tasks_module, "BackupRunRepository", FakeBackupRunRepository)
+    monkeypatch.setattr(uow_module, "BackupRunRepository", FakeBackupRunRepository)
     monkeypatch.setattr(
         tasks_module,
         "utc_now",

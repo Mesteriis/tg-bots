@@ -5,25 +5,19 @@ from taskiq_redis import RedisAsyncResultBackend, RedisStreamBroker
 
 from tg_bot_aggregator.audit import record_audit_event
 from tg_bot_aggregator.core.config import Settings, get_settings
-from tg_bot_aggregator.core.db import create_engine, create_session_factory
+from tg_bot_aggregator.core.db import resolve_runtime_database_state
+from tg_bot_aggregator.core.time import utc_now
 from tg_bot_aggregator.domain.analytics.mtproto import MtprotoService
-from tg_bot_aggregator.domain.analytics.repository import MtprotoSessionRepository
 from tg_bot_aggregator.domain.analytics.service import AnalyticsService
-from tg_bot_aggregator.domain.backups.repository import BackupRunRepository
 from tg_bot_aggregator.domain.backups.service import BackupService, BackupServiceError
 from tg_bot_aggregator.domain.batches.service import WorkflowService
-from tg_bot_aggregator.domain.operations.repository import (
-    RuntimeAdvancedSettingsRepository,
-    RuntimeSettingsRepository,
-)
 from tg_bot_aggregator.domain.ops.repository import OpsAutomationRuleRepository
 from tg_bot_aggregator.domain.ops.service import TelegramOpsService
 from tg_bot_aggregator.domain.reliability.service import RedisRateLimitStore, SendRateLimiter
-from tg_bot_aggregator.domain.sending.repository import SendHistoryRepository
 from tg_bot_aggregator.domain.sending.service import SendService
 from tg_bot_aggregator.infra.events import RedisEventBus
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
-from tg_bot_aggregator.models import utc_now
+from tg_bot_aggregator.infra.uow import UnitOfWork
 from tg_bot_aggregator.runtime_settings import apply_runtime_settings
 
 
@@ -64,19 +58,19 @@ async def _close_event_bus(event_bus: RedisEventBus | None) -> None:
 
 
 async def run_refresh_analytics_target(target_id: int, run_id: int | None = None) -> int:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
+    runtime_db = await resolve_runtime_database_state(get_settings())
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     events: RedisEventBus | None = None
     try:
-        async with session_factory() as session:
-            mtproto = MtprotoService(settings, MtprotoSessionRepository(session))
+        async with UnitOfWork(session_factory, settings=settings) as uow:
+            mtproto = MtprotoService(settings, uow.mtproto_sessions)
             events = RedisEventBus(settings.redis_url)
-            service = AnalyticsService(session, mtproto, events)
+            service = AnalyticsService(uow.session, mtproto, events)
             return await service.refresh_target(target_id, run_id)
     finally:
         await _close_event_bus(events)
-        await engine.dispose()
+        await runtime_db.close()
 
 
 @broker.task
@@ -86,39 +80,39 @@ async def refresh_analytics_target(target_id: int, run_id: int | None = None) ->
 
 @broker.task
 async def refresh_all_analytics_targets() -> list[int]:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
+    runtime_db = await resolve_runtime_database_state(get_settings())
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     events: RedisEventBus | None = None
     try:
-        async with session_factory() as session:
-            mtproto = MtprotoService(settings, MtprotoSessionRepository(session))
+        async with UnitOfWork(session_factory, settings=settings) as uow:
+            mtproto = MtprotoService(settings, uow.mtproto_sessions)
             events = RedisEventBus(settings.redis_url)
-            service = AnalyticsService(session, mtproto, events)
+            service = AnalyticsService(uow.session, mtproto, events)
             return await service.refresh_all()
     finally:
         await _close_event_bus(events)
-        await engine.dispose()
+        await runtime_db.close()
 
 
 async def run_send_history(send_history_id: int) -> int:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
+    runtime_db = await resolve_runtime_database_state(get_settings())
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     redis_client: redis.Redis | None = None
     events: RedisEventBus | None = None
     try:
-        async with session_factory() as session:
+        async with UnitOfWork(session_factory, settings=settings) as uow:
             settings = apply_runtime_settings(
                 settings,
-                await RuntimeSettingsRepository(session).get(),
-                await RuntimeAdvancedSettingsRepository(session).get(),
+                await uow.runtime_settings.get(),
+                await uow.runtime_advanced_settings.get(),
             )
             redis_client = redis.from_url(settings.redis_url)
             rate_limiter = _create_send_rate_limiter(settings, redis_client)
             events = RedisEventBus(settings.redis_url)
             service = SendService(
-                session,
+                uow.session,
                 TelegramBotApiClient(settings.telegram_bot_api_base_url),
                 settings,
                 events,
@@ -132,7 +126,7 @@ async def run_send_history(send_history_id: int) -> int:
     finally:
         await _close_event_bus(events)
         await _close_redis_client(redis_client)
-        await engine.dispose()
+        await runtime_db.close()
 
 
 @broker.task
@@ -141,33 +135,33 @@ async def send_history(send_history_id: int) -> int:
 
 
 async def run_due_send_history(limit: int = 100) -> list[int]:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
+    runtime_db = await resolve_runtime_database_state(get_settings())
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     redis_client: redis.Redis | None = None
     events: RedisEventBus | None = None
     try:
-        async with session_factory() as session:
+        async with UnitOfWork(session_factory, settings=settings) as uow:
             settings = apply_runtime_settings(
                 settings,
-                await RuntimeSettingsRepository(session).get(),
-                await RuntimeAdvancedSettingsRepository(session).get(),
+                await uow.runtime_settings.get(),
+                await uow.runtime_advanced_settings.get(),
             )
             redis_client = redis.from_url(settings.redis_url)
             rate_limiter = _create_send_rate_limiter(settings, redis_client)
             events = RedisEventBus(settings.redis_url)
             service = SendService(
-                session,
+                uow.session,
                 TelegramBotApiClient(settings.telegram_bot_api_base_url),
                 settings,
                 events,
                 rate_limiter=rate_limiter,
             )
-            history = SendHistoryRepository(session)
+            history = uow.sending
             now = utc_now()
             stale_cutoff = now - timedelta(seconds=settings.send_stale_lock_grace_seconds)
             await history.release_stale_locks(stale_cutoff)
-            await session.commit()
+            await uow.commit()
             due_rows = await history.list_ready_for_lease(
                 now,
                 limit=limit,
@@ -186,7 +180,7 @@ async def run_due_send_history(limit: int = 100) -> list[int]:
     finally:
         await _close_event_bus(events)
         await _close_redis_client(redis_client)
-        await engine.dispose()
+        await runtime_db.close()
 
 
 @broker.task
@@ -195,21 +189,21 @@ async def due_send_history(limit: int = 100) -> list[int]:
 
 
 async def run_send_batch(batch_id: int) -> int:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
+    runtime_db = await resolve_runtime_database_state(get_settings())
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     events: RedisEventBus | None = None
     try:
-        async with session_factory() as session:
+        async with UnitOfWork(session_factory, settings=settings) as uow:
             settings = apply_runtime_settings(
                 settings,
-                await RuntimeSettingsRepository(session).get(),
-                await RuntimeAdvancedSettingsRepository(session).get(),
+                await uow.runtime_settings.get(),
+                await uow.runtime_advanced_settings.get(),
             )
             events = RedisEventBus(settings.redis_url)
             service = WorkflowService(
                 SendService(
-                    session,
+                    uow.session,
                     TelegramBotApiClient(settings.telegram_bot_api_base_url),
                     settings,
                     events,
@@ -219,7 +213,7 @@ async def run_send_batch(batch_id: int) -> int:
             return batch.id
     finally:
         await _close_event_bus(events)
-        await engine.dispose()
+        await runtime_db.close()
 
 
 @broker.task
@@ -228,19 +222,19 @@ async def send_batch(batch_id: int) -> int:
 
 
 async def run_backup_snapshot(push_to_git: bool | None = None) -> int:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
+    runtime_db = await resolve_runtime_database_state(get_settings())
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     try:
-        async with session_factory() as session:
+        async with UnitOfWork(session_factory, settings=settings) as uow:
             settings = apply_runtime_settings(
                 settings,
-                await RuntimeSettingsRepository(session).get(),
-                await RuntimeAdvancedSettingsRepository(session).get(),
+                await uow.runtime_settings.get(),
+                await uow.runtime_advanced_settings.get(),
             )
-            runs = BackupRunRepository(session)
+            runs = uow.backups
             run = await runs.create(status="started")
-            service = BackupService(session, settings)
+            service = BackupService(uow.session, settings)
             resolved_push_to_git = (
                 settings.backup_schedule_push_to_git if push_to_git is None else push_to_git
             )
@@ -263,7 +257,7 @@ async def run_backup_snapshot(push_to_git: bool | None = None) -> int:
                     git_commit=commit,
                 )
                 await record_audit_event(
-                    session,
+                    uow.session,
                     source="scheduler",
                     action="backup.run",
                     status="succeeded",
@@ -284,7 +278,7 @@ async def run_backup_snapshot(push_to_git: bool | None = None) -> int:
                     error_message=str(exc),
                 )
                 await record_audit_event(
-                    session,
+                    uow.session,
                     source="scheduler",
                     action="backup.run",
                     status="failed",
@@ -293,12 +287,12 @@ async def run_backup_snapshot(push_to_git: bool | None = None) -> int:
                     message=str(exc),
                     metadata={"push_to_git": resolved_push_to_git},
                 )
-                await session.commit()
+                await uow.commit()
                 raise
-            await session.commit()
+            await uow.commit()
             return run.id
     finally:
-        await engine.dispose()
+        await runtime_db.close()
 
 
 @broker.task
@@ -307,19 +301,19 @@ async def backup_snapshot(push_to_git: bool | None = None) -> int:
 
 
 async def run_scheduled_backup_if_due() -> int | None:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
+    runtime_db = await resolve_runtime_database_state(get_settings())
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     try:
-        async with session_factory() as session:
+        async with UnitOfWork(session_factory, settings=settings) as uow:
             settings = apply_runtime_settings(
                 settings,
-                await RuntimeSettingsRepository(session).get(),
-                await RuntimeAdvancedSettingsRepository(session).get(),
+                await uow.runtime_settings.get(),
+                await uow.runtime_advanced_settings.get(),
             )
             if not settings.backup_schedule_enabled:
                 return None
-            latest_runs = await BackupRunRepository(session).list(limit=1)
+            latest_runs = await uow.backups.list(limit=1)
             latest = latest_runs[0] if latest_runs else None
             if latest and latest.finished_at:
                 finished_at = latest.finished_at
@@ -331,7 +325,7 @@ async def run_scheduled_backup_if_due() -> int | None:
                 if utc_now() < next_due_at:
                     return None
     finally:
-        await engine.dispose()
+        await runtime_db.close()
     return await run_backup_snapshot(settings.backup_schedule_push_to_git)
 
 
@@ -341,9 +335,9 @@ async def scheduled_backup_if_due() -> int | None:
 
 
 async def run_ops_automation_rules() -> dict[str, int]:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
+    runtime_db = await resolve_runtime_database_state(get_settings())
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     events: RedisEventBus | None = None
     result = {"applied": 0, "skipped": 0, "failed": 0, "rules_checked": 0}
     try:
@@ -378,7 +372,7 @@ async def run_ops_automation_rules() -> dict[str, int]:
         return result
     finally:
         await _close_event_bus(events)
-        await engine.dispose()
+        await runtime_db.close()
 
 
 @broker.task

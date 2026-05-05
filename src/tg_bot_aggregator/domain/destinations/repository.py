@@ -9,7 +9,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.core.errors import NotFoundError
-from tg_bot_aggregator.models import Destination, DestinationHealth, utc_now
+from tg_bot_aggregator.domain.destinations.models import (
+    Destination,
+    DestinationHealth,
+    utc_now,
+)
 
 
 async def _get_or_none(session: AsyncSession, model: type[Any], row_id: int) -> Any | None:

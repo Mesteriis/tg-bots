@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from tg_bot_aggregator.domain.backups import service as backup_service
-from tg_bot_aggregator.schemas import RuntimeSettingsRead
+from tg_bot_aggregator.domain.operations.schemas import RuntimeSettingsRead
 
 
 def test_run_git_reports_missing_git_binary(monkeypatch: pytest.MonkeyPatch) -> None:

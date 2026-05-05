@@ -5,6 +5,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.orm import Base
+from tg_bot_aggregator.core.time import utc_now
 from tg_bot_aggregator.domain.bots.repository import BotRepository
 from tg_bot_aggregator.domain.reliability.service import (
     MemoryRateLimitStore,
@@ -19,7 +21,6 @@ from tg_bot_aggregator.domain.sending.repository import (
     SendHistoryRepository,
 )
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiError
-from tg_bot_aggregator.models import Base, utc_now
 
 
 async def _create_leased_history(db_session: AsyncSession):

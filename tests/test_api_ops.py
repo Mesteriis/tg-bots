@@ -3,6 +3,8 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.orm import Base
+from tg_bot_aggregator.core.time import utc_now
 from tg_bot_aggregator.domain.bots.repository import BotRepository
 from tg_bot_aggregator.domain.diagnostics.repository import DiagnosticUpdateRepository
 from tg_bot_aggregator.domain.mcp.repository import McpSettingsRepository
@@ -17,7 +19,6 @@ from tg_bot_aggregator.domain.ops.repository import (
 from tg_bot_aggregator.infra.audit import AuditRepository
 from tg_bot_aggregator.infra.events import MemoryEventBus
 from tg_bot_aggregator.main import create_app
-from tg_bot_aggregator.models import Base, utc_now
 
 
 @pytest.fixture
@@ -247,3 +248,22 @@ async def test_get_operations_settings_is_read_only_when_empty(
     async with session_factory() as session:
         assert await RuntimeSettingsRepository(session).get() is None
         assert await RuntimeAdvancedSettingsRepository(session).get() is None
+
+
+async def test_get_operations_settings_includes_telegram_egress_fields(
+    ops_client: tuple[httpx.AsyncClient, async_sessionmaker, MemoryEventBus],
+) -> None:
+    client, _, _ = ops_client
+
+    response = await client.get("/api/v1/operations/settings")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["telegram_egress_mode"] == "direct"
+    assert payload["telegram_egress_enabled"] is False
+    assert payload["telegram_egress_provider"] is None
+    assert payload["telegram_egress_last_status"] == "disconnected"
+    assert payload["telegram_egress_last_error"] is None
+    assert payload["telegram_egress_connected_at"] is None
+    assert payload["telegram_egress_last_handshake_at"] is None
+    assert payload["telegram_egress_last_egress_ip"] is None

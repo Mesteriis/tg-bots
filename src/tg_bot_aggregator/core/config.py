@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
@@ -32,7 +33,8 @@ class Settings(BaseSettings):
     telegram_api_id: str | None = Field(default=None, validation_alias="TELEGRAM_API_ID")
     telegram_api_hash: str | None = Field(default=None, validation_alias="TELEGRAM_API_HASH")
     telegram_bot_api_base_url: str = Field(
-        default="http://telegram-bot-api:8081", validation_alias="TELEGRAM_BOT_API_BASE_URL"
+        default="https://api.telegram.org",
+        validation_alias="TELEGRAM_BOT_API_BASE_URL",
     )
 
     shared_media_root: str = Field(default="/shared/media", validation_alias="SHARED_MEDIA_ROOT")
@@ -58,6 +60,11 @@ class Settings(BaseSettings):
     )
     telethon_session_dir: str = Field(
         default="/data/telethon", validation_alias="TELETHON_SESSION_DIR"
+    )
+    admin_auth_file: str | None = Field(default=None, validation_alias="ADMIN_AUTH_FILE")
+    admin_session_ttl_seconds: int = Field(
+        default=2_592_000,
+        validation_alias="ADMIN_SESSION_TTL_SECONDS",
     )
     diagnostic_poll_timeout_seconds: int = Field(
         default=30, validation_alias="DIAGNOSTIC_POLL_TIMEOUT_SECONDS"
@@ -161,6 +168,38 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="BACKUP_SCHEDULE_PUSH_TO_GIT",
     )
+    telegram_egress_mode: Literal["direct", "wireguard", "openvpn"] = Field(
+        default="direct",
+        validation_alias="TELEGRAM_EGRESS_MODE",
+    )
+    telegram_egress_enabled: bool = Field(
+        default=False,
+        validation_alias="TELEGRAM_EGRESS_ENABLED",
+    )
+    telegram_egress_provider: Literal["wireguard", "openvpn"] | None = Field(
+        default=None,
+        validation_alias="TELEGRAM_EGRESS_PROVIDER",
+    )
+    telegram_egress_state_dir: str = Field(
+        default="/data/telegram-egress",
+        validation_alias="TELEGRAM_EGRESS_STATE_DIR",
+    )
+    telegram_egress_control_url: str | None = Field(
+        default=None,
+        validation_alias="TELEGRAM_EGRESS_CONTROL_URL",
+    )
+    sqlite_uow_lock_enabled: bool = Field(
+        default=True,
+        validation_alias="SQLITE_UOW_LOCK_ENABLED",
+    )
+    sqlite_uow_lock_timeout_seconds: int = Field(
+        default=60,
+        validation_alias="SQLITE_UOW_LOCK_TIMEOUT_SECONDS",
+    )
+    sqlite_uow_lock_wait_seconds: int = Field(
+        default=60,
+        validation_alias="SQLITE_UOW_LOCK_WAIT_SECONDS",
+    )
 
     @field_validator(
         "cors_allowed_origins",
@@ -191,6 +230,12 @@ class Settings(BaseSettings):
     def is_local_bot_api(self) -> bool:
         local_prefixes = ("http://telegram-bot-api", "http://localhost", "http://127.0.0.1")
         return self.telegram_bot_api_base_url.startswith(local_prefixes)
+
+    @property
+    def effective_admin_auth_file(self) -> str:
+        if self.admin_auth_file:
+            return self.admin_auth_file
+        return str(Path(self.telethon_session_dir).resolve().parent / "admin-auth.json")
 
 
 @lru_cache

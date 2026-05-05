@@ -3,19 +3,24 @@ from pathlib import Path
 from tg_bot_aggregator.core.config import Settings
 
 
-def test_settings_defaults_are_local_and_versioned() -> None:
+def test_settings_defaults_are_cloud_for_local_runtime_and_versioned() -> None:
     settings = Settings()
 
     assert settings.app_host == "127.0.0.1"
     assert settings.api_v1_prefix == "/api/v1"
     assert settings.mcp_v1_prefix == "/mcp/v1"
     assert settings.shared_media_root == "/shared/media"
-    assert settings.telegram_bot_api_base_url == "http://telegram-bot-api:8081"
+    assert settings.telegram_bot_api_base_url == "https://api.telegram.org"
     assert settings.max_local_file_bytes == 2_097_152_000
     assert settings.diagnostic_poll_timeout_seconds == 30
     assert settings.diagnostic_retry_delay_seconds == 5.0
     assert settings.protected_api_hosts == ["tg.sh-inc.ru", "tg.sh-inc.dev"]
-    assert settings.is_local_bot_api is True
+    assert settings.is_local_bot_api is False
+    assert settings.telegram_egress_mode == "direct"
+    assert settings.telegram_egress_enabled is False
+    assert settings.telegram_egress_provider is None
+    assert settings.telegram_egress_state_dir == "/data/telegram-egress"
+    assert settings.telegram_egress_control_url is None
 
 
 def test_settings_parse_csv_origins() -> None:
@@ -87,3 +92,30 @@ def test_diagnostic_bot_is_wired_in_compose_env_and_docs() -> None:
     assert "DIAGNOSTIC_RETRY_DELAY_SECONDS" in env_example
     assert "Diagnostic Polling Bot" in readme
     assert "/api/v1/diagnostics/bot" in readme
+
+
+def test_telegram_egress_stack_files_and_docs_are_present() -> None:
+    env_example = Path(".env.example").read_text()
+    compose = Path("docker-compose.telegram-egress.yml").read_text()
+    lxc_compose = Path("deploy/docker-compose.lxc.telegram-egress.yml").read_text()
+    wrapper = Path("deploy/telegram-egress/gluetun-wrapper.sh").read_text()
+    readme = Path("README.md").read_text()
+    deployment = Path("docs/deployment/rnet-proxmox.md").read_text()
+
+    assert "TELEGRAM_EGRESS_CONTROL_URL=" in env_example
+    assert "telegram-egress:" in compose
+    assert 'network_mode: "service:telegram-egress"' in compose
+    assert "TELEGRAM_EGRESS_CONTROL_URL: http://127.0.0.1:8000" in compose
+    assert "TELEGRAM_BOT_API_BASE_URL: http://127.0.0.1:8081" in compose
+    assert 'qmcgaw/gluetun:v3.41.1' in compose
+    assert "gluetun-wrapper.sh" in compose
+    assert "openvpn/profile.ovpn" in wrapper
+    assert "wireguard/profile.conf" in wrapper
+    assert "exec /gluetun-entrypoint" in wrapper
+    assert "docker-compose.telegram-egress.yml" in readme
+    assert "deploy/docker-compose.lxc.telegram-egress.yml" in readme
+    assert "internal port `8001`" in readme
+    assert "deploy/docker-compose.lxc.telegram-egress.yml" in deployment
+    assert "http://127.0.0.1:8000" in deployment
+    assert "http://127.0.0.1:8081" in deployment
+    assert 'network_mode: "service:telegram-egress"' in lxc_compose

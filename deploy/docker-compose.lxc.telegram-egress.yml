@@ -1,0 +1,149 @@
+services:
+  telegram-egress:
+    image: qmcgaw/gluetun:v3.41.1
+    hostname: telegram-egress
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    entrypoint: ["/bin/sh", "/gluetun-wrapper.sh"]
+    env_file:
+      - path: ../.env
+        required: true
+    environment:
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-wireguard}"
+      HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE: '{"auth":"none"}'
+    ports:
+      - "${APP_PORT:-8000}:8001"
+    volumes:
+      - app-data:/data
+      - /mnt/omw-media:/shared/media:ro
+      - ./telegram-egress/gluetun-wrapper.sh:/gluetun-wrapper.sh:ro
+
+  app:
+    build: ..
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: true
+    environment:
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8001"
+      TELEGRAM_BOT_API_BASE_URL: http://127.0.0.1:8081
+      TELEGRAM_EGRESS_MODE: "${TELEGRAM_EGRESS_MODE:-wireguard}"
+      TELEGRAM_EGRESS_ENABLED: "${TELEGRAM_EGRESS_ENABLED:-true}"
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-wireguard}"
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
+      TELEGRAM_EGRESS_CONTROL_URL: http://127.0.0.1:8000
+    command:
+      - sh
+      - -c
+      - python -m tg_bot_aggregator.migration_repair && alembic upgrade head && uvicorn tg_bot_aggregator.main:create_app --factory --host 0.0.0.0 --port 8001
+    network_mode: "service:telegram-egress"
+    volumes:
+      - app-data:/data
+      - /mnt/omw-media:/shared/media:ro
+    depends_on:
+      - telegram-egress
+      - redis
+      - telegram-bot-api
+
+  worker:
+    build: ..
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: true
+    environment:
+      TELEGRAM_BOT_API_BASE_URL: http://127.0.0.1:8081
+      TELEGRAM_EGRESS_MODE: "${TELEGRAM_EGRESS_MODE:-wireguard}"
+      TELEGRAM_EGRESS_ENABLED: "${TELEGRAM_EGRESS_ENABLED:-true}"
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-wireguard}"
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
+      TELEGRAM_EGRESS_CONTROL_URL: http://127.0.0.1:8000
+    command: ["taskiq", "worker", "tg_bot_aggregator.tasks:broker", "tg_bot_aggregator.tasks"]
+    network_mode: "service:telegram-egress"
+    volumes:
+      - app-data:/data
+      - /mnt/omw-media:/shared/media:ro
+    depends_on:
+      - telegram-egress
+      - redis
+      - telegram-bot-api
+
+  scheduler:
+    build: ..
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: true
+    command: ["python", "-m", "tg_bot_aggregator.scheduler"]
+    depends_on:
+      - redis
+
+  diagnostic-bot:
+    build: ..
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: true
+    environment:
+      TELEGRAM_BOT_API_BASE_URL: http://127.0.0.1:8081
+      TELEGRAM_EGRESS_MODE: "${TELEGRAM_EGRESS_MODE:-wireguard}"
+      TELEGRAM_EGRESS_ENABLED: "${TELEGRAM_EGRESS_ENABLED:-true}"
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-wireguard}"
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
+      TELEGRAM_EGRESS_CONTROL_URL: http://127.0.0.1:8000
+    command: ["python", "-m", "tg_bot_aggregator.domain.diagnostics.bot"]
+    network_mode: "service:telegram-egress"
+    volumes:
+      - app-data:/data
+    depends_on:
+      - telegram-egress
+      - telegram-bot-api
+
+  discovery-bot:
+    build: ..
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: true
+    environment:
+      TELEGRAM_BOT_API_BASE_URL: http://127.0.0.1:8081
+      TELEGRAM_EGRESS_MODE: "${TELEGRAM_EGRESS_MODE:-wireguard}"
+      TELEGRAM_EGRESS_ENABLED: "${TELEGRAM_EGRESS_ENABLED:-true}"
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-wireguard}"
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
+      TELEGRAM_EGRESS_CONTROL_URL: http://127.0.0.1:8000
+    command: ["python", "-m", "tg_bot_aggregator.domain.discovery.bot"]
+    network_mode: "service:telegram-egress"
+    volumes:
+      - app-data:/data
+    depends_on:
+      - telegram-egress
+      - telegram-bot-api
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: true
+    environment:
+      TELEGRAM_LOCAL: "1"
+    network_mode: "service:telegram-egress"
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
+      - /mnt/omw-media:/shared/media:ro
+    depends_on:
+      - telegram-egress
+
+volumes:
+  app-data:
+  telegram-bot-api-data:

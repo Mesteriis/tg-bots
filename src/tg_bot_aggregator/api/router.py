@@ -4,6 +4,7 @@ from tg_bot_aggregator.api.v1 import (
     analytics,
     audit,
     auth,
+    backups,
     bots,
     destinations,
     diagnostics,
@@ -36,6 +37,7 @@ def create_api_router(api_v1_prefix: str = "/api/v1") -> APIRouter:
     v1_router.include_router(media.router)
     v1_router.include_router(ops.router)
     v1_router.include_router(operations.router)
+    v1_router.include_router(backups.router)
     v1_router.include_router(reliability.router)
     v1_router.include_router(templates.router)
     v1_router.include_router(sending.router)

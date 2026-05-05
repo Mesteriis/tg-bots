@@ -3,11 +3,11 @@ from mcp.server.fastmcp.exceptions import ToolError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.orm import Base
 from tg_bot_aggregator.domain.mcp.repository import McpSettingsRepository
 from tg_bot_aggregator.domain.mcp.server import create_mcp_server
 from tg_bot_aggregator.infra.events import MemoryEventBus
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
-from tg_bot_aggregator.models import Base
 
 
 async def test_mcp_settings_default_to_core_and_reliability_tools(db_session) -> None:

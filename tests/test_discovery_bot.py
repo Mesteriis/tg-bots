@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from tg_bot_aggregator.core.orm import Base
 from tg_bot_aggregator.domain.bots.repository import BotRepository
 from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
 from tg_bot_aggregator.domain.discovery.bot import DiscoveryPollingBot
@@ -11,7 +12,6 @@ from tg_bot_aggregator.domain.discovery.repository import (
     BotDiscoveryEventRepository,
     BotDiscoverySettingsRepository,
 )
-from tg_bot_aggregator.models import Base
 
 
 class FakeDiscoveryApi:

@@ -7,8 +7,60 @@ from starlette.types import ASGIApp
 from tg_bot_aggregator.audit import record_audit_event
 from tg_bot_aggregator.core.config import Settings
 from tg_bot_aggregator.core.security import is_protected_host_request
+from tg_bot_aggregator.domain.auth.admin_service import ADMIN_SESSION_COOKIE, AdminAuthService
 from tg_bot_aggregator.domain.auth.repository import ApiTokenRepository
 from tg_bot_aggregator.domain.auth.service import API_TOKEN_COOKIE, API_TOKEN_HEADER, hash_api_token
+
+
+class AdminSessionAuthMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp, settings: Settings) -> None:
+        super().__init__(app)
+        self.settings = settings
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        if not self._requires_admin_session(request):
+            return await call_next(request)
+
+        service = AdminAuthService(request.app.state.settings)
+        state = service.state_from_session_token(request.cookies.get(ADMIN_SESSION_COOKIE))
+        if not state.authenticated:
+            return Response(
+                '{"detail":"admin session required"}',
+                status_code=401,
+                media_type="application/json",
+            )
+        request.state.admin_username = state.username
+        request.state.admin_authenticated = True
+        return await call_next(request)
+
+    def _requires_admin_session(self, request: Request) -> bool:
+        if not getattr(request.app.state, "admin_auth_enabled", True):
+            return False
+        path = request.url.path
+        settings = getattr(request.app.state, "settings", self.settings)
+        if path in {"/", "/favicon.ico"}:
+            return False
+        if path.startswith(settings.mcp_v1_prefix) or path.startswith("/bot"):
+            return False
+        if path.startswith(f"{settings.api_v1_prefix}/auth/admin"):
+            return False
+        if path == f"{settings.api_v1_prefix}/auth/session":
+            return False
+        if not path.startswith(settings.api_v1_prefix):
+            return False
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+        origin = request.headers.get("origin")
+        if is_protected_host_request(
+            host=host,
+            origin=origin,
+            protected_hosts=settings.protected_api_hosts,
+        ):
+            return False
+        return True
 
 
 class ProtectedHostAuthMiddleware(BaseHTTPMiddleware):

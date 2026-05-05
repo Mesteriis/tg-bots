@@ -12,6 +12,7 @@ from starlette.applications import Starlette
 
 from tg_bot_aggregator.core.config import Settings
 from tg_bot_aggregator.core.errors import NotFoundError
+from tg_bot_aggregator.core.time import utc_now
 from tg_bot_aggregator.domain.analytics.repository import AnalyticsRepository
 from tg_bot_aggregator.domain.auth.repository import ApiTokenRepository
 from tg_bot_aggregator.domain.auth.service import (
@@ -44,6 +45,7 @@ from tg_bot_aggregator.domain.reliability.service import (
     ReliabilityReadService,
     SendRateLimiter,
 )
+from tg_bot_aggregator.domain.sending.models import SendAttempt, SendHistory
 from tg_bot_aggregator.domain.sending.repository import (
     SendAttemptRepository,
     SendHistoryRepository,
@@ -54,7 +56,6 @@ from tg_bot_aggregator.domain.templates.repository import TemplateRepository
 from tg_bot_aggregator.infra.audit import AuditRepository
 from tg_bot_aggregator.infra.events import MemoryEventBus
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
-from tg_bot_aggregator.models import SendAttempt, SendHistory, utc_now
 
 SessionFactoryProvider = Callable[[], async_sessionmaker[AsyncSession]]
 EnqueueSendHistory = Callable[[int], Awaitable[str | None]]

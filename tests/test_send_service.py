@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.time import utc_now
 from tg_bot_aggregator.domain.batches.repository import SendBatchRepository
 from tg_bot_aggregator.domain.batches.service import WorkflowService
 from tg_bot_aggregator.domain.bots.repository import BotRepository
@@ -23,7 +24,6 @@ from tg_bot_aggregator.domain.sending.service import (
 )
 from tg_bot_aggregator.domain.templates.repository import TemplateRepository
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
-from tg_bot_aggregator.models import utc_now
 
 
 class CapturingEvents:
@@ -125,7 +125,10 @@ async def test_send_file_sends_file_uri(db_session: AsyncSession, tmp_path: Path
     file_path = tmp_path / "a.mp4"
     file_path.write_bytes(b"video")
     seen: dict[str, Any] = {}
-    settings = Settings(SHARED_MEDIA_ROOT=str(tmp_path))
+    settings = Settings(
+        TELEGRAM_BOT_API_BASE_URL="http://telegram-bot-api:8081",
+        SHARED_MEDIA_ROOT=str(tmp_path),
+    )
     service = SendService(db_session, _bot_api_client(seen), settings)
 
     row = await service.send_file(bot.id, "video", "a.mp4", chat_id="@ops", caption="cap")
@@ -143,7 +146,10 @@ async def test_send_file_rejects_unavailable_shared_media_root_before_telegram_c
     bot = await BotRepository(db_session).create(name="ops", token="123:token")
     await db_session.commit()
     seen: dict[str, Any] = {}
-    settings = Settings(SHARED_MEDIA_ROOT=str(tmp_path / "missing-media"))
+    settings = Settings(
+        TELEGRAM_BOT_API_BASE_URL="http://telegram-bot-api:8081",
+        SHARED_MEDIA_ROOT=str(tmp_path / "missing-media"),
+    )
     service = SendService(db_session, _bot_api_client(seen), settings)
 
     with pytest.raises(SendServiceError, match="shared media root is not available"):
@@ -160,7 +166,11 @@ async def test_send_file_can_require_shared_media_root_to_be_mounted(
     await db_session.commit()
     (tmp_path / "a.mp4").write_bytes(b"video")
     seen: dict[str, Any] = {}
-    settings = Settings(SHARED_MEDIA_ROOT=str(tmp_path), SHARED_MEDIA_REQUIRE_MOUNT=True)
+    settings = Settings(
+        TELEGRAM_BOT_API_BASE_URL="http://telegram-bot-api:8081",
+        SHARED_MEDIA_ROOT=str(tmp_path),
+        SHARED_MEDIA_REQUIRE_MOUNT=True,
+    )
     service = SendService(db_session, _bot_api_client(seen), settings)
 
     with pytest.raises(SendServiceError, match="shared media root is not mounted"):

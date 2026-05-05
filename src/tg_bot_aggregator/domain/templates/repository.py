@@ -8,7 +8,11 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.core.errors import NotFoundError
-from tg_bot_aggregator.models import MessageTemplate, MessageTemplateVersion, utc_now
+from tg_bot_aggregator.domain.templates.models import (
+    MessageTemplate,
+    MessageTemplateVersion,
+    utc_now,
+)
 
 
 async def _get_or_none(session: AsyncSession, model: type[Any], row_id: int) -> Any | None:

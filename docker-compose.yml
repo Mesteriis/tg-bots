@@ -9,6 +9,10 @@ services:
       DATABASE_URL: sqlite+aiosqlite:////data/app.db
       REDIS_URL: redis://redis:6379/0
       TELEGRAM_BOT_API_BASE_URL: http://telegram-bot-api:8081
+      TELEGRAM_EGRESS_MODE: "${TELEGRAM_EGRESS_MODE:-direct}"
+      TELEGRAM_EGRESS_ENABLED: "${TELEGRAM_EGRESS_ENABLED:-false}"
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-}"
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
       SHARED_MEDIA_ROOT: /shared/media
     ports:
       - "${APP_PORT:-8000}:8000"
@@ -29,6 +33,10 @@ services:
       DATABASE_URL: sqlite+aiosqlite:////data/app.db
       REDIS_URL: redis://redis:6379/0
       TELEGRAM_BOT_API_BASE_URL: http://telegram-bot-api:8081
+      TELEGRAM_EGRESS_MODE: "${TELEGRAM_EGRESS_MODE:-direct}"
+      TELEGRAM_EGRESS_ENABLED: "${TELEGRAM_EGRESS_ENABLED:-false}"
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-}"
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
       SHARED_MEDIA_ROOT: /shared/media
     volumes:
       - app-data:/data
@@ -58,6 +66,10 @@ services:
     environment:
       DATABASE_URL: sqlite+aiosqlite:////data/app.db
       TELEGRAM_BOT_API_BASE_URL: http://telegram-bot-api:8081
+      TELEGRAM_EGRESS_MODE: "${TELEGRAM_EGRESS_MODE:-direct}"
+      TELEGRAM_EGRESS_ENABLED: "${TELEGRAM_EGRESS_ENABLED:-false}"
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-}"
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
       DIAGNOSTIC_POLL_TIMEOUT_SECONDS: "${DIAGNOSTIC_POLL_TIMEOUT_SECONDS:-30}"
       DIAGNOSTIC_RETRY_DELAY_SECONDS: "${DIAGNOSTIC_RETRY_DELAY_SECONDS:-5}"
     volumes:
@@ -74,6 +86,10 @@ services:
     environment:
       DATABASE_URL: sqlite+aiosqlite:////data/app.db
       TELEGRAM_BOT_API_BASE_URL: http://telegram-bot-api:8081
+      TELEGRAM_EGRESS_MODE: "${TELEGRAM_EGRESS_MODE:-direct}"
+      TELEGRAM_EGRESS_ENABLED: "${TELEGRAM_EGRESS_ENABLED:-false}"
+      TELEGRAM_EGRESS_PROVIDER: "${TELEGRAM_EGRESS_PROVIDER:-}"
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
       DISCOVERY_POLL_TIMEOUT_SECONDS: "${DISCOVERY_POLL_TIMEOUT_SECONDS:-30}"
       DISCOVERY_RETRY_DELAY_SECONDS: "${DISCOVERY_RETRY_DELAY_SECONDS:-5}"
     volumes:

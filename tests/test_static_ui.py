@@ -1,19 +1,45 @@
+import re
 from pathlib import Path
 
 
-def test_static_ui_uses_vue_api_and_events() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+def _spa_source() -> str:
+    return (
+        Path("src/tg_bot_aggregator/static/index.html").read_text()
+        + Path("src/tg_bot_aggregator/static/app.css").read_text()
+        + Path("src/tg_bot_aggregator/static/app.js").read_text()
+    )
 
-    assert "https://unpkg.com/vue@3" in html
+
+def test_static_ui_uses_vue_api_and_events() -> None:
+    html = _spa_source()
+
+    assert "/static/vendor/vue.global.prod.js" in html
+    assert "/static/vendor/lucide.min.js" in html
+    assert "v-cloak" in html
+    assert Path("src/tg_bot_aggregator/static/vendor/vue.global.prod.js").exists()
+    assert Path("src/tg_bot_aggregator/static/vendor/lucide.min.js").exists()
     assert "/api/v1" in html
     assert 'new EventSource("/api/v1/events")' in html
     assert "apiToken" in html
 
 
+def test_static_ui_exposes_telegram_network_tab() -> None:
+    html = _spa_source()
+
+    assert '{ id: "network", label: "Прокси / VPN"' in html
+    assert "Telegram-сеть: прокси / VPN" in html
+    assert "activeTab === 'network'" in html
+    assert "WireGuard" in html
+    assert "OpenVPN" in html
+    assert "Xray пока остается в roadmap" in html
+
+
 def test_static_ui_uses_onedark_motion_and_token_first_bot_flow() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "#282c34" in html
+    assert ":root" in html
+    assert "[v-cloak]" in html
     assert "#61afef" in html
     assert "@keyframes panelIn" in html
     assert "prefers-reduced-motion" in html
@@ -23,8 +49,15 @@ def test_static_ui_uses_onedark_motion_and_token_first_bot_flow() -> None:
     assert "Получаю данные" in html
 
 
-def test_static_ui_shows_api_errors_for_bot_create() -> None:
+def test_static_ui_does_not_self_close_textareas() -> None:
     html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+
+    assert "<textarea" in html
+    assert not re.search(r"<textarea\b[^>]*?/>", html)
+
+
+def test_static_ui_shows_api_errors_for_bot_create() -> None:
+    html = _spa_source()
 
     assert "lastError" in html
     assert "error-banner" in html
@@ -33,9 +66,9 @@ def test_static_ui_shows_api_errors_for_bot_create() -> None:
 
 
 def test_static_ui_exposes_diagnostic_bot_management() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
-    assert '{ id: "diagnostics", label: "Диагностика", icon: "scan-search"' in html
+    assert '{ id: "diagnostics", label: "ID-бот", icon: "scan-search"' in html
     assert "activeTab === 'diagnostics'" in html
     assert 'v-model.number="diagnosticSettings.bot_id"' in html
     assert 'v-model="diagnosticSettings.is_enabled"' in html
@@ -44,9 +77,9 @@ def test_static_ui_exposes_diagnostic_bot_management() -> None:
 
 
 def test_static_ui_exposes_mcp_and_api_token_management() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
-    assert '{ id: "mcp", label: "MCP", icon: "plug-zap"' in html
+    assert '{ id: "mcp", label: "MCP и API", icon: "plug-zap"' in html
     assert "activeTab === 'mcp'" in html
     assert 'activeTab === \'mcp\'" class="stack-layout"' in html
     assert "mcpSubTab === 'tools'" in html
@@ -58,9 +91,9 @@ def test_static_ui_exposes_mcp_and_api_token_management() -> None:
 
 
 def test_static_ui_exposes_ops_automation_controls() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
-    assert '{ id: "discovery", label: "Telegram Ops", icon: "radar"' in html
+    assert '{ id: "discovery", label: "Ops", icon: "radar"' in html
     for label in [
         "Боты",
         "Адресаты",
@@ -68,7 +101,7 @@ def test_static_ui_exposes_ops_automation_controls() -> None:
         "Отправка",
         "История",
         "MCP",
-        "Операции",
+        "Конфигурация",
     ]:
         assert label in html
     assert "destination_alias" in html
@@ -83,7 +116,7 @@ def test_static_ui_exposes_ops_automation_controls() -> None:
 
 
 def test_static_ui_exposes_telegram_ops_control_panel() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     for marker in [
         "Факты",
@@ -129,7 +162,7 @@ def test_static_ui_exposes_telegram_ops_control_panel() -> None:
 
 
 def test_static_ui_contains_tables_and_mcp_scope_controls() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "minmax(0, 1fr)" in html
     assert ".table-wrap" in html
@@ -140,7 +173,7 @@ def test_static_ui_contains_tables_and_mcp_scope_controls() -> None:
 
 
 def test_static_ui_uses_operator_console_navigation_patterns() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "operator-toolbar" in html
     assert "operator-actions" in html
@@ -151,12 +184,42 @@ def test_static_ui_uses_operator_console_navigation_patterns() -> None:
     assert "prefers-reduced-motion" in html
 
 
+def test_static_ui_prioritizes_sending_platform_navigation() -> None:
+    html = _spa_source()
+
+    assert 'activeTab: "send"' in html
+    assert "navGroups" in html
+    assert "navSections" in html
+    assert "workflowStats" in html
+    assert 'navAccordionOpenId: "workflow"' in html
+    assert "activeNavGroupId" in html
+    assert "isNavGroupOpen" in html
+    assert "toggleNavGroup" in html
+    assert "selectTab" in html
+    assert "Платформа отправки" in html
+    assert "Рабочий контур" in html
+    assert "Контроль" in html
+    assert "Интеграции" in html
+    assert "Инфраструктура" in html
+    assert 'tabIds: ["send", "bots", "destinations", "templates", "history"]' in html
+    assert 'class="side-nav"' in html
+    assert 'class="nav-product-card"' in html
+    assert 'class="nav-product-main"' in html
+    assert 'class="nav-session-card"' in html
+    assert 'class="nav-section-toggle"' in html
+    assert 'v-show="isNavGroupOpen(group)"' in html
+    assert '<header>' not in html
+    assert "calc(100vh - 56px)" not in html
+
+
 def test_static_ui_uses_modals_for_bot_and_analytics_creation() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "botModalOpen" in html
     assert "openBotModal" in html
     assert "closeBotModal" in html
+    assert 'openBotModal() {' in html
+    assert 'this.lastError = "";' in html
     assert "analyticsModalOpen" in html
     assert "openAnalyticsModal" in html
     assert "closeAnalyticsModal" in html
@@ -165,7 +228,7 @@ def test_static_ui_uses_modals_for_bot_and_analytics_creation() -> None:
 
 
 def test_static_ui_uses_operator_send_and_history_subtabs() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     for marker in [
         'sendWorkTab: "quick"',
@@ -176,6 +239,22 @@ def test_static_ui_uses_operator_send_and_history_subtabs() -> None:
         "sendWorkTab === 'preview'",
         "Быстрая отправка",
         "Preview / cURL",
+    ]:
+        assert marker in html
+
+    for marker in [
+        "sendTargetMode",
+        "Способ адресации",
+        "сохраненный адресат",
+        "алиас адресата",
+        "ручной chat ID",
+        "v-if=\"sendTargetMode.text === 'destination'\"",
+        "v-if=\"sendTargetMode.text === 'alias'\"",
+        "v-if=\"sendTargetMode.text === 'chat_id'\"",
+        "v-if=\"forms.send.send_mode === 'queued'\"",
+        "v-if=\"forms.templateSend.send_mode === 'queued'\"",
+        "v-if=\"forms.file.send_mode === 'queued'\"",
+        "normalizeSendPayload",
     ]:
         assert marker in html
 
@@ -194,7 +273,7 @@ def test_static_ui_uses_operator_send_and_history_subtabs() -> None:
 
 
 def test_static_ui_uses_operator_mcp_operations_and_mtproto_layouts() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     for marker in [
         'mcpSubTab: "profile"',
@@ -214,27 +293,37 @@ def test_static_ui_uses_operator_mcp_operations_and_mtproto_layouts() -> None:
         "operationsSubTab === 'infra'",
         "operationsSubTab === 'backup'",
         "operationsSubTab === 'restore'",
-        "Runtime",
-        "Infra и секреты",
-        "Backup",
-        "Restore",
+        "Поведение",
+        "Инфраструктура",
+        "Бэкапы",
+        "Восстановление",
     ]:
         assert marker in html
 
     for marker in [
         'mtprotoStep: "phone"',
-        "mtprotoStep === 'phone'",
-        "mtprotoStep === 'code'",
-        "mtprotoStep === 'password'",
-        "Шаг 1",
-        "Шаг 2",
-        "Шаг 3",
+        "mtprotoStatus: { status: \"missing\"",
+        "syncMtprotoStepFromStatus",
+        "mtprotoStatusLabel",
+        "mtprotoCredentialsConfigured",
+        "Открыть my.telegram.org",
+        "MTProto не нужен для добавления Bot API токенов",
     ]:
         assert marker in html
 
 
+def test_static_ui_revoke_token_modal_uses_busy_state_and_finally_cleanup() -> None:
+    html = _spa_source()
+
+    assert "tokenRevocationBusy" in html
+    assert "this.tokenRevocationBusy = true;" in html
+    assert "this.tokenRevocationBusy = false;" in html
+    assert ":disabled=\"tokenRevocationBusy\"" in html
+    assert "finally" in html
+
+
 def test_static_ui_is_russian_first_and_explains_mtproto() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert '<html lang="ru">' in html
     assert "Агрегатор Telegram-ботов" in html
@@ -242,11 +331,75 @@ def test_static_ui_is_russian_first_and_explains_mtproto() -> None:
     assert '{ id: "send", label: "Отправка", icon: "send"' in html
     assert "Зачем нужен MTProto" in html
     assert "Запросить код" in html
+
+
+def test_static_ui_uses_admin_auth_shell_before_dashboard_boot() -> None:
+    html = _spa_source()
+
+    for marker in [
+        "adminUiReady",
+        "adminAuthenticated",
+        "loadAdminState",
+        "loginAdmin",
+        "bootstrapAdmin",
+        "logoutAdmin",
+        "Вход администратора",
+        "Первая настройка",
+        "Войти через Touch ID / passkey",
+        'v-if="adminUiReady && adminAuthenticated"',
+    ]:
+        assert marker in html
+
+
+def test_static_ui_places_admin_passkey_controls_in_infra_settings() -> None:
+    html = _spa_source()
+
+    for marker in [
+        "adminPasskeys",
+        "passkeySupported",
+        "passkeyOriginSupported",
+        "passkeyOriginHint",
+        "beginPasskeyRegistration",
+        "loginWithPasskey",
+        "deletePasskey",
+        "Администратор и Touch ID",
+        "Смена логина и пароля обязательна перед активацией Touch ID / passkey.",
+        "Для локального Touch ID открой админку через http://localhost:8000",
+        "touch ID",
+    ]:
+        assert marker in html
+
+
+def test_static_ui_exposes_auth_diagnostics_and_session_controls() -> None:
+    html = _spa_source()
+
+    for marker in [
+        "adminSessionLabel",
+        "Текущая сессия",
+        "Auth file",
+        "Текущий origin",
+        "Текущий RP ID",
+        "admin_auth_bootstrap_required",
+        "admin_auth_file_exists",
+        "admin_auth_file_readable",
+        "@click=\"logoutAdmin\"",
+        (
+            "confirm(\"Удалить этот passkey? Повторный вход через Touch ID придется "
+            "подключить заново.\")"
+        ),
+        (
+            "confirm(\"Обновить логин и пароль администратора? Текущая browser-сессия "
+            "будет перевыпущена.\")"
+        ),
+    ]:
+        assert marker in html
     assert "любой клиент с доступом к ней сможет пользоваться сохраненной MTProto-сессией" in html
+    assert "Сначала укажи Telegram API ID и Telegram API Hash" in html
+    assert "MTProto нужен только для аналитики" in html
 
 
 def test_static_ui_describes_tabs_and_cards() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert 'class="section-description"' in html
     assert "currentTab.description" in html
@@ -259,7 +412,7 @@ def test_static_ui_describes_tabs_and_cards() -> None:
 
 
 def test_static_ui_uses_destination_modal_and_full_width_list() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert 'activeTab === \'destinations\'" class="stack-layout"' in html
     assert 'class="panel full-span"' in html
@@ -277,7 +430,7 @@ def test_static_ui_uses_destination_modal_and_full_width_list() -> None:
 
 
 def test_static_ui_uses_dropdowns_for_fixed_choices() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "parseModeOptions" in html
     assert 'v-model="forms.template.parse_mode"' in html
@@ -289,7 +442,7 @@ def test_static_ui_uses_dropdowns_for_fixed_choices() -> None:
 
 
 def test_static_ui_exposes_template_send_flow() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "Отправка по шаблону" in html
     assert "forms.templateSend" in html
@@ -300,7 +453,7 @@ def test_static_ui_exposes_template_send_flow() -> None:
 
 
 def test_static_ui_exposes_mcp_connection_helper_and_media_browser() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "connection-info" in html
     assert "Подключение MCP" in html
@@ -309,7 +462,7 @@ def test_static_ui_exposes_mcp_connection_helper_and_media_browser() -> None:
 
 
 def test_static_ui_disables_file_send_when_shared_media_is_unavailable() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "fileSendAvailable" in html
     assert "fileSendUnavailableReason" in html
@@ -318,7 +471,7 @@ def test_static_ui_disables_file_send_when_shared_media_is_unavailable() -> None
 
 
 def test_static_ui_uses_template_subtabs_for_saved_and_create() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert 'templateSubTab: "saved"' in html
     assert 'class="subtabs"' in html
@@ -331,7 +484,7 @@ def test_static_ui_uses_template_subtabs_for_saved_and_create() -> None:
 
 
 def test_static_ui_uses_send_subtabs_for_send_modes() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert 'sendSubTab: "text"' in html
     assert 'aria-label="Отправка"' in html
@@ -347,7 +500,7 @@ def test_static_ui_uses_send_subtabs_for_send_modes() -> None:
 
 
 def test_static_ui_explains_and_validates_templates() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "Как правильно писать шаблоны" in html
     assert "{{name}}" in html
@@ -360,7 +513,7 @@ def test_static_ui_explains_and_validates_templates() -> None:
 
 
 def test_static_ui_exposes_send_profiles_preview_retry_and_cancel() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "Профили отправки" in html
     assert "sendProfiles" in html
@@ -375,7 +528,7 @@ def test_static_ui_exposes_send_profiles_preview_retry_and_cancel() -> None:
 
 
 def test_static_ui_exposes_batches_and_diagnostic_update_destination_flow() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert "Batch-отправка" in html
     assert "sendBatches" in html
@@ -390,10 +543,10 @@ def test_static_ui_exposes_batches_and_diagnostic_update_destination_flow() -> N
 
 
 def test_static_ui_exposes_operations_backup_preflight_and_versions() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
-    assert '{ id: "operations", label: "Операции", icon: "settings-2"' in html
-    assert "Runtime-настройки без рестарта" in html
+    assert '{ id: "operations", label: "Конфигурация", icon: "settings-2"' in html
+    assert "Поведение отправки без рестарта" in html
     assert "JSON backup в git" in html
     assert 'v-model="operationsSettings.backup_git_repo_url"' in html
     assert 'v-model="operationsSettings.backup_git_service"' in html
@@ -418,7 +571,7 @@ def test_static_ui_exposes_operations_backup_preflight_and_versions() -> None:
 
 
 def test_static_ui_exposes_reliability_graph_and_preserves_existing_tabs() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert '{ id: "reliability", label: "Надежность", icon: "activity"' in html
     assert "reliabilityGraph" in html
@@ -432,7 +585,6 @@ def test_static_ui_exposes_reliability_graph_and_preserves_existing_tabs() -> No
     assert "Telegram" in html
     assert "Result" in html
     assert "@keyframes edgeFlow" in html
-    assert "grid-auto-flow: column" in html
     assert "repeat(7, 140px)" not in html
     assert '{ id: "source", label: "Batch / Manual"' in html
     assert '{ id: "queue", label: "Queue"' in html
@@ -442,21 +594,36 @@ def test_static_ui_exposes_reliability_graph_and_preserves_existing_tabs() -> No
         "Адресаты",
         "Шаблоны",
         "Отправка",
-        "История",
+        "Журнал",
         "MTProto",
         "Аналитика",
-        "Диагностика",
-        "Автопоиск",
+        "ID-бот",
+        "Ops",
         "MCP",
         "Аудит",
-        "Операции",
+        "Конфигурация",
         "Состояние",
     ]:
         assert tab in html
 
 
+def test_static_ui_uses_snake_layout_for_reliability_graph() -> None:
+    html = _spa_source()
+
+    assert "reliability-graph-snake" in html
+    assert "reliability-graph-row" in html
+    assert "reliability-node-slot" in html
+    assert "reliability-graph-turn-row" in html
+    assert "reliability-inspector-grid" in html
+    assert "reliabilityGraphRows()" in html
+    assert "reliabilityRowEdge" in html
+    assert "reliabilityRowTurn" in html
+    assert "grid-auto-flow: column" not in html
+    assert "reliability-legend" not in html
+
+
 def test_static_ui_reliability_calls_new_api_and_keeps_history_actions() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert 'this.api("/reliability/summary"' in html
     assert 'this.api("/reliability/graph"' in html
@@ -507,7 +674,7 @@ def test_static_ui_reliability_calls_new_api_and_keeps_history_actions() -> None
 
 
 def test_static_ui_renders_health_as_cards_and_exposes_local_secrets() -> None:
-    html = Path("src/tg_bot_aggregator/static/index.html").read_text()
+    html = _spa_source()
 
     assert 'class="health-grid"' in html
     assert "Статус API" in html
@@ -519,4 +686,59 @@ def test_static_ui_renders_health_as_cards_and_exposes_local_secrets() -> None:
     assert 'v-model="operationsSettings.telegram_api_id"' in html
     assert 'v-model="operationsSettings.telegram_api_hash"' in html
     assert 'type="password"' in html
-    assert "Локальные секреты" in html
+    assert "Инфраструктура и секреты" in html
+
+
+def test_static_ui_operations_uses_settings_ux_with_dependent_fields() -> None:
+    html = _spa_source()
+
+    assert '{ id: "operations", label: "Конфигурация", icon: "settings-2"' in html
+    assert "Поведение" in html
+    assert "Инфраструктура" in html
+    assert "Бэкапы" in html
+    assert "Восстановление" in html
+    assert "operations-layout" in html
+    assert "operations-card-grid" in html
+    assert "Telegram transport" in html
+    assert "Shared media" in html
+    assert "Retry и delivery" in html
+    assert "Policy и quiet hours" in html
+    assert "Callback" in html
+    assert "formatQuietHoursInput" in html
+    assert "applyBackupServiceDefaults" in html
+    assert "applyMaxLocalFilePreset" in html
+    assert 'v-if="operationsSettings.policy_enabled"' in html
+    assert 'v-if="operationsSettings.callback_enabled"' in html
+    assert 'v-if="operationsSettings.backup_schedule_enabled"' in html
+    assert 'v-if="operationsSettings.backup_git_auth_method !== \'none\'"' in html
+    assert 'v-model="operationsSettings.send_default_mode"' in html
+    assert 'inputmode="numeric"' in html
+    assert 'maxlength="5"' in html
+
+
+def test_static_ui_exposes_telegram_connectivity_controls() -> None:
+    html = _spa_source()
+
+    for marker in [
+        "Telegram connectivity",
+        "telegramEgressState",
+        "telegramEgressDraft",
+        "telegramEgressConfig",
+        "/operations/telegram-egress",
+        "/operations/telegram-egress/config",
+        "/operations/telegram-egress/check",
+        "/operations/telegram-egress/connect",
+        "/operations/telegram-egress/disconnect",
+        "/operations/telegram-egress/restart",
+        "saveTelegramEgressSettings",
+        "uploadTelegramEgressConfig",
+        "checkTelegramEgress",
+        "connectTelegramEgress",
+        "disconnectTelegramEgress",
+        "restartTelegramEgress",
+        "normalizeTelegramEgressDraft",
+        "OpenVPN lifecycle сейчас валидирует профиль, хранит конфиг и отдает статус.",
+    ]:
+        assert marker in html
+
+    assert "полноценный lifecycle будет включен следующим срезом" not in html

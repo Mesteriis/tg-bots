@@ -1,3 +1,7 @@
-from tg_bot_aggregator.models import utc_now
+from datetime import UTC, datetime
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
 
 __all__ = ["utc_now"]

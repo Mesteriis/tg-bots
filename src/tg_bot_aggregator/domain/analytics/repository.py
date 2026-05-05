@@ -8,7 +8,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.core.errors import NotFoundError
-from tg_bot_aggregator.models import (
+from tg_bot_aggregator.domain.analytics.models import (
     AnalyticsRun,
     AnalyticsSnapshot,
     AnalyticsTarget,

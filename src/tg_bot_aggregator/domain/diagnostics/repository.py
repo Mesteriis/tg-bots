@@ -7,7 +7,11 @@ from typing import Any
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tg_bot_aggregator.models import DiagnosticBotSettings, DiagnosticUpdate, utc_now
+from tg_bot_aggregator.domain.diagnostics.models import (
+    DiagnosticBotSettings,
+    DiagnosticUpdate,
+    utc_now,
+)
 
 
 async def _get_or_none(session: AsyncSession, model: type[Any], row_id: int) -> Any | None:

@@ -7,7 +7,7 @@ from typing import Any, Protocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tg_bot_aggregator.core.config import get_settings
-from tg_bot_aggregator.core.db import create_engine, create_session_factory
+from tg_bot_aggregator.core.db import resolve_runtime_database_state
 from tg_bot_aggregator.domain.bots.repository import BotRepository
 from tg_bot_aggregator.domain.diagnostics.formatter import (
     build_copy_keyboard,
@@ -19,7 +19,6 @@ from tg_bot_aggregator.domain.diagnostics.repository import (
     DiagnosticUpdateRepository,
 )
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
-from tg_bot_aggregator.models import Base
 
 logger = logging.getLogger(__name__)
 
@@ -181,11 +180,9 @@ class DiagnosticPollingBot:
 
 
 async def async_main(once: bool = False) -> int:
-    settings = get_settings()
-    engine = create_engine(settings)
-    session_factory = create_session_factory(engine)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    runtime_db = await resolve_runtime_database_state(get_settings(), create_sqlite_schema=True)
+    settings = runtime_db.settings
+    session_factory = runtime_db.session_factory
     bot = DiagnosticPollingBot(
         session_factory=session_factory,
         bot_api=TelegramBotApiClient(settings.telegram_bot_api_base_url),
@@ -199,7 +196,7 @@ async def async_main(once: bool = False) -> int:
         await bot.run_forever()
         return 0
     finally:
-        await engine.dispose()
+        await runtime_db.close()
 
 
 def main() -> None:

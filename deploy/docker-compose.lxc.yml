@@ -5,6 +5,8 @@ services:
     env_file:
       - path: ../.env
         required: true
+    environment:
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
     command:
       - sh
       - -c
@@ -24,6 +26,8 @@ services:
     env_file:
       - path: ../.env
         required: true
+    environment:
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
     command: ["taskiq", "worker", "tg_bot_aggregator.tasks:broker", "tg_bot_aggregator.tasks"]
     volumes:
       - app-data:/data
@@ -48,6 +52,8 @@ services:
     env_file:
       - path: ../.env
         required: true
+    environment:
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
     command: ["python", "-m", "tg_bot_aggregator.domain.diagnostics.bot"]
     volumes:
       - app-data:/data
@@ -60,6 +66,8 @@ services:
     env_file:
       - path: ../.env
         required: true
+    environment:
+      TELEGRAM_EGRESS_STATE_DIR: /data/telegram-egress
     command: ["python", "-m", "tg_bot_aggregator.domain.discovery.bot"]
     volumes:
       - app-data:/data

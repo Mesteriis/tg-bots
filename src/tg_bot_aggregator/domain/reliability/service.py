@@ -11,12 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.core.config import Settings
 from tg_bot_aggregator.core.security import redact_secrets
+from tg_bot_aggregator.core.time import utc_now
+from tg_bot_aggregator.domain.sending.models import SendHistory
 from tg_bot_aggregator.domain.sending.repository import (
     SendAttemptRepository,
     SendHistoryRepository,
 )
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiError
-from tg_bot_aggregator.models import SendHistory, utc_now
 
 
 @dataclass(frozen=True)

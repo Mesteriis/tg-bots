@@ -38,9 +38,16 @@ class MtprotoService:
         self.session_repo = session_repo
         self.client_factory = client_factory or TelegramClient
 
+    @staticmethod
+    def _missing_credentials_message() -> str:
+        return "MTProto недоступен: сначала укажи Telegram API ID и Telegram API Hash в настройках."
+
+    def _credentials_configured(self) -> bool:
+        return bool(self.settings.telegram_api_id and self.settings.telegram_api_hash)
+
     def _client(self) -> Any:
-        if not self.settings.telegram_api_id or not self.settings.telegram_api_hash:
-            raise MtprotoConfigurationError("TELEGRAM_API_ID and TELEGRAM_API_HASH are required")
+        if not self._credentials_configured():
+            raise MtprotoConfigurationError(self._missing_credentials_message())
         session_dir = Path(self.settings.telethon_session_dir)
         session_dir.mkdir(parents=True, exist_ok=True)
         return self.client_factory(
@@ -49,19 +56,39 @@ class MtprotoService:
             self.settings.telegram_api_hash,
         )
 
-    async def status(self) -> dict[str, str | None]:
+    async def status(self) -> dict[str, object | None]:
         row = await self.session_repo.get_default()
+        if not self._credentials_configured():
+            return {
+                "status": "config_missing",
+                "configured": False,
+                "api_credentials_missing": True,
+                "phone": row.phone if row is not None else None,
+                "last_error": self._missing_credentials_message(),
+            }
         if row is None:
-            return {"status": "missing", "phone": None, "last_error": None}
-        return {"status": row.status, "phone": row.phone, "last_error": row.last_error}
+            return {
+                "status": "missing",
+                "configured": True,
+                "api_credentials_missing": False,
+                "phone": None,
+                "last_error": None,
+            }
+        return {
+            "status": row.status,
+            "configured": True,
+            "api_credentials_missing": False,
+            "phone": row.phone,
+            "last_error": row.last_error,
+        }
 
-    async def start_login(self, phone: str) -> dict[str, str | None]:
+    async def start_login(self, phone: str) -> dict[str, object | None]:
         async with self._client() as client:
             await client.send_code_request(phone)
         row = await self.session_repo.upsert_default(phone=phone, status="code_requested")
         return {"status": row.status, "phone": row.phone, "last_error": row.last_error}
 
-    async def confirm_code(self, phone: str, code: str) -> dict[str, str | None]:
+    async def confirm_code(self, phone: str, code: str) -> dict[str, object | None]:
         try:
             async with self._client() as client:
                 await client.sign_in(phone=phone, code=code)
@@ -71,7 +98,7 @@ class MtprotoService:
         row = await self.session_repo.upsert_default(phone=phone, status="ready", last_error=None)
         return {"status": row.status, "phone": row.phone, "last_error": row.last_error}
 
-    async def confirm_password(self, password: str) -> dict[str, str | None]:
+    async def confirm_password(self, password: str) -> dict[str, object | None]:
         row = await self.session_repo.get_default()
         phone = row.phone if row is not None else None
         async with self._client() as client:
@@ -115,4 +142,3 @@ class MtprotoService:
                 "has_views": any(value is not None for value in views),
             },
         )
-

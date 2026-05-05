@@ -7,24 +7,24 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tg_bot_aggregator.core.errors import NotFoundError
 from tg_bot_aggregator.core.security import redact_secrets
+from tg_bot_aggregator.core.time import utc_now
+from tg_bot_aggregator.domain.bots.models import Bot
 from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.models import Destination
 from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
 from tg_bot_aggregator.domain.diagnostics.repository import DiagnosticUpdateRepository
 from tg_bot_aggregator.domain.discovery.repository import BotDiscoveryEventRepository
 from tg_bot_aggregator.domain.mcp.catalog import MCP_TOOL_NAMES
+from tg_bot_aggregator.domain.ops.models import (
+    OpsAutomationRule,
+    OpsFact,
+    OpsRecommendation,
+)
 from tg_bot_aggregator.domain.ops.repository import (
     OpsActionRunRepository,
     OpsAutomationRuleRepository,
     OpsFactRepository,
     OpsRecommendationRepository,
-)
-from tg_bot_aggregator.models import (
-    Bot,
-    Destination,
-    OpsAutomationRule,
-    OpsFact,
-    OpsRecommendation,
-    utc_now,
 )
 
 OpsRisk = Literal["low", "medium", "high"]

@@ -7,6 +7,8 @@ from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.orm import Base
+from tg_bot_aggregator.core.time import utc_now
 from tg_bot_aggregator.domain.bots.repository import BotRepository
 from tg_bot_aggregator.domain.sending.repository import (
     SendAttemptRepository,
@@ -14,7 +16,6 @@ from tg_bot_aggregator.domain.sending.repository import (
 )
 from tg_bot_aggregator.infra.events import MemoryEventBus
 from tg_bot_aggregator.main import create_app
-from tg_bot_aggregator.models import Base, utc_now
 
 
 @pytest.fixture

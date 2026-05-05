@@ -8,7 +8,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.domain.mcp.catalog import MCP_DEFAULT_ENABLED_TOOL_NAMES
-from tg_bot_aggregator.models import McpCoverageSnapshot, McpSettings, utc_now
+from tg_bot_aggregator.domain.mcp.models import McpCoverageSnapshot, McpSettings, utc_now
 
 
 async def _get_or_none(session: AsyncSession, model: type[Any], row_id: int) -> Any | None:

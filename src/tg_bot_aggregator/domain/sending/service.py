@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tg_bot_aggregator.core.config import Settings
 from tg_bot_aggregator.core.errors import NotFoundError
 from tg_bot_aggregator.core.security import redact_secrets, redact_text
+from tg_bot_aggregator.core.time import utc_now
 from tg_bot_aggregator.domain.bots.repository import BotRepository
+from tg_bot_aggregator.domain.destinations.models import Destination
 from tg_bot_aggregator.domain.destinations.repository import DestinationRepository
 from tg_bot_aggregator.domain.media.paths import SharedFile, SharedPathError, validate_shared_file
 from tg_bot_aggregator.domain.reliability.service import (
@@ -22,6 +24,7 @@ from tg_bot_aggregator.domain.reliability.service import (
     compute_retry_decision,
     latency_ms_since,
 )
+from tg_bot_aggregator.domain.sending.models import SendHistory
 from tg_bot_aggregator.domain.sending.repository import (
     SendAttemptRepository,
     SendHistoryRepository,
@@ -29,7 +32,6 @@ from tg_bot_aggregator.domain.sending.repository import (
 from tg_bot_aggregator.domain.templates.renderer import render_template_text
 from tg_bot_aggregator.domain.templates.repository import TemplateRepository
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient, TelegramBotApiError
-from tg_bot_aggregator.models import Destination, SendHistory, utc_now
 
 
 class EventPublisher(Protocol):

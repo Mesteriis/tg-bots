@@ -6,8 +6,6 @@ from typing import Any
 
 import redis.asyncio as redis
 
-from tg_bot_aggregator.schemas import EventEnvelope
-
 
 @dataclass(frozen=True)
 class EventRecord:
@@ -17,7 +15,11 @@ class EventRecord:
 
 
 def build_event_payload(event_type: str, data: dict[str, Any]) -> dict[str, Any]:
-    return EventEnvelope(event_type=event_type, data=data).model_dump()
+    return {
+        "schema_version": "v1",
+        "event_type": event_type,
+        "data": data,
+    }
 
 
 def format_sse(record: EventRecord) -> str:
@@ -90,4 +92,3 @@ class RedisEventBus:
         if self._client is not None:
             await self._client.aclose()
             self._client = None
-

@@ -6,6 +6,7 @@ import httpx
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tg_bot_aggregator.core.config import Settings
+from tg_bot_aggregator.core.orm import Base
 from tg_bot_aggregator.domain.operations.repository import (
     RuntimeAdvancedSettingsRepository,
     RuntimeSettingsRepository,
@@ -13,7 +14,6 @@ from tg_bot_aggregator.domain.operations.repository import (
 from tg_bot_aggregator.infra.events import MemoryEventBus
 from tg_bot_aggregator.infra.telegram_client import TelegramBotApiClient
 from tg_bot_aggregator.main import create_app
-from tg_bot_aggregator.models import Base
 
 
 async def _client(
@@ -97,6 +97,14 @@ async def test_missing_shared_media_root_is_reported_cleanly(tmp_path: Path) -> 
     assert health_payload["shared_media_available"] is False
     assert "not available" in health_payload["shared_media_error"]
     assert health_payload["max_local_file_bytes"] == 2_097_152_000
+    assert health_payload["admin_auth_bootstrap_required"] is True
+    assert health_payload["admin_auth_file_exists"] is False
+    assert health_payload["admin_auth_username"] == "admin"
+    assert health_payload["telegram_egress_mode"] == "direct"
+    assert health_payload["telegram_egress_enabled"] is False
+    assert health_payload["telegram_egress_provider"] is None
+    assert health_payload["telegram_egress_provider_config_present"] is False
+    assert health_payload["telegram_egress_last_status"] == "disconnected"
     assert media.status_code == 400
     assert "not available" in media.json()["detail"]
 
@@ -120,6 +128,33 @@ async def test_shared_media_can_require_real_mountpoint(tmp_path: Path) -> None:
     assert "not mounted" in payload["shared_media_error"]
 
 
+async def test_health_reports_telegram_egress_summary(tmp_path: Path) -> None:
+    state_dir = tmp_path / "telegram-egress"
+    (state_dir / "wireguard").mkdir(parents=True)
+    (state_dir / "wireguard" / "profile.conf").write_text(
+        "[Interface]\nPrivateKey = example\n"
+    )
+    client, _ = await _client(
+        settings=Settings(
+            DATABASE_URL="sqlite+aiosqlite:///:memory:",
+            TELEGRAM_EGRESS_MODE="wireguard",
+            TELEGRAM_EGRESS_ENABLED=True,
+            TELEGRAM_EGRESS_STATE_DIR=str(state_dir),
+        )
+    )
+
+    async with client:
+        health = await client.get("/api/v1/health")
+
+    payload = health.json()
+    assert payload["telegram_egress_mode"] == "wireguard"
+    assert payload["telegram_egress_enabled"] is True
+    assert payload["telegram_egress_provider"] == "wireguard"
+    assert payload["telegram_egress_provider_config_present"] is True
+    assert payload["telegram_egress_last_status"] == "disconnected"
+    assert payload["telegram_egress_last_error"] is None
+
+
 async def test_favicon_and_mcp_connection_info_are_available() -> None:
     client, _ = await _client()
 
@@ -134,6 +169,19 @@ async def test_favicon_and_mcp_connection_info_are_available() -> None:
     assert payload["legacy_sse"]["path"] == "/mcp/v1/sse"
     assert "X-API-Token" in payload["required_headers"]
     assert "tg.sh-inc.ru" in payload["protected_hosts"]
+
+
+async def test_root_html_is_served_with_no_store_cache_headers() -> None:
+    client, _ = await _client()
+
+    async with client:
+        response = await client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["expires"] == "0"
 
 
 async def test_health_and_crud_and_send_flow() -> None:
@@ -200,6 +248,92 @@ async def test_create_bot_returns_gateway_error_when_bot_api_unreachable() -> No
     assert response.status_code == 502
     assert response.json() == {
         "detail": "Telegram Bot API request failed: name resolution failed"
+    }
+
+
+async def test_create_bot_does_not_require_mtproto_credentials() -> None:
+    client, _ = await _client(
+        settings=Settings(
+            DATABASE_URL="sqlite+aiosqlite:///:memory:",
+            TELEGRAM_API_ID=None,
+            TELEGRAM_API_HASH=None,
+        )
+    )
+    async with client:
+        response = await client.post("/api/v1/bots", json={"token": "123:token"})
+
+    assert response.status_code == 201
+    assert response.json()["username"] == "ops_bot"
+
+
+async def test_create_bot_succeeds_with_file_sqlite_when_redis_lock_backend_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "app.db"
+    database_url = f"sqlite+aiosqlite:///{database_path}"
+    engine = create_async_engine(database_url)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def default_handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith("/getMe"):
+            return httpx.Response(
+                200, json={"ok": True, "result": {"id": 123, "username": "ops_bot"}}
+            )
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 88}})
+
+    app = create_app(
+        settings=Settings(
+            DATABASE_URL=database_url,
+            REDIS_URL="redis://redis:6379/0",
+        ),
+        session_factory=session_factory,
+        event_bus=MemoryEventBus(),
+        bot_api_client=TelegramBotApiClient(
+            "http://telegram-bot-api:8081",
+            httpx.AsyncClient(transport=httpx.MockTransport(default_handler)),
+        ),
+    )
+    app.state.uow_settings = Settings(
+        DATABASE_URL=database_url,
+        REDIS_URL="redis://redis:6379/0",
+    )
+    client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    )
+
+    async with client:
+        response = await client.post("/api/v1/bots", json={"token": "123:token"})
+
+    await engine.dispose()
+
+    assert response.status_code == 201
+    assert response.json()["username"] == "ops_bot"
+
+
+async def test_mtproto_start_login_requires_api_credentials() -> None:
+    client, _ = await _client(
+        settings=Settings(
+            DATABASE_URL="sqlite+aiosqlite:///:memory:",
+            TELEGRAM_API_ID=None,
+            TELEGRAM_API_HASH=None,
+        ),
+        raise_app_exceptions=False,
+    )
+    async with client:
+        response = await client.post(
+            "/api/v1/mtproto/login/start",
+            json={"phone": "+79990000000"},
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": (
+            "MTProto недоступен: сначала укажи Telegram API ID "
+            "и Telegram API Hash в настройках."
+        )
     }
 
 
@@ -770,7 +904,6 @@ async def test_runtime_settings_patch_persists_local_secret_and_infra_settings()
             await client.patch(
                 "/api/v1/operations/settings",
                 json={
-                    "database_url": "sqlite+aiosqlite:///./local.db",
                     "redis_url": "redis://:pass@redis:6379/2",
                     "telegram_api_id": "12345",
                     "telegram_api_hash": "secret-hash",
@@ -792,12 +925,23 @@ async def test_runtime_settings_patch_persists_local_secret_and_infra_settings()
     assert patched["telegram_api_id"] == "12345"
     assert patched["telegram_api_hash"] == "secret-hash"
     assert patched["redis_url"] == "redis://:pass@redis:6379/2"
-    assert loaded["database_url"] == "sqlite+aiosqlite:///./local.db"
     assert loaded["cors_allowed_origins"] == ["http://localhost:8000", "http://tg.local"]
     assert loaded["diagnostic_retry_delay_seconds"] == 1.5
     assert patched["backup_schedule_enabled"] is True
     assert loaded["backup_schedule_interval_seconds"] == 3600
     assert loaded["backup_schedule_push_to_git"] is True
+
+
+async def test_runtime_settings_patch_rejects_non_postgres_database_switch() -> None:
+    client, _ = await _client()
+    async with client:
+        response = await client.patch(
+            "/api/v1/operations/settings",
+            json={"database_url": "sqlite+aiosqlite:///./local.db"},
+        )
+
+    assert response.status_code == 400
+    assert "target database_url must be postgres" in response.json()["detail"]
 
 
 async def test_app_lifespan_loads_persisted_runtime_settings() -> None:

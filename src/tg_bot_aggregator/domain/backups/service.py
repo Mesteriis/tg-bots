@@ -13,20 +13,16 @@ from sqlalchemy import DateTime, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tg_bot_aggregator.core.security import redact_secrets, redact_text
-from tg_bot_aggregator.models import (
-    ApiToken,
-    Bot,
-    BotDiscoverySettings,
-    Destination,
-    DiagnosticBotSettings,
-    McpSettings,
-    MessageTemplate,
-    MessageTemplateVersion,
-    RuntimeAdvancedSettings,
-    RuntimeSettings,
-    SendProfile,
-)
-from tg_bot_aggregator.schemas import RuntimeSettingsRead
+from tg_bot_aggregator.domain.auth.models import ApiToken
+from tg_bot_aggregator.domain.bots.models import Bot
+from tg_bot_aggregator.domain.destinations.models import Destination
+from tg_bot_aggregator.domain.diagnostics.models import DiagnosticBotSettings
+from tg_bot_aggregator.domain.discovery.models import BotDiscoverySettings
+from tg_bot_aggregator.domain.mcp.models import McpSettings
+from tg_bot_aggregator.domain.operations.models import RuntimeAdvancedSettings, RuntimeSettings
+from tg_bot_aggregator.domain.operations.schemas import RuntimeSettingsRead
+from tg_bot_aggregator.domain.sending.models import SendProfile
+from tg_bot_aggregator.domain.templates.models import MessageTemplate, MessageTemplateVersion
 
 BACKUP_MODELS: tuple[tuple[str, type[Any]], ...] = (
     ("bots", Bot),

@@ -2,9 +2,13 @@ from typing import Any
 
 from tg_bot_aggregator.core.errors import NotFoundError
 from tg_bot_aggregator.domain.batches.service import WorkflowService
+from tg_bot_aggregator.domain.sending.schemas import (
+    SendPreflightCheckRead,
+    SendPreflightRead,
+    SendPreviewRead,
+)
 from tg_bot_aggregator.domain.sending.service import SendService, SendServiceError
 from tg_bot_aggregator.domain.templates.renderer import TemplateRenderError
-from tg_bot_aggregator.schemas import SendPreflightCheckRead, SendPreflightRead, SendPreviewRead
 
 
 class OperationsService:
