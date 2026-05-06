@@ -226,6 +226,13 @@ class Settings(BaseSettings):
             return None
         return value
 
+    @field_validator("telegram_egress_provider", mode="before")
+    @classmethod
+    def parse_optional_egress_provider(cls, value: str | None) -> str | None:
+        if value == "":
+            return None
+        return value
+
     @property
     def is_local_bot_api(self) -> bool:
         local_prefixes = ("http://telegram-bot-api", "http://localhost", "http://127.0.0.1")

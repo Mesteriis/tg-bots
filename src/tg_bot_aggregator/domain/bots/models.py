@@ -12,6 +12,10 @@ from tg_bot_aggregator.core.time import utc_now
 if TYPE_CHECKING:
     from tg_bot_aggregator.domain.destinations.models import Destination
     from tg_bot_aggregator.domain.diagnostics.models import DiagnosticBotSettings
+else:
+    # Ensure related mapped classes are registered in runtime for relationship resolution.
+    from tg_bot_aggregator.domain.destinations import models as _destinations_models
+    from tg_bot_aggregator.domain.diagnostics import models as _diagnostics_models
 
 
 class Bot(Base):

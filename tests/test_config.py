@@ -81,6 +81,14 @@ def test_settings_treat_blank_optional_integer_env_values_as_unset(monkeypatch) 
     assert settings.rate_limit_per_minute is None
 
 
+def test_settings_treat_blank_telegram_egress_provider_as_unset(monkeypatch) -> None:
+    monkeypatch.setenv("TELEGRAM_EGRESS_PROVIDER", "")
+
+    settings = Settings()
+
+    assert settings.telegram_egress_provider is None
+
+
 def test_diagnostic_bot_is_wired_in_compose_env_and_docs() -> None:
     compose = Path("docker-compose.yml").read_text()
     env_example = Path(".env.example").read_text()
